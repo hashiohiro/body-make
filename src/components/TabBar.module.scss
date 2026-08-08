@@ -1,0 +1,35 @@
+.tabs {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 0 10px;
+  border: 0;
+  background: none;
+  font-size: 10px;
+  color: var(--ink-muted);
+
+  svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  &[aria-selected='true'] {
+    color: var(--accent);
+    font-weight: 600;
+  }
+}

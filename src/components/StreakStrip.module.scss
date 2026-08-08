@@ -1,0 +1,52 @@
+@use '../styles/mixins' as *;
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(14, 1fr);
+  gap: 4px;
+}
+
+.cell {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+}
+
+/// 片方だけ記録した日は同じ青の淡いステップ。量の違いを 1 色の濃淡で表す
+.half {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--accent) 38%, var(--surface-sunken));
+}
+
+.full {
+  border-color: transparent;
+  background: var(--accent);
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+}
+
+.stats {
+  margin-left: auto;
+  @include tabular;
+}

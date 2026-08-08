@@ -1,0 +1,58 @@
+// 出力を持たないユーティリティ層。各コンポーネントの *.module.scss から @use する。
+
+$bp-wide: 560px;
+
+@mixin wide {
+  @media (min-width: $bp-wide) {
+    @content;
+  }
+}
+
+/// ダークモードの上書きを 2 スコープ（OS 設定 / アプリ内トグル）へ同時に展開する。
+/// トークンで足りない、コンポーネント固有の調整だけに使う。
+@mixin dark {
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme='light'])) & {
+      @content;
+    }
+  }
+
+  :root[data-theme='dark'] & {
+    @content;
+  }
+}
+
+@mixin card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+@mixin focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+/// 数字が縦に揃うべき場所（表・軸ラベル）専用。
+/// 大きな単独数値に当てると桁幅が均一になって間延びするため使わない。
+@mixin tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@mixin truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/// 横スクロール領域のスクロールバーを隠す（チップ列など）
+@mixin hide-scrollbar {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

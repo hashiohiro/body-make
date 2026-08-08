@@ -1,0 +1,30 @@
+@use './styles/mixins' as *;
+
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 16px calc(var(--tab-h) + 28px + env(safe-area-inset-bottom));
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 0 10px;
+  background: color-mix(in srgb, var(--plane) 88%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.title {
+  font-size: 17px;
+}
+
+.today {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-muted);
+  @include tabular;
+}

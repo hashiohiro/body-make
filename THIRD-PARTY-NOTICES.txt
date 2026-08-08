@@ -1,0 +1,45 @@
+THIRD-PARTY NOTICES for BodyMake
+
+The built application bundles code from the components listed below. Every
+component is under the MIT License, whose permission and warranty terms are
+identical to those in the accompanying LICENSE.txt. The copyright notices are
+reproduced here to satisfy the attribution requirement.
+
+  React, React DOM, Scheduler
+  Copyright (c) Meta Platforms, Inc. and affiliates.
+  https://github.com/facebook/react
+
+  Workbox
+  Copyright 2018 Google LLC
+  https://github.com/GoogleChrome/workbox
+
+  vite-plugin-pwa
+  Copyright (c) 2020-PRESENT Anthony Fu <https://github.com/antfu>
+  https://github.com/vite-pwa/vite-plugin-pwa
+
+  Vite
+  Copyright (c) 2019-present, VoidZero Inc. and Vite contributors
+  https://github.com/vitejs/vite
+
+
+NOTES ON SCOPE
+
+vite-plugin-pwa and Vite are build-time packages, but both emit runtime code
+into the shipped bundle, so they belong here rather than in the build-tooling
+list: vite-plugin-pwa supplies the service-worker registration helper via its
+virtual:pwa-register module, and Vite injects its modulepreload polyfill
+because the registration helper is loaded through a dynamic import.
+
+Packages that only run during the build and leave no code in dist/ are not
+listed. TypeScript, sass-embedded, Rollup, esbuild and Wrangler fall in that
+group; sass-embedded compiles SCSS to plain CSS and contributes no runtime.
+
+No fonts are bundled. Typography resolves to the operating system's own UI
+font stack, and the achievement badges use platform emoji. The application
+icons in icons/ were generated for this project and are covered by
+LICENSE.txt.
+
+The list is regenerated from build output rather than from package manifests:
+`npm run licenses` reconstructs the set of third-party modules from the source
+maps of every artifact in dist/. See scripts/licenses.mjs for the method and
+its known blind spots.

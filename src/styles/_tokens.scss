@@ -1,0 +1,92 @@
+// ===========================================================
+//  デザイントークン
+//  ライト値を素の :root に「全部」定義し、ダークは 2 スコープで上書きする。
+//   - @media (prefers-color-scheme: dark) … OS 設定
+//   - :root[data-theme='dark']            … アプリ内トグル（OS より優先）
+//  :where() と :not([data-theme='light']) で、明示ライト指定が OS ダークに勝つ。
+// ===========================================================
+
+$light: (
+  plane:          #f9f9f7,
+  surface:        #fcfcfb,
+  surface-sunken: #f2f1ed,
+  border:         rgba(11, 11, 11, 0.1),
+  ink:            #0b0b0b,
+  ink-2:          #52514e,
+  ink-muted:      #898781,
+  grid:           #e1e0d9,
+  axis:           #c3c2b7,
+  // 系列色は「実体」に固定する。並び順や絞り込みで塗り替えない
+  s-weight:       #2a78d6,
+  s-fat:          #eb6834,
+  s-lean:         #1baf7a,
+  s-weight-wash:  rgba(42, 120, 214, 0.1),
+  s-fat-wash:     rgba(235, 104, 52, 0.1),
+  // カロリー収支の発散型 2 極（寒色↔暖色で「反対」と読ませる）。中点はゼロ線のグレー
+  s-deficit:      #2a78d6,
+  s-surplus:      #e34948,
+  good:           #0ca30c,
+  good-text:      #006300,
+  warning:        #fab219,
+  critical:       #d03b3b,
+  accent:         #2a78d6,
+  accent-soft:    rgba(42, 120, 214, 0.12),
+  shadow:         (0 1px 2px rgba(11, 11, 11, 0.05), 0 1px 10px rgba(11, 11, 11, 0.03)),
+);
+
+$dark: (
+  plane:          #0d0d0d,
+  surface:        #1a1a19,
+  surface-sunken: #232321,
+  border:         rgba(255, 255, 255, 0.1),
+  ink:            #ffffff,
+  ink-2:          #c3c2b7,
+  ink-muted:      #898781,
+  grid:           #2c2c2a,
+  axis:           #383835,
+  s-weight:       #3987e5,
+  s-fat:          #d95926,
+  s-lean:         #199e70,
+  s-weight-wash:  rgba(57, 135, 229, 0.14),
+  s-fat-wash:     rgba(217, 89, 38, 0.14),
+  s-deficit:      #3987e5,
+  s-surplus:      #e66767,
+  good:           #0ca30c,
+  good-text:      #0ca30c,
+  warning:        #fab219,
+  critical:       #d03b3b,
+  accent:         #3987e5,
+  accent-soft:    rgba(57, 135, 229, 0.18),
+  shadow:         (0 1px 2px rgba(0, 0, 0, 0.4)),
+);
+
+@mixin emit($theme) {
+  @each $name, $value in $theme {
+    --#{$name}: #{$value};
+  }
+}
+
+:root {
+  color-scheme: light;
+  @include emit($light);
+
+  --radius: 14px;
+  --radius-s: 9px;
+  --radius-xs: 8px;
+
+  --font: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+
+  --tab-h: 56px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) {
+    color-scheme: dark;
+    @include emit($dark);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  @include emit($dark);
+}

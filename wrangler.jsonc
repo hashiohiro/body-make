@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bodymake",
+  "compatibility_date": "2026-08-08",
+
+  // サーバー側のコードは持たない完全な静的配信。
+  // Worker スクリプトを置かない場合、assets だけの構成で配信できる。
+  "assets": {
+    "directory": "./dist",
+    // ハッシュルーティングなので通常は使われないが、
+    // 存在しないパスを直打ちされたときに 404 ではなくアプリを返す
+    "not_found_handling": "single-page-application"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

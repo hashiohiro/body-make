@@ -1,0 +1,99 @@
+@use 'tokens';
+@use 'mixins' as *;
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+html {
+  // ピンチによる拡大縮小を止める。スクロール（pan-x / pan-y）だけを許可し、
+  // pinch-zoom と double-tap-zoom をジェスチャの候補から外す
+  touch-action: pan-x pan-y;
+}
+
+body {
+  margin: 0;
+  background: var(--plane);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  // 端末を横向きにしたときに iOS が本文を勝手に拡大するのを防ぐ
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+
+  // テキスト選択と長押しメニューを止める。
+  // 数値は設定画面から CSV / JSON で書き出せるので、選択できなくても取り出す手段は残る
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+// 入力欄は選択・カーソル移動ができないと編集不能になるので、ここだけ元に戻す
+input,
+textarea,
+select,
+[contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+h1,
+h2,
+h3,
+p,
+figure {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  @include focus-ring;
+}
+
+a {
+  color: var(--accent);
+}
+
+:where(input, select) {
+  @include focus-ring;
+}
+
+#root {
+  min-height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

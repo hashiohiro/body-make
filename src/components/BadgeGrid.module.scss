@@ -1,0 +1,66 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(94px, 1fr));
+  gap: 9px;
+}
+
+.badge {
+  position: relative;
+  padding: 11px 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+  text-align: center;
+  opacity: 0.45;
+}
+
+.earned {
+  opacity: 1;
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.icon {
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+.name {
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--ink-2);
+}
+
+.earned .name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.progress {
+  margin-top: 6px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  overflow: hidden;
+
+  i {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+  }
+}
+
+.summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.next {
+  margin-left: auto;
+  color: var(--ink-muted);
+}

@@ -1,0 +1,29 @@
+# Cloudflare の静的アセット配信に渡すヘッダー設定。
+# ビルド時に dist/ へそのままコピーされる。
+
+# Service Worker と HTML は必ず毎回検証させる。
+# ここをキャッシュされると新しいビルドを出しても端末に届かなくなる。
+/sw.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Cache-Control: no-cache
+
+# ハッシュ付きファイル名なので、中身が変われば URL も変わる。永続キャッシュしてよい。
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/icons/*
+  Cache-Control: public, max-age=604800
+
+# 記録は端末内にしか無いが、埋め込みや MIME 推測の事故は塞いでおく
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin

@@ -1,0 +1,68 @@
+@use '../styles/mixins' as *;
+
+.row {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
+
+  &[aria-current='true'] {
+    background: var(--accent-soft);
+    border-radius: var(--radius-xs);
+  }
+}
+
+.date {
+  font-size: 12px;
+  color: var(--ink-2);
+  @include tabular;
+}
+
+.values {
+  font-size: 13px;
+  @include tabular;
+
+  small {
+    margin-left: 6px;
+    font-size: 11px;
+    color: var(--ink-muted);
+  }
+}
+
+.missing {
+  font-size: 11px;
+  color: var(--warning);
+}
+
+.slots {
+  display: flex;
+  gap: 3px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+}
+
+.dotOn {
+  background: var(--accent);
+  border-color: transparent;
+}
+
+.list {
+  max-height: 60vh;
+  overflow-y: auto;
+}

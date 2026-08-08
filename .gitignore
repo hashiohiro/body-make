@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dev-dist/
+.wrangler/
+*.local
+.dev.vars
+.DS_Store
+
+# ルートの正本から prebuild で生成される
+public/THIRD-PARTY-NOTICES.txt

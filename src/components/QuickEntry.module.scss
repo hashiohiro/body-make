@@ -1,0 +1,142 @@
+@use '../styles/mixins' as *;
+
+.dateRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.dateInput {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface-sunken);
+  @include tabular;
+}
+
+.nav {
+  flex: none;
+  width: 40px;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.slots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.slot {
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+}
+
+.slotHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 9px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.copy {
+  margin-left: auto;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 10px;
+  color: var(--ink-2);
+  min-height: 0;
+}
+
+.field + .field {
+  margin-top: 8px;
+}
+
+.fieldLabel {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+.stepper {
+  display: flex;
+  align-items: stretch;
+  gap: 5px;
+}
+
+.step {
+  flex: none;
+  width: 36px;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 17px;
+  line-height: 1;
+  user-select: none;
+
+  &:active {
+    background: var(--accent-soft);
+  }
+}
+
+.input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  font-size: 16px; // 16px 未満だと iOS がフォーカス時にズームする
+  font-weight: 600;
+  text-align: center;
+  @include tabular;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
+
+.summary {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+
+  b {
+    margin-left: auto;
+    font-weight: 620;
+    color: var(--ink);
+    @include tabular;
+  }
+}
