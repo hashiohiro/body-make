@@ -4,7 +4,7 @@ import { ExercisePicker } from '../components/training/ExercisePicker';
 import { GROUP_LABELS } from '../lib/exerciseCatalog';
 import { addDays, formatMD, formatMDW, todayISO, weekdayJa } from '../lib/date';
 import { fmt } from '../lib/format';
-import { previousPoint, sessionGroups } from '../lib/training';
+import { personalBest, pickVolume, previousPoint, sessionGroups } from '../lib/training';
 import type { BodyData } from '../hooks/useBodyData';
 import ui from '../styles/ui.module.scss';
 import s from '../components/training/training.module.scss';
@@ -108,6 +108,14 @@ export function TrainingView({ body, date, onDateChange }: Props) {
             entry={entry}
             point={session?.exercises.find((p) => p.exerciseId === entry.exerciseId) ?? null}
             previous={previousPoint(sessions, entry.exerciseId, date)}
+            best={personalBest(sessions, entry.exerciseId, addDays(date, -1), pickVolume)}
+            bestWeight={personalBest(
+              sessions,
+              entry.exerciseId,
+              addDays(date, -1),
+              // 換算後ではなく、バーに載せた数字。目標やグラフの「最大重量」と揃える
+              (p) => p.top?.weight ?? null,
+            )}
             onValue={(index, field, value) =>
               setSetValue(date, entry.exerciseId, index, field, value)
             }

@@ -155,6 +155,32 @@ describe('トレ画面', () => {
     expect(screen.getByText(/の記録はまだありません/)).toBeTruthy();
   });
 
+  it('総重量の下に通算の最高重量・最高挙上量と、そこまでの残りを出す', async () => {
+    const { addDays, todayISO } = await import('../lib/date');
+    const today = todayISO();
+    // 過去最高（600）と前回（500）を別の日にして、前回ではなく通算の最高を見ていることを確かめる
+    seedData(['ex_bench'], {
+      [addDays(today, -2)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+      [addDays(today, -1)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 50, reps: 10 }] }],
+    });
+    render(<Harness />);
+    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+
+    // 最高重量は換算後ではなく、バーに載せた数字
+    expect(screen.getByText('最高重量 60.0 kg')).toBeTruthy();
+    // まだ 1kg も積んでいない時点でも、目安として残り全量を出す
+    expect(screen.getByText('最高挙上量 600 kg（あと 600 kg）')).toBeTruthy();
+
+    typeSet(setRows()[0]!, '60', '7');
+    expect(screen.getByText('最高挙上量 600 kg（あと 180 kg）')).toBeTruthy();
+
+    // 届いたら残りは出さない。当日を最高値に含めると、入れた瞬間に必ず 0 になる
+    typeSet(setRows()[0]!, '60', '10');
+    expect(screen.getByText('最高挙上量 600 kg')).toBeTruthy();
+    expect(screen.queryByText(/あと /)).toBeNull();
+  });
+
   it('同じ種目は 1 日に 2 つ作られない', () => {
     seedExercises('ex_bench');
     render(<Harness />);

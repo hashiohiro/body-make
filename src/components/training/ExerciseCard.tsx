@@ -15,6 +15,10 @@ interface Props {
   entry: SessionExercise;
   point: ExercisePoint | null;
   previous: ExerciseHistoryPoint | null;
+  /** その日より前の挙上量の最高値。当日を含めると、入れた瞬間に自分が最高になって指標にならない */
+  best: number | null;
+  /** 同じくその日より前の、記録した重量の最高値 */
+  bestWeight: number | null;
   onValue: (index: number, field: 'weight' | 'reps', value: number | null) => void;
   onAddSet: () => void;
   onRemoveSet: (index: number) => void;
@@ -27,6 +31,8 @@ export function ExerciseCard({
   entry,
   point,
   previous,
+  best,
+  bestWeight,
   onValue,
   onAddSet,
   onRemoveSet,
@@ -116,6 +122,23 @@ export function ExerciseCard({
           )}
         </b>
       </div>
+
+      {/*
+        通算の最高。前回との差は上の行が持っているので、ここは通算で見る。
+        残りは入力の途中から出す（上の差分は volume が 0 のあいだ出ない）。
+        「あと」は挙上量に括り付ける。並べただけだと、どちらまでの残りか読めない
+      */}
+      {(bestWeight != null || (best != null && best > 0)) && (
+        <div className={s.exPrev}>
+          {bestWeight != null && <span>最高重量 {fmt(bestWeight)} kg</span>}
+          {best != null && best > 0 && (
+            <span>
+              最高挙上量 {Math.round(best).toLocaleString()} kg
+              {volume < best && `（あと ${Math.round(best - volume).toLocaleString()} kg）`}
+            </span>
+          )}
+        </div>
+      )}
     </section>
   );
 }
