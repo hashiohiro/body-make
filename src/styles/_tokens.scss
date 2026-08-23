@@ -26,6 +26,14 @@ $light-series: (
   // カロリー収支の発散型 2 極（寒色↔暖色で「反対」と読ませる）。中点はゼロ線のグレー
   s-deficit: #2a78d6,
   s-surplus: #e34948,
+  // 部位の色。配色を変えても塗り替えない。
+  // 6 本を同時に描くので、テーマのアクセント 1 色から作ると見分けられない
+  g-chest: #e05252,
+  g-back: #2f7fd1,
+  g-legs: #1f9e6e,
+  g-shoulders: #d98a1f,
+  g-arms: #8b5fd6,
+  g-core: #6f7787,
 );
 
 $dark-series: (
@@ -36,6 +44,12 @@ $dark-series: (
   s-fat-wash: rgba(217, 89, 38, 0.14),
   s-deficit: #3987e5,
   s-surplus: #e66767,
+  g-chest: #e56a6a,
+  g-back: #4a94e0,
+  g-legs: #2ab183,
+  g-shoulders: #e0a03f,
+  g-arms: #a077e0,
+  g-core: #8d95a3,
 );
 
 $light-shadow: (0 1px 2px rgba(11, 11, 11, 0.05), 0 1px 10px rgba(11, 11, 11, 0.03));

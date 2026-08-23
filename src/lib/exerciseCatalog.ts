@@ -608,6 +608,16 @@ export const GROUP_LABELS: Record<MuscleGroup, string> = {
 
 export const GROUP_ORDER: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
 
+/** 部位を同時に 6 本描くとき用。トークン側で配色によらず固定してある */
+export const GROUP_COLORS: Record<MuscleGroup, string> = {
+  chest: 'var(--g-chest)',
+  back: 'var(--g-back)',
+  legs: 'var(--g-legs)',
+  shoulders: 'var(--g-shoulders)',
+  arms: 'var(--g-arms)',
+  core: 'var(--g-core)',
+};
+
 /**
  * 挙上量と推定1RM を出すときに、記録した重量をどう換算するか。
  * 最大重量と目標は記録した数字のまま扱うので、ここの選択に影響されない。

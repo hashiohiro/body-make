@@ -47,10 +47,12 @@ function typeSet(row: HTMLElement, weight: string, reps: string) {
   fireEvent.change(within(row).getByLabelText(/回数$/), { target: { value: reps } });
 }
 
-/** 種目を選ぶモーダルが開いているか。中身は閉じていても DOM に残る */
+/** モーダルが開いているか。中身は閉じていても DOM に残る */
 function pickerOpen(): boolean {
   return document.querySelector('dialog')?.hasAttribute('open') ?? false;
 }
+
+const dialogOpen = pickerOpen;
 
 function setRows(): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>('[data-set-row]')];
@@ -181,18 +183,43 @@ describe('トレ画面', () => {
     expect(screen.queryByText(/あと /)).toBeNull();
   });
 
-  it('同じ種目は 1 日に 2 つ作られない', () => {
+  it('✓ をもう一度押すとその日から外れる', () => {
     seedExercises('ex_bench');
     render(<Harness />);
     fireEvent.click(screen.getByText('＋ 種目を追加'));
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
-
-    // 続けて選べるように開いたまま。すでにある種目は ✓ 付きで出て、押しても増えない
-    fireEvent.click(screen.getByText(/✓ ベンチプレス/));
-
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(1);
-    // ✓ を押したときだけ「そのカードへ行く」操作なので閉じる
-    expect(pickerOpen()).toBe(false);
+
+    // 入れ間違いをその場で取り消せる。閉じてカードの × を探させない
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(screen.getByText(/✓ ベンチプレス/));
+    expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
+    // 何も入力していなければ失うものが無いので確認しない
+    expect(confirmSpy).not.toHaveBeenCalled();
+    // 続けて選べるよう開いたまま
+    expect(pickerOpen()).toBe(true);
+
+    // 入力済みなら消えるものがあるので確認する
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    typeSet(setRows()[0]!, '60', '10');
+    fireEvent.click(screen.getByText(/✓ ベンチプレス/));
+    expect(confirmSpy).toHaveBeenCalledOnce();
+    expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
+
+    confirmSpy.mockRestore();
+  });
+
+  it('外すのを取り消したらその日に残る', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    typeSet(setRows()[0]!, '60', '10');
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    fireEvent.click(screen.getByText(/✓ ベンチプレス/));
+    expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(1);
+    confirmSpy.mockRestore();
   });
 
   it('種目は続けて複数選べる', () => {
@@ -423,20 +450,34 @@ describe('グラフタブ', () => {
     // 「挙上量」は部位別の配分カードにもあるので、推移カードの中で探す
     const card = within(screen.getByText('種目別の推移').closest('section')!);
 
-    // 一覧には記録のある種目だけが並び、既定は記録数の多いベンチプレス
-    expect(card.getByRole('button', { name: /ベンチプレス/, pressed: true })).toBeTruthy();
-    expect(card.getByRole('button', { name: /サイドレイズ/, pressed: false })).toBeTruthy();
+    // 一覧には記録のある種目だけが並ぶ
+    expect(card.getByRole('button', { name: /ベンチプレス/ })).toBeTruthy();
+    expect(card.getByRole('button', { name: /サイドレイズ/ })).toBeTruthy();
     expect(card.queryByRole('button', { name: /スクワット/ })).toBeNull();
     expect(card.getByRole('button', { name: '挙上量', pressed: true })).toBeTruthy();
-
-    // 一覧から直接切り替えられる（開く・閉じるが要らない）
-    fireEvent.click(card.getByRole('button', { name: /サイドレイズ/ }));
-    expect(card.getByRole('button', { name: /サイドレイズ/, pressed: true })).toBeTruthy();
 
     fireEvent.click(card.getByRole('button', { name: '推定1RM' }));
     expect(card.getByRole('button', { name: '推定1RM', pressed: true })).toBeTruthy();
     // レップ数に依存しない最大重量も選べる
     expect(card.getByRole('button', { name: '最大重量' })).toBeTruthy();
+  });
+
+  it('一覧の行を選ぶと、詳細のグラフと元データをダイアログで出す', () => {
+    seedTraining();
+    render(<ChartsHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'トレーニング' }));
+    // 詳細は画面に常駐させない。一覧を見比べる邪魔になる
+    expect(screen.queryByText('元データ')).toBeNull();
+    expect(dialogOpen()).toBe(false);
+
+    const card = within(screen.getByText('種目別の推移').closest('section')!);
+    fireEvent.click(card.getByRole('button', { name: /ベンチプレス/ }));
+    expect(dialogOpen()).toBe(true);
+    expect(screen.getByText('元データ')).toBeTruthy();
+    // 見出しの数値は通算の最高
+    expect(screen.getByText('過去最大')).toBeTruthy();
+    // 週のセット数へこの種目がどれだけ効いたか
+    expect(screen.getByText('週のセット数への貢献')).toBeTruthy();
   });
 
   it('種目別の推移を部位で絞れる', () => {
@@ -451,11 +492,37 @@ describe('グラフタブ', () => {
     // 補助部位は拾わない（腕にベンチプレスが並ぶと、種目の推移として読めない）
     fireEvent.click(within(card.getByRole('group', { name: '部位' })).getByText('肩'));
     expect(card.queryByRole('button', { name: /ベンチプレス/ })).toBeNull();
-    // 絞り込みで選択中の種目が消えたら、残っているほうへ移る
-    expect(card.getByRole('button', { name: /サイドレイズ/, pressed: true })).toBeTruthy();
+    expect(card.getByRole('button', { name: /サイドレイズ/ })).toBeTruthy();
 
     fireEvent.click(within(card.getByRole('group', { name: '部位' })).getByText('すべて'));
     expect(card.getByRole('button', { name: /ベンチプレス/ })).toBeTruthy();
+  });
+
+  it('部位別の推移は記録のある部位だけを線にし、値を切り替えられる', () => {
+    seedTraining();
+    render(<ChartsHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'トレーニング' }));
+
+    const card = within(screen.getByText('部位別の推移').closest('section')!);
+    expect(card.getByRole('button', { name: 'セット数', pressed: true })).toBeTruthy();
+
+    // ベンチ（胸・肩・腕）とサイドレイズ（肩・背中）だけ。脚と体幹は線を出さない
+    expect(card.getByText('胸')).toBeTruthy();
+    expect(card.getByText('肩')).toBeTruthy();
+    expect(card.queryByText('脚')).toBeNull();
+    expect(card.queryByText('体幹')).toBeNull();
+
+    fireEvent.click(card.getByRole('button', { name: '挙上量' }));
+    expect(card.getByRole('button', { name: '挙上量', pressed: true })).toBeTruthy();
+  });
+
+  it('グラフは粗いほうから細かいほうへ並ぶ', () => {
+    seedTraining();
+    render(<ChartsHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'トレーニング' }));
+
+    const titles = [...document.querySelectorAll('h2')].map((h) => h.textContent);
+    expect(titles).toEqual(['部位別の推移', '部位別の配分', '種目別の推移']);
   });
 
   it('部位別の配分はセット数と挙上量を切り替えられ、実施日数も出す', () => {
@@ -500,9 +567,12 @@ describe('グラフタブ', () => {
     fireEvent.click(screen.getByRole('button', { name: 'トレーニング' }));
 
     const card = within(screen.getByText('種目別の推移').closest('section')!);
-    expect(card.getByRole('button', { name: '挙上量', pressed: true })).toBeTruthy();
     fireEvent.click(card.getByRole('button', { name: /プランク/ }));
-    expect(card.getByText('秒で数える種目なので、この指標は出せません')).toBeTruthy();
+    // ダイアログ側は種目 1 つぶんなので、秒の種目では重量系の指標そのものを出さない
+    const dialog = within(document.querySelector('dialog')!);
+    expect(dialog.queryByRole('button', { name: '挙上量' })).toBeNull();
+    expect(dialog.queryByRole('button', { name: '推定1RM' })).toBeNull();
+    expect(dialog.getByRole('button', { name: '最大回数', pressed: true })).toBeTruthy();
   });
 
   it('記録が無ければ空状態を出す', () => {

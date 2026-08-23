@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ExerciseCard } from '../components/training/ExerciseCard';
+import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialog';
 import { ExercisePicker } from '../components/training/ExercisePicker';
 import { GROUP_LABELS } from '../lib/exerciseCatalog';
 import { addDays, formatMD, formatMDW, todayISO, weekdayJa } from '../lib/date';
@@ -39,19 +40,27 @@ export function TrainingView({ body, date, onDateChange }: Props) {
 
   const session = useMemo(() => sessions.find((x) => x.date === date) ?? null, [sessions, date]);
   const [openDate, setOpenDate] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const usedIds = new Set(dayEntries.map((e) => e.exerciseId));
 
-  const pick = (id: string) => {
-    if (usedIds.has(id)) {
-      // 同一種目は 1 日 1 エントリ。重複は作らず、既存のカードへ連れて行く
-      // scrollIntoView は jsdom に無い。スクロールできなくても記録は続けられる
-      document
-        .getElementById(`ex-card-${id}`)
-        ?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  /**
+   * その日に入れる／外すの切り替え。
+   *
+   * 同一種目は 1 日 1 エントリなので、押すたびに増えることはない。
+   * 入力済みのセットがあるときだけ確認する（消えるものがあると伝える必要があるときだけ挟む）。
+   */
+  const toggle = (id: string) => {
+    const entry = dayEntries.find((e) => e.exerciseId === id);
+    if (!entry) {
+      addDayExercise(date, id);
       return;
     }
-    addDayExercise(date, id);
+    const hasValue = entry.sets.some((set) => set.weight != null || set.reps != null);
+    const name = byId.get(id)?.name ?? '';
+    if (hasValue && !confirm(`「${name}」をこの日から外します。\n入力したセットも消えます。`))
+      return;
+    removeDayExercise(date, id);
   };
 
   return (
@@ -122,6 +131,7 @@ export function TrainingView({ body, date, onDateChange }: Props) {
             onAddSet={() => addSet(date, entry.exerciseId)}
             onRemoveSet={(index) => removeSet(date, entry.exerciseId, index)}
             onRemove={() => removeDayExercise(date, entry.exerciseId)}
+            onOpenDetail={() => setDetailId(entry.exerciseId)}
             onCopyPrevious={() => {
               const prev = previousPoint(sessions, entry.exerciseId, date);
               if (!prev) return;
@@ -139,7 +149,7 @@ export function TrainingView({ body, date, onDateChange }: Props) {
         {dayEntries.length === 0 && active.length > 0 && (
           <p className={ui.emptyState}>{formatMDW(date)} の記録はまだありません。</p>
         )}
-        <ExercisePicker exercises={active} usedIds={usedIds} onPick={pick} />
+        <ExercisePicker exercises={active} usedIds={usedIds} onToggle={toggle} />
       </section>
 
       <section className={ui.card}>
@@ -237,6 +247,16 @@ export function TrainingView({ body, date, onDateChange }: Props) {
           <b>*</b> は1レップの実測。
         </p>
       </section>
+
+      <ExerciseDetailDialog
+        open={detailId != null}
+        onClose={() => setDetailId(null)}
+        exercise={detailId == null ? null : (byId.get(detailId) ?? null)}
+        sessions={sessions}
+        // 記録画面は期間で絞らない。過去ぜんぶを見せる
+        from=""
+        date={date}
+      />
     </>
   );
 }

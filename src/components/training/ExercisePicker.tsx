@@ -8,8 +8,8 @@ import s from './training.module.scss';
 interface Props {
   exercises: readonly Exercise[];
   usedIds: ReadonlySet<string>;
-  /** すでにその日にある種目を選んだときは、重複を作らず既存カードへ移動する */
-  onPick: (id: string) => void;
+  /** その日に入れる／外すの切り替え。押すたびに増えることはない */
+  onToggle: (id: string) => void;
 }
 
 /**
@@ -19,7 +19,7 @@ interface Props {
  * 挿入されるぶんだけピッカーが下へ押し出され、続けて選ぶたびに
  * 指の下で一覧が動く（1 件ずつ閉じていた頃は起きなかった）。
  */
-export function ExercisePicker({ exercises, usedIds, onPick }: Props) {
+export function ExercisePicker({ exercises, usedIds, onToggle }: Props) {
   const [open, setOpen] = useState(false);
 
   if (exercises.length === 0) {
@@ -60,12 +60,9 @@ export function ExercisePicker({ exercises, usedIds, onPick }: Props) {
                         type="button"
                         className={s.pickerBtn}
                         aria-pressed={used}
-                        onClick={() => {
-                          // すでにその日にある種目を選ぶのは「そのカードへ行く」操作。
-                          // 行き先はモーダルの背面にあるので閉じる
-                          if (used) setOpen(false);
-                          onPick(e.id);
-                        }}
+                        // ✓ はトグル。押しても外れないと、間違えて入れたものを
+                        // ここで取り消せず、閉じてカードの × を探すことになる
+                        onClick={() => onToggle(e.id)}
                       >
                         {used ? '✓ ' : '＋ '}
                         {e.name}

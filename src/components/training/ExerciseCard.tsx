@@ -24,6 +24,8 @@ interface Props {
   onRemoveSet: (index: number) => void;
   onRemove: () => void;
   onCopyPrevious: () => void;
+  /** グラフ画面と同じ詳細ダイアログを開く */
+  onOpenDetail: () => void;
 }
 
 export function ExerciseCard({
@@ -38,6 +40,7 @@ export function ExerciseCard({
   onRemoveSet,
   onRemove,
   onCopyPrevious,
+  onOpenDetail,
 }: Props) {
   const volume = point?.volume ?? 0;
   const prevVolume = previous?.point.volume ?? null;
@@ -139,6 +142,21 @@ export function ExerciseCard({
           )}
         </div>
       )}
+
+      {/*
+        記録しながら過去の推移を見たくなる。グラフ画面と同じものを開く。
+        通算の数字のすぐ下に置く（そこから掘り下げる動線なので）
+      */}
+      <div className={s.exDetailRow}>
+        <button
+          type="button"
+          className={s.exDetail}
+          aria-label={`${exercise.name}の推移を見る`}
+          onClick={onOpenDetail}
+        >
+          推移を見る
+        </button>
+      </div>
     </section>
   );
 }
