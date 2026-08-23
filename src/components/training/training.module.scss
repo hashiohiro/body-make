@@ -1,0 +1,720 @@
+@use '../../styles/mixins' as *;
+
+/* ---- 日付ナビ（QuickEntry と同じ形にそろえる） ---- */
+
+.dateRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dateInput {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface-sunken);
+  @include tabular;
+}
+
+.nav {
+  flex: none;
+  width: 40px;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* ---- 種目カード ---- */
+
+.exHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.exName {
+  font-size: 15px;
+  font-weight: 640;
+  letter-spacing: 0.01em;
+}
+
+.exTag {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+.exRemove {
+  margin-left: auto;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 10px;
+  color: var(--ink-2);
+  min-height: 0;
+}
+
+.prev {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  @include tabular;
+}
+
+.prevBtn {
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  font-size: 11px;
+  color: var(--ink-2);
+  min-height: 0;
+}
+
+/* ---- セット行 ---- */
+
+.setHead,
+.setRow {
+  display: grid;
+  // ± も W も置かないぶん、数値の幅を最大に取る
+  grid-template-columns: 34px minmax(0, 1fr) 14px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 6px;
+}
+
+.setHead {
+  margin-bottom: 4px;
+  font-size: 10px;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+.setRow + .setRow {
+  margin-top: 6px;
+}
+
+.setIndex {
+  font-size: 10px;
+  font-weight: 620;
+  text-align: center;
+  color: var(--ink-muted);
+  @include tabular;
+}
+
+.setIndexTop {
+  color: var(--accent);
+}
+
+.times {
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  font-size: 16px; // 16px 未満だと iOS がフォーカス時にズームする
+  font-weight: 600;
+  text-align: center;
+  @include tabular;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
+
+.rowBtn {
+  min-height: 34px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1;
+
+  &[aria-pressed='true'] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+}
+
+.addSet {
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.exFoot {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--ink-muted);
+  @include tabular;
+
+  b {
+    margin-left: auto;
+    font-size: 13px;
+    font-weight: 640;
+    color: var(--ink);
+  }
+}
+
+/* ---- 種目ピッカー / 種目管理 ---- */
+
+.pickerGroup {
+  margin-top: 10px;
+
+  &:first-of-type {
+    margin-top: 4px;
+  }
+}
+
+.pickerLabel {
+  margin-bottom: 5px;
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+.pickerList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.subWeightRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.subWeightName {
+  flex: 0 0 2.5em;
+  color: var(--ink-muted);
+}
+
+.pickerBtn {
+  padding: 7px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  font-size: 12px;
+  color: var(--ink);
+  min-height: 0;
+
+  /* 選択中は他のトグルと同じアクセント。記号を足さなくても選択が分かる */
+  &[aria-pressed='true'] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+  }
+}
+
+/* 係数は部位の従属なので、ピルを一段小さくして階層を付ける */
+.stepBtn {
+  padding: 4px 9px;
+  font-size: 11px;
+}
+
+/* 記録一覧の行を開いたときの中身 */
+.sessionDetail {
+  margin: 2px 0 10px;
+  padding: 10px 11px;
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+}
+
+.heatmap {
+  th[scope='col'],
+  td {
+    text-align: center;
+    white-space: nowrap;
+  }
+}
+
+/* 現在値と開始比の 1 行 */
+.statRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 10px 0 2px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  @include tabular;
+
+  b {
+    font-size: 18px;
+    font-weight: 640;
+    color: var(--ink);
+  }
+}
+
+/* 小さい数値カードは 2 枚並べる。1 枚で全幅を使うほどの情報量がない */
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+
+  > section {
+    margin-bottom: 0;
+  }
+}
+
+/* チップが横に溢れると、スクロールに気づかず選択肢を見落とす。折り返して全部見せる */
+.filterRow {
+  margin-top: 14px;
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+
+/*
+ * 絞り込みが 2 段になる場所。
+ * 見出しと行の間より、組と組の間を広く取らないと、どの見出しがどの行かが読めない
+ */
+.filters {
+  margin: 14px 0 12px;
+
+  .pickerLabel {
+    margin-bottom: 4px;
+
+    & + .filterRow + .pickerLabel {
+      margin-top: 12px;
+    }
+  }
+
+  .filterRow {
+    margin: 0;
+  }
+}
+
+/* 今週どの曜日にやったか。日数だけでは分からない */
+.week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.weekDay {
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  font-size: 9px;
+  color: var(--ink-muted);
+}
+
+.weekCell {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+}
+
+.weekCellOn {
+  border-color: transparent;
+  background: var(--s-lean);
+}
+
+.weekCellToday {
+  border-color: var(--accent);
+}
+
+/* 部位ごとの配分は本数で比べたいので、チップではなく横棒で出す */
+.groupRow {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 46px;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 11px;
+  color: var(--ink-2);
+  @include tabular;
+}
+
+.groupBarTrack {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.groupBarFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--s-lean);
+}
+
+.groupValue {
+  text-align: right;
+
+  b {
+    font-size: 13px;
+    font-weight: 640;
+    color: var(--ink);
+  }
+}
+
+.groupRowOff {
+  color: var(--ink-muted);
+}
+
+.coverCount {
+  b {
+    margin: 0 1px;
+    font-size: 13px;
+    font-weight: 640;
+    color: var(--ink);
+  }
+}
+
+/*
+ * 種目別の推移の一覧。切り替えずに全種目の形を見比べるための行。
+ *
+ * 種目名・数値・折れ線を 1 行に横並べすると、折れ線に 50px ほどしか回らず
+ * 形が潰れる。見比べるための図なので、幅は折れ線に全部渡して 2 段にする。
+ */
+.trendList {
+  margin-top: 6px;
+}
+
+.trendRow {
+  /*
+   * 選択中の左バーと行間の区切り線は、どちらも box-shadow で描く。
+   * border で両方やると角が斜めに継がれ、2 行目以降でバーの上端が
+   * 区切り線の色に食われる（1 行目は border-top が無いので出ない）。
+   * border-top には 1px ぶん中身がずれる問題もある。
+   */
+  --row-bar: transparent;
+  --row-line: transparent;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name stat'
+    'spark spark';
+  align-items: baseline;
+  gap: 2px 10px;
+  width: 100%;
+  min-height: 0;
+  padding: 7px 9px 7px 11px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  box-shadow:
+    inset 2px 0 0 var(--row-bar),
+    inset 0 1px 0 var(--row-line);
+  text-align: left;
+
+  &[aria-pressed='true'] {
+    --row-bar: var(--accent);
+    background: var(--accent-soft);
+  }
+}
+
+.trendRow + .trendRow,
+.trendOpen + .trendRow {
+  --row-line: var(--border);
+}
+
+/* 部位ごとの塊。見出しが区切るので、塊の先頭には行間の線を出さない */
+.trendGroup + .trendGroup {
+  margin-top: 12px;
+}
+
+.trendName {
+  grid-area: name;
+  font-size: 12px;
+  color: var(--ink);
+  @include truncate;
+}
+
+.trendStat {
+  grid-area: stat;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--ink-muted);
+  @include tabular;
+
+  b {
+    font-size: 13px;
+    font-weight: 640;
+    color: var(--ink);
+  }
+
+  em {
+    font-style: normal;
+  }
+
+  i {
+    font-style: normal;
+    font-size: 11px;
+  }
+}
+
+.trendSpark {
+  grid-area: spark;
+  margin-top: 1px;
+}
+
+/* 選んだ行の直下に開く詳細。行のアクセントバーをそのまま伸ばして、対応を見せる */
+.trendOpen {
+  margin-bottom: 6px;
+  padding: 0 9px 6px 11px;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* 部位の行。タップで種目ごとの内訳を開く */
+.goalGroup {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  color: var(--ink);
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
+}
+
+.goalGroupName {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.goalGroupCount {
+  font-size: 11px;
+  color: var(--ink-muted);
+  @include tabular;
+}
+
+.goalGroupRate {
+  font-size: 12px;
+  text-align: right;
+  color: var(--ink-2);
+  @include tabular;
+}
+
+.goalDetail {
+  padding: 10px 11px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+}
+
+.goal + .goal {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.goalFoot {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ink-muted);
+  @include tabular;
+}
+
+.meter {
+  height: 6px;
+  margin: 8px 0 4px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.meterFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--s-lean);
+}
+
+.manageRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
+}
+
+.manageName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manageArchived {
+  color: var(--ink-muted);
+  text-decoration: line-through;
+}
+
+.goalTag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-size: 10px;
+  color: var(--accent);
+  @include tabular;
+}
+
+/* 固定幅にすると文字が見切れたりカードをはみ出すので、比率で収める */
+.goalInputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.goalValue {
+  text-align: center;
+  @include tabular;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+.goalUnit {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.miniBtn {
+  flex: none;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.newForm {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+}
+
+.newField {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-muted);
+
+  input,
+  select {
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 16px;
+  }
+}
+
+/* ---- セッション結果表 ---- */
+
+.summaryTop {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.summaryMain {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+  @include tabular;
+
+  b {
+    font-size: 20px;
+    font-weight: 640;
+    color: var(--ink);
+  }
+}
+
+.summaryPrev {
+  margin-left: auto;
+}
+
+.summaryMeta {
+  font-size: 11px;
+  color: var(--ink-muted);
+  @include tabular;
+}

@@ -10,6 +10,19 @@
   margin-bottom: 12px;
 }
 
+/* カードの群を分ける見出し。1 画面に体組成とトレーニングが同居するので境界を示す */
+.sectionLabel {
+  margin: 22px 2px 8px;
+  font-size: 11px;
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+
+  &:first-child {
+    margin-top: 4px;
+  }
+}
+
 .cardHeader {
   display: flex;
   align-items: baseline;

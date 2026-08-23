@@ -1,9 +1,57 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildDaily, buildWeeks, computeProjection, computeStats, emptyDay } from '../lib/derive';
-import { emptyData, loadData, saveData } from '../lib/storage';
-import type { AppData, Entries, Measurement, Settings, SlotId } from '../types';
+import { emptyData, loadData, sanitizeData, saveData } from '../lib/storage';
+import { buildSessions, computeTrainingStats, exerciseGoals } from '../lib/training';
+import type { ImportPayload } from '../lib/io';
+import type {
+  AppData,
+  Entries,
+  Exercise,
+  Measurement,
+  MuscleGroup,
+  SessionExercise,
+  Settings,
+  SlotId,
+  WorkSet,
+  Workouts,
+} from '../types';
 
 export type MeasurementField = keyof Measurement;
+export type SetField = 'weight' | 'reps';
+
+const EMPTY_SET: WorkSet = { weight: null, reps: null };
+
+/**
+ * 空の器を残さない。空セット → 空種目 → 日付キー、の順に落とす。
+ * 既存の setValue が「4 項目すべて空になった日はキーごと落とす」のと同じ作法。
+ */
+function pruneDay(workouts: Workouts, date: string): Workouts {
+  const day = workouts[date];
+  if (!day) return workouts;
+
+  const kept = day
+    .map((e) => ({ ...e, sets: e.sets.filter((s) => s.weight != null || s.reps != null) }))
+    .filter((e) => e.sets.length > 0);
+
+  const next = { ...workouts };
+  if (kept.length === 0) delete next[date];
+  else next[date] = kept;
+  return next;
+}
+
+function mapDayExercise(
+  workouts: Workouts,
+  date: string,
+  exerciseId: string,
+  fn: (entry: SessionExercise) => SessionExercise,
+): Workouts {
+  const day = workouts[date] ?? [];
+  const found = day.some((e) => e.exerciseId === exerciseId);
+  const nextDay = found
+    ? day.map((e) => (e.exerciseId === exerciseId ? fn(e) : e))
+    : [...day, fn({ exerciseId, sets: [] })];
+  return { ...workouts, [date]: nextDay };
+}
 
 export interface BodyData {
   data: AppData;
@@ -11,11 +59,39 @@ export interface BodyData {
   weeks: ReturnType<typeof buildWeeks>;
   stats: ReturnType<typeof computeStats>;
   projection: ReturnType<typeof computeProjection>;
+  sessions: ReturnType<typeof buildSessions>;
+  trainingStats: ReturnType<typeof computeTrainingStats>;
+  trainingGoals: ReturnType<typeof exerciseGoals>;
+
   setValue: (date: string, slot: SlotId, field: MeasurementField, value: number | null) => void;
   removeDay: (date: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
-  mergeEntries: (entries: Entries, mode: 'merge' | 'replace') => void;
+  importData: (payload: ImportPayload, mode: 'merge' | 'replace') => void;
+
+  /** 実績のみ削除（種目マスタと設定は残す） */
+  clearRecords: () => void;
+  /** すべて削除（設定だけ残す） */
   clearAll: () => void;
+
+  addDayExercise: (date: string, exerciseId: string) => void;
+  removeDayExercise: (date: string, exerciseId: string) => void;
+  addSet: (date: string, exerciseId: string) => void;
+  removeSet: (date: string, exerciseId: string, index: number) => void;
+  setSetValue: (
+    date: string,
+    exerciseId: string,
+    index: number,
+    field: SetField,
+    value: number | null,
+  ) => void;
+  copySets: (date: string, exerciseId: string, sets: readonly WorkSet[]) => void;
+
+  setGroupGoal: (group: MuscleGroup, value: number | null) => void;
+  upsertExercise: (exercise: Exercise) => void;
+  addExercises: (exercises: readonly Exercise[]) => void;
+  /** 種目とその記録をまとめて消す。参照だけ残すと次回読み込みでログが黙って落ちるため */
+  removeExercise: (id: string) => void;
+  moveExercise: (id: string, delta: number) => void;
 }
 
 export function useBodyData(): BodyData {
@@ -31,6 +107,16 @@ export function useBodyData(): BodyData {
   const projection = useMemo(
     () => computeProjection(daily, stats, data.settings),
     [daily, stats, data.settings],
+  );
+  // 自重換算に体重が要るので daily → sessions の順で導出する
+  const sessions = useMemo(
+    () => buildSessions(data.workouts, data.exercises, daily),
+    [data.workouts, data.exercises, daily],
+  );
+  const trainingStats = useMemo(() => computeTrainingStats(sessions), [sessions]);
+  const trainingGoals = useMemo(
+    () => exerciseGoals(sessions, data.exercises),
+    [sessions, data.exercises],
   );
 
   const setValue = useCallback(
@@ -69,16 +155,203 @@ export function useBodyData(): BodyData {
     setData((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }));
   }, []);
 
-  const mergeEntries = useCallback((entries: Entries, mode: 'merge' | 'replace') => {
-    setData((prev) => ({
-      ...prev,
-      entries: mode === 'replace' ? entries : { ...prev.entries, ...entries },
-    }));
+  /**
+   * インポートは最後に sanitizeData を通す。
+   * 種目とログを別々にマージすると、片方だけ入って参照先のない workouts が残りうるため。
+   */
+  const importData = useCallback((payload: ImportPayload, mode: 'merge' | 'replace') => {
+    setData((prev) => {
+      const entries: Entries =
+        mode === 'replace' ? payload.entries : { ...prev.entries, ...payload.entries };
+
+      const exercises =
+        payload.exercises == null
+          ? prev.exercises
+          : mode === 'replace'
+            ? payload.exercises
+            : [
+                ...prev.exercises,
+                ...payload.exercises.filter((e) => !prev.exercises.some((p) => p.id === e.id)),
+              ];
+
+      const workouts =
+        payload.workouts == null
+          ? prev.workouts
+          : mode === 'replace'
+            ? payload.workouts
+            : { ...prev.workouts, ...payload.workouts };
+
+      return sanitizeData({
+        version: 2,
+        settings: payload.settings ?? prev.settings,
+        entries,
+        exercises,
+        workouts,
+      });
+    });
+  }, []);
+
+  const clearRecords = useCallback(() => {
+    setData((prev) => ({ ...prev, entries: {}, workouts: {} }));
   }, []);
 
   const clearAll = useCallback(() => {
     setData((prev) => ({ ...emptyData(), settings: prev.settings }));
   }, []);
 
-  return { data, daily, weeks, stats, projection, setValue, removeDay, updateSettings, mergeEntries, clearAll };
+  /* ---- 筋トレのログ ---- */
+
+  const addDayExercise = useCallback((date: string, exerciseId: string) => {
+    setData((prev) => {
+      // 同一種目は 1 日 1 エントリ。すでにあれば何もしない（画面側で既存カードへ移動する）
+      if ((prev.workouts[date] ?? []).some((e) => e.exerciseId === exerciseId)) return prev;
+      const day = prev.workouts[date] ?? [];
+      return {
+        ...prev,
+        workouts: { ...prev.workouts, [date]: [...day, { exerciseId, sets: [{ ...EMPTY_SET }] }] },
+      };
+    });
+  }, []);
+
+  const removeDayExercise = useCallback((date: string, exerciseId: string) => {
+    setData((prev) => {
+      const day = prev.workouts[date];
+      if (!day) return prev;
+      const kept = day.filter((e) => e.exerciseId !== exerciseId);
+      const workouts = { ...prev.workouts };
+      if (kept.length === 0) delete workouts[date];
+      else workouts[date] = kept;
+      return { ...prev, workouts };
+    });
+  }, []);
+
+  const addSet = useCallback((date: string, exerciseId: string) => {
+    setData((prev) => ({
+      ...prev,
+      workouts: mapDayExercise(prev.workouts, date, exerciseId, (e) => ({
+        ...e,
+        // 直前のセットを複製する。同じ重量で続けるのが普通なので、入力は差分だけで済む
+        sets: [...e.sets, e.sets.length > 0 ? { ...e.sets[e.sets.length - 1]! } : { ...EMPTY_SET }],
+      })),
+    }));
+  }, []);
+
+  const removeSet = useCallback((date: string, exerciseId: string, index: number) => {
+    setData((prev) => {
+      const workouts = mapDayExercise(prev.workouts, date, exerciseId, (e) => ({
+        ...e,
+        sets: e.sets.filter((_, i) => i !== index),
+      }));
+      return { ...prev, workouts: pruneDay(workouts, date) };
+    });
+  }, []);
+
+  const setSetValue = useCallback(
+    (date: string, exerciseId: string, index: number, field: SetField, value: number | null) => {
+      setData((prev) => ({
+        ...prev,
+        workouts: mapDayExercise(prev.workouts, date, exerciseId, (e) => ({
+          ...e,
+          sets: e.sets.map((s, i) => (i === index ? { ...s, [field]: value } : s)),
+        })),
+      }));
+    },
+    [],
+  );
+
+  const copySets = useCallback((date: string, exerciseId: string, sets: readonly WorkSet[]) => {
+    setData((prev) => ({
+      ...prev,
+      workouts: mapDayExercise(prev.workouts, date, exerciseId, (e) => ({
+        ...e,
+        sets: sets.map((s) => ({ weight: s.weight, reps: s.reps })),
+      })),
+    }));
+  }, []);
+
+  /* ---- 種目マスタ ---- */
+
+  const setGroupGoal = useCallback((group: MuscleGroup, value: number | null) => {
+    setData((prev) => ({ ...prev, groupGoals: { ...prev.groupGoals, [group]: value } }));
+  }, []);
+
+  const upsertExercise = useCallback((exercise: Exercise) => {
+    setData((prev) => {
+      const exists = prev.exercises.some((e) => e.id === exercise.id);
+      return {
+        ...prev,
+        exercises: exists
+          ? prev.exercises.map((e) => (e.id === exercise.id ? exercise : e))
+          : [...prev.exercises, { ...exercise, order: prev.exercises.length }],
+      };
+    });
+  }, []);
+
+  const addExercises = useCallback((exercises: readonly Exercise[]) => {
+    setData((prev) => {
+      const known = new Set(prev.exercises.map((e) => e.id));
+      const added = exercises
+        .filter((e) => !known.has(e.id))
+        .map((e, i) => ({ ...e, order: prev.exercises.length + i }));
+      if (added.length === 0) return prev;
+      return { ...prev, exercises: [...prev.exercises, ...added] };
+    });
+  }, []);
+
+  const removeExercise = useCallback((id: string) => {
+    setData((prev) => {
+      // 種目を消してログを残すと、sanitize が参照先のないログとして黙って落とす。
+      // 消えるものが見えるように、ここで明示的に一緒に消す
+      const workouts: Workouts = {};
+      for (const [date, day] of Object.entries(prev.workouts)) {
+        const kept = day.filter((e) => e.exerciseId !== id);
+        if (kept.length > 0) workouts[date] = kept;
+      }
+      return {
+        ...prev,
+        exercises: prev.exercises.filter((e) => e.id !== id).map((e, i) => ({ ...e, order: i })),
+        workouts,
+      };
+    });
+  }, []);
+
+  const moveExercise = useCallback((id: string, delta: number) => {
+    setData((prev) => {
+      const list = [...prev.exercises].sort((a, b) => a.order - b.order);
+      const from = list.findIndex((e) => e.id === id);
+      const to = from + delta;
+      if (from < 0 || to < 0 || to >= list.length) return prev;
+      const [moved] = list.splice(from, 1);
+      list.splice(to, 0, moved!);
+      return { ...prev, exercises: list.map((e, i) => ({ ...e, order: i })) };
+    });
+  }, []);
+
+  return {
+    data,
+    daily,
+    weeks,
+    stats,
+    projection,
+    sessions,
+    trainingStats,
+    trainingGoals,
+    setValue,
+    removeDay,
+    updateSettings,
+    importData,
+    clearRecords,
+    clearAll,
+    addDayExercise,
+    removeDayExercise,
+    addSet,
+    removeSet,
+    setSetValue,
+    copySets,
+    setGroupGoal,
+    upsertExercise,
+    addExercises,
+    removeExercise,
+    moveExercise,
+  };
 }

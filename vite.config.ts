@@ -1,10 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+// バージョンの出どころを package.json 1 つに保つ（画面に出す値を二重管理しない）
+import pkg from './package.json';
 
 // GitHub Pages のプロジェクトページ配下でも OneDrive 上の静的配信でも動くよう相対パス出力にする
 export default defineConfig({
   base: './',
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   plugins: [
     react(),
     VitePWA({

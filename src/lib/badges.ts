@@ -1,3 +1,4 @@
+import type { TrainingStats } from './training';
 import type { Stats } from '../types';
 
 export interface Badge {
@@ -16,7 +17,7 @@ interface Rule {
   name: string;
   detail: string;
   /** 現在値 */
-  value: (s: Stats) => number | null;
+  value: (s: Stats, t: TrainingStats) => number | null;
   /** 到達条件 */
   goal: number;
 }
@@ -38,6 +39,12 @@ const RULES: Rule[] = [
   { id: 'bf-1', icon: '📉', name: '体脂肪−1%', detail: '開始から体脂肪率−1.0%', value: (s) => (s.bodyFatDelta == null ? null : -s.bodyFatDelta), goal: 1 },
   { id: 'bf-3', icon: '✨', name: '体脂肪−3%', detail: '開始から体脂肪率−3.0%', value: (s) => (s.bodyFatDelta == null ? null : -s.bodyFatDelta), goal: 3 },
   { id: 'fat-2', icon: '🔻', name: '体脂肪量−2kg', detail: '開始から体脂肪量−2.0kg', value: (s) => (s.fatMassDelta == null ? null : -s.fatMassDelta), goal: 2 },
+  // トレーニングは「やった事実」だけを数える。成果（挙上重量の伸び）は褒めない
+  { id: 'train-30', icon: '🏋️', name: 'トレ30回', detail: 'トレーニングを通算30回', value: (_s, t) => t.sessions, goal: 30 },
+  { id: 'train-100', icon: '🥇', name: 'トレ100回', detail: 'トレーニングを通算100回', value: (_s, t) => t.sessions, goal: 100 },
+  { id: 'train-week-4', icon: '📅', name: '週2回 ×4週', detail: '週2回以上を4週続ける', value: (_s, t) => t.bestWeeklyStreak, goal: 4 },
+  { id: 'train-week-12', icon: '🗓️', name: '週2回 ×12週', detail: '週2回以上を12週続ける', value: (_s, t) => t.bestWeeklyStreak, goal: 12 },
+  { id: 'train-full-body', icon: '🧩', name: '全部位を一巡', detail: '1週間で6部位すべてを回す', value: (_s, t) => t.fullBodyWeeks, goal: 1 },
 ];
 
 /** 体重を落としつつ除脂肪体重を保てたか。ボディメイクとしての「質」を見る特別枠 */
@@ -55,9 +62,9 @@ function qualityBadge(stats: Stats): Badge {
   };
 }
 
-export function computeBadges(stats: Stats): Badge[] {
+export function computeBadges(stats: Stats, training: TrainingStats): Badge[] {
   const fromRules = RULES.map<Badge>((rule) => {
-    const value = rule.value(stats) ?? 0;
+    const value = rule.value(stats, training) ?? 0;
     return {
       id: rule.id,
       icon: rule.icon,

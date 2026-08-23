@@ -1,12 +1,47 @@
+@use 'sass:color';
+@use 'sass:math';
+@use 'sass:list';
+@use 'sass:map';
+
 // ===========================================================
 //  デザイントークン
 //  ライト値を素の :root に「全部」定義し、ダークは 2 スコープで上書きする。
 //   - @media (prefers-color-scheme: dark) … OS 設定
 //   - :root[data-theme='dark']            … アプリ内トグル（OS より優先）
 //  :where() と :not([data-theme='light']) で、明示ライト指定が OS ダークに勝つ。
+//
+//  名前つきの配色（indigo-night ほか）は明示指定でしか出ないので属性セレクタだけ。
+//  OS がダークのときは上の @media も当たるが、属性セレクタのほうが詳細度で勝つ。
 // ===========================================================
 
-$light: (
+// 系列色は「実体」に固定する。並び順や絞り込みでも、配色を変えても塗り替えない。
+// 体重・体脂肪・除脂肪の 3 本は常に見分けられる必要があり、
+// テーマのアクセント 1 色から識別可能な 3 色は作れないため。
+$light-series: (
+  s-weight:       #2a78d6,
+  s-fat:          #eb6834,
+  s-lean:         #1baf7a,
+  s-weight-wash:  rgba(42, 120, 214, 0.1),
+  s-fat-wash:     rgba(235, 104, 52, 0.1),
+  // カロリー収支の発散型 2 極（寒色↔暖色で「反対」と読ませる）。中点はゼロ線のグレー
+  s-deficit:      #2a78d6,
+  s-surplus:      #e34948,
+);
+
+$dark-series: (
+  s-weight:       #3987e5,
+  s-fat:          #d95926,
+  s-lean:         #199e70,
+  s-weight-wash:  rgba(57, 135, 229, 0.14),
+  s-fat-wash:     rgba(217, 89, 38, 0.14),
+  s-deficit:      #3987e5,
+  s-surplus:      #e66767,
+);
+
+$light-shadow: (0 1px 2px rgba(11, 11, 11, 0.05), 0 1px 10px rgba(11, 11, 11, 0.03));
+$dark-shadow: (0 1px 2px rgba(0, 0, 0, 0.4));
+
+$light: map.merge($light-series, (
   plane:          #f9f9f7,
   surface:        #fcfcfb,
   surface-sunken: #f2f1ed,
@@ -16,25 +51,16 @@ $light: (
   ink-muted:      #898781,
   grid:           #e1e0d9,
   axis:           #c3c2b7,
-  // 系列色は「実体」に固定する。並び順や絞り込みで塗り替えない
-  s-weight:       #2a78d6,
-  s-fat:          #eb6834,
-  s-lean:         #1baf7a,
-  s-weight-wash:  rgba(42, 120, 214, 0.1),
-  s-fat-wash:     rgba(235, 104, 52, 0.1),
-  // カロリー収支の発散型 2 極（寒色↔暖色で「反対」と読ませる）。中点はゼロ線のグレー
-  s-deficit:      #2a78d6,
-  s-surplus:      #e34948,
   good:           #0ca30c,
   good-text:      #006300,
   warning:        #fab219,
   critical:       #d03b3b,
   accent:         #2a78d6,
   accent-soft:    rgba(42, 120, 214, 0.12),
-  shadow:         (0 1px 2px rgba(11, 11, 11, 0.05), 0 1px 10px rgba(11, 11, 11, 0.03)),
-);
+  shadow:         $light-shadow,
+));
 
-$dark: (
+$dark: map.merge($dark-series, (
   plane:          #0d0d0d,
   surface:        #1a1a19,
   surface-sunken: #232321,
@@ -44,21 +70,120 @@ $dark: (
   ink-muted:      #898781,
   grid:           #2c2c2a,
   axis:           #383835,
-  s-weight:       #3987e5,
-  s-fat:          #d95926,
-  s-lean:         #199e70,
-  s-weight-wash:  rgba(57, 135, 229, 0.14),
-  s-fat-wash:     rgba(217, 89, 38, 0.14),
-  s-deficit:      #3987e5,
-  s-surplus:      #e66767,
   good:           #0ca30c,
   good-text:      #0ca30c,
   warning:        #fab219,
   critical:       #d03b3b,
   accent:         #3987e5,
   accent-soft:    rgba(57, 135, 229, 0.18),
-  shadow:         (0 1px 2px rgba(0, 0, 0, 0.4)),
+  shadow:         $dark-shadow,
+));
+
+/// ReRail（別アプリ）の配色定義を、このアプリのトークンへ写す。
+///
+/// 向こうは背景をグラデーション、面をガラス（半透明）で作っているので、
+/// 地を単色にすると別物になる。--plane-image で地に重ね、面は半透明のまま受ける。
+///
+/// color.scale の結果はチャンネルが小数のまま出る。
+/// rgb(101.856, 104.448, 224.544) のような値は有効だが、読めないし CSS も太る
+@function px($c) {
+  @return rgb(
+    math.round(color.channel($c, 'red', $space: rgb)),
+    math.round(color.channel($c, 'green', $space: rgb)),
+    math.round(color.channel($c, 'blue', $space: rgb))
+  );
+}
+
+/// 系列色と影は移さない。系列色は上記の理由、影は向こうに対応する概念が無い。
+///
+/// $calm は彩度をどれだけ落とすか（0 で原色のまま、1 で最大）。
+/// 向こうは Tailwind の 500 番台をそのまま使っていて、本文色まで彩度が高い。
+/// 暗い地に彩度の高い文字を置くと発光して見えるので、色相は保ったまま彩度だけ落とす。
+/// もともと低彩度に設計されている配色（Solarized・Sakura）は落とす量を減らす。
+@function rerail(
+  $from, $via, $to,
+  $accent, $success, $warning, $danger,
+  $ink, $ink-2, $ink-muted,
+  $surface, $sunken, $border,
+  $dark: true,
+  $calm: 1
+) {
+  // 本文色がいちばん効く。アクセントは識別に使うので控えめに落とす
+  $text-drop: -52% * $calm;
+  $accent-drop: -20% * $calm;
+  $plane-drop: -28% * $calm;
+
+  $a: px(color.scale($accent, $saturation: $accent-drop, $lightness: -4% * $calm));
+  // 終端を地に寄せて、グラデーションの振れ幅そのものを縮める
+  $to-calm: px(color.mix(color.scale($to, $saturation: $plane-drop), $from, 78%));
+
+  $series: $dark-series;
+  $shadow: $dark-shadow;
+  // 明るい地の上では、成功色をそのまま文字に使うと読めない
+  $good-text: px(color.scale($success, $saturation: $accent-drop));
+  @if not $dark {
+    $series: $light-series;
+    $shadow: $light-shadow;
+    $good-text: px(color.scale($success, $saturation: $accent-drop, $lightness: -25%));
+  }
+
+  @return map.merge($series, (
+    plane:          $from,
+    plane-image:    linear-gradient(
+                      160deg,
+                      $from 0%,
+                      px(color.scale($via, $saturation: $plane-drop)) 55%,
+                      $to-calm 100%
+                    ),
+    surface:        $surface,
+    surface-sunken: $sunken,
+    border:         $border,
+    ink:            $ink,
+    ink-2:          px(color.scale($ink-2, $saturation: $text-drop)),
+    ink-muted:      px(color.scale($ink-muted, $saturation: $text-drop)),
+    grid:           rgba($a, 0.14),
+    axis:           rgba($a, 0.28),
+    good:           px(color.scale($success, $saturation: $accent-drop)),
+    good-text:      $good-text,
+    warning:        px(color.scale($warning, $saturation: $accent-drop)),
+    critical:       px(color.scale($danger, $saturation: $accent-drop)),
+    accent:         $a,
+    accent-soft:    rgba($a, 0.14),
+    shadow:         $shadow,
+  ));
+}
+
+$themes: (
+  indigo-night: rerail(
+    #1e1b4b, #312e81, #581c87,
+    #6366f1, #10b981, #f59e0b, #ef4444,
+    #ffffff, #a5b4fc, #818cf8,
+    rgba(49, 46, 129, 0.7), rgba(30, 27, 75, 0.5), rgba(99, 102, 241, 0.2)
+  ),
+  ocean-blue: rerail(
+    #0f172a, #1e3a5f, #164e63,
+    #0ea5e9, #10b981, #f59e0b, #ef4444,
+    #ffffff, #7dd3fc, #38bdf8,
+    rgba(30, 58, 95, 0.7), rgba(15, 23, 42, 0.5), rgba(14, 165, 233, 0.2)
+  ),
+  sakura: rerail(
+    #fce9ec, #fdf2f4, #fff5f7,
+    #e8627c, #4caf50, #ff9800, #f44336,
+    #a64a61, #d16b80, #e8a0ae,
+    rgba(255, 255, 255, 0.8), rgba(232, 98, 124, 0.1), rgba(232, 98, 124, 0.2),
+    $dark: false, $calm: 0.4
+  ),
+  solarized-light: rerail(
+    #fdf6e3, #eee8d5, #fdf6e3,
+    #268bd2, #859900, #b58900, #dc322f,
+    #586e75, #657b83, #93a1a1,
+    rgba(238, 232, 213, 0.75), rgba(147, 161, 161, 0.16), rgba(147, 161, 161, 0.32),
+    $dark: false, $calm: 0.3
+  ),
 );
+
+/// 地が明るい配色。フォームやスクロールバーの既定色を OS へ伝えるのに使う
+$light-themes: (sakura, solarized-light);
 
 @mixin emit($theme) {
   @each $name, $value in $theme {
@@ -69,6 +194,9 @@ $dark: (
 :root {
   color-scheme: light;
   @include emit($light);
+
+  // 地に重ねる画像。単色の配色では何も重ねない
+  --plane-image: none;
 
   --radius: 14px;
   --radius-s: 9px;
@@ -89,4 +217,15 @@ $dark: (
 :root[data-theme='dark'] {
   color-scheme: dark;
   @include emit($dark);
+}
+
+@each $id, $theme in $themes {
+  :root[data-theme='#{$id}'] {
+    @if list.index($light-themes, $id) {
+      color-scheme: light;
+    } @else {
+      color-scheme: dark;
+    }
+    @include emit($theme);
+  }
 }

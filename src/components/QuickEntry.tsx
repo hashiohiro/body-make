@@ -1,4 +1,4 @@
-import { addDays, formatMDW, todayISO } from '../lib/date';
+import { addDays, todayISO } from '../lib/date';
 import { dayAverageBodyFat, dayAverageWeight, emptyDay } from '../lib/derive';
 import { fmt } from '../lib/format';
 import { BODYFAT_RANGE, WEIGHT_RANGE } from '../lib/storage';
@@ -46,8 +46,7 @@ export function QuickEntry({ date, entries, daily, onDateChange, onValue }: Prop
   return (
     <section className={ui.card}>
       <header className={ui.cardHeader}>
-        <h2 className={ui.cardTitle}>記録</h2>
-        <span className={ui.hint}>{formatMDW(date)}</span>
+        <h2 className={ui.cardTitle}>体組成</h2>
       </header>
 
       <div className={s.dateRow}>
@@ -141,10 +140,6 @@ export function QuickEntry({ date, entries, daily, onDateChange, onValue }: Prop
           {fmt(avgWeight)} kg / {fmt(avgBodyFat)} %
         </b>
       </div>
-
-      <p className={ui.note}>
-        朝と夜の平均を「その日の値」として扱います（エクセルと同じ）。片方だけでも記録すればカウントされます。
-      </p>
     </section>
   );
 }

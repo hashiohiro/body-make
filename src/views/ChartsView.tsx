@@ -4,8 +4,9 @@ import type { ChartSeries } from '../components/charts/TimeSeriesChart';
 import { EnergyBalanceChart } from '../components/charts/EnergyBalanceChart';
 import { WeeklyCompositionChart } from '../components/charts/WeeklyCompositionChart';
 import { DailyTable, EnergyTable, WeeklyTable } from '../components/DataTables';
+import { TrainingCharts } from '../components/training/TrainingCharts';
 import { addDays, isoToTime, todayISO } from '../lib/date';
-import { computeEnergyBalance, ENERGY_WINDOWS, KCAL_PER_KG, weeksShort } from '../lib/energy';
+import { computeEnergyBalance, ENERGY_WINDOWS, weeksShort } from '../lib/energy';
 import type { EnergyWindow } from '../lib/energy';
 import type { BodyData } from '../hooks/useBodyData';
 import ui from '../styles/ui.module.scss';
@@ -18,13 +19,17 @@ const RANGES: { id: RangeId; label: string; days: number | null }[] = [
   { id: 'all', label: '全期間', days: null },
 ];
 
+type Mode = 'body' | 'training';
+
 export function ChartsView({ body }: { body: BodyData }) {
-  const { daily, weeks, data } = body;
+  const { daily, weeks, sessions, data } = body;
+  const [mode, setMode] = useState<Mode>('body');
   const [range, setRange] = useState<RangeId>('all');
   const [energyWindow, setEnergyWindow] = useState<EnergyWindow>(1);
 
   const today = todayISO();
-  const firstDate = daily[0]?.date ?? today;
+  // 体重より先にトレーニングを記録し始めた場合も期間の起点に含める
+  const firstDate = [daily[0]?.date, sessions[0]?.date].filter(Boolean).sort()[0] ?? today;
 
   const from = useMemo(() => {
     const days = RANGES.find((r) => r.id === range)?.days ?? null;
@@ -84,6 +89,24 @@ export function ChartsView({ body }: { body: BodyData }) {
 
   return (
     <>
+      {/* 体組成とトレーニングは別の物差しなので、同じ画面に混ぜず切り替える */}
+      <div className={ui.chipRow} role="group" aria-label="グラフの種類">
+        {([
+          ['body', '体組成'],
+          ['training', 'トレーニング'],
+        ] as [Mode, string][]).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={ui.chip}
+            aria-pressed={mode === id}
+            onClick={() => setMode(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* フィルタはすべてのグラフに効く 1 行としてカードの外に置く */}
       <div className={ui.chipRow} role="group" aria-label="表示期間">
         {RANGES.map((r) => (
@@ -99,6 +122,12 @@ export function ChartsView({ body }: { body: BodyData }) {
         ))}
       </div>
 
+      {mode === 'training' && (
+        <TrainingCharts sessions={sessions} exercises={data.exercises} from={from} />
+      )}
+
+      {mode === 'body' && (
+        <>
       <section className={ui.card}>
         <header className={ui.cardHeader}>
           <h2 className={ui.cardTitle}>体重の推移</h2>
@@ -116,7 +145,7 @@ export function ChartsView({ body }: { body: BodyData }) {
           }
         />
         <p className={ui.note}>
-          点は朝夕の平均（その日の実測）、線は7日移動平均。水分や食事で1〜2kg動くため、判断は線のほうで行います。
+          体重は水分や食事で1日のうちに1〜2kg動きます。判断は移動平均の線のほうで。
         </p>
       </section>
 
@@ -136,9 +165,6 @@ export function ChartsView({ body }: { body: BodyData }) {
               : null
           }
         />
-        <p className={ui.note}>
-          体重とは単位が違うので別のグラフにしています（2軸で重ねると目盛りの合わせ方しだいで相関があるように見えてしまうため）。
-        </p>
       </section>
 
       <section className={ui.card}>
@@ -148,7 +174,7 @@ export function ChartsView({ body }: { body: BodyData }) {
         </header>
         <WeeklyCompositionChart weeks={visibleWeeks} />
         <p className={ui.note}>
-          体脂肪量 = 週平均体重 × 週平均体脂肪率 ÷ 100（近似）。除脂肪体重が保たれたまま体脂肪量だけ減っているのが理想の形です。
+          除脂肪体重を保ったまま体脂肪量だけ減っているのが理想の形です。
         </p>
         <WeeklyTable weeks={visibleWeeks} />
       </section>
@@ -194,13 +220,9 @@ export function ChartsView({ body }: { body: BodyData }) {
         )}
 
         <p className={ui.note}>
-          体組織1kgあたり {KCAL_PER_KG.toLocaleString()} kcal として、週平均どうしの差を1日あたりの収支に換算しています。
-          摂取カロリーそのものではなく「摂取 − 消費」の推定値です。
-          <br />
-          <br />
-          棒は<b>体重ベース</b>。体組成計の体脂肪率は水分や食事で大きく振れるため、値の信頼度は体重ベースのほうが高くなります。
-          灰色のマーカーが<b>体脂肪量ベース</b>の推定で、棒との差が大きい週ほど体組成計の読みが荒れていると考えてください。
-          どちらも数週間ぶんの傾向で見る値で、1週ぶんの値を鵜呑みにしないのが安全です。
+          「摂取 − 消費」の推定値です（摂取カロリーそのものではありません）。
+          数週間の傾向で見る値で、1週ぶんを鵜呑みにしないでください。
+          棒と灰色マーカーの差が大きい週ほど、体組成計の読みが荒れています。
         </p>
       </section>
 
@@ -210,6 +232,8 @@ export function ChartsView({ body }: { body: BodyData }) {
         </header>
         <DailyTable daily={visible} />
       </section>
+        </>
+      )}
     </>
   );
 }

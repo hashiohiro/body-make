@@ -1,0 +1,121 @@
+import { formatMD } from '../../lib/date';
+import { deltaTone, fmt, fmtDelta } from '../../lib/format';
+import { GROUP_LABELS } from '../../lib/exerciseCatalog';
+import { summarizeSets } from '../../lib/training';
+import type { ExerciseHistoryPoint } from '../../lib/training';
+import type { Exercise, ExercisePoint, SessionExercise } from '../../types';
+import { SetRow } from './SetRow';
+import ui from '../../styles/ui.module.scss';
+import s from './training.module.scss';
+
+const TONE_CLASS = { good: ui.good, bad: ui.bad, flat: ui.flat } as const;
+
+interface Props {
+  exercise: Exercise;
+  entry: SessionExercise;
+  point: ExercisePoint | null;
+  previous: ExerciseHistoryPoint | null;
+  onValue: (index: number, field: 'weight' | 'reps', value: number | null) => void;
+  onAddSet: () => void;
+  onRemoveSet: (index: number) => void;
+  onRemove: () => void;
+  onCopyPrevious: () => void;
+}
+
+export function ExerciseCard({
+  exercise,
+  entry,
+  point,
+  previous,
+  onValue,
+  onAddSet,
+  onRemoveSet,
+  onRemove,
+  onCopyPrevious,
+}: Props) {
+  const volume = point?.volume ?? 0;
+  const prevVolume = previous?.point.volume ?? null;
+  const delta = prevVolume != null && prevVolume > 0 && volume > 0 ? volume - prevVolume : null;
+  // 挙上量は増えたほうが前進なので lowerIsBetter = false。方向の反転は既存の仕組みに任せる
+  const tone = deltaTone(delta, false, 0.5);
+
+  // まだ何も入っていないカードにだけ複製を出す。入力済みを黙って上書きしない
+  const empty = entry.sets.every((set) => set.weight == null && set.reps == null);
+
+  return (
+    <section className={ui.card} id={`ex-card-${exercise.id}`}>
+      <div className={s.exHead}>
+        <span className={s.exName}>{exercise.name}</span>
+        <span className={s.exTag}>{GROUP_LABELS[exercise.group]}</span>
+        <button
+          type="button"
+          className={s.exRemove}
+          aria-label={`${exercise.name}をこの日から外す`}
+          onClick={onRemove}
+        >
+          ×
+        </button>
+      </div>
+
+      <div className={s.prev}>
+        {previous ? (
+          <>
+            <span>
+              前回 {formatMD(previous.date)}: {summarizeSets(previous.point)}
+            </span>
+            {empty && (
+              <button type="button" className={s.prevBtn} onClick={onCopyPrevious}>
+                前回の構成で始める
+              </button>
+            )}
+          </>
+        ) : (
+          <span>この種目の記録は初めてです</span>
+        )}
+      </div>
+
+      <div className={s.setHead} aria-hidden="true">
+        <span />
+        <span>{exercise.repUnit === 'seconds' ? '秒数' : '回数'}</span>
+        <span />
+        <span>重量 kg</span>
+        <span />
+      </div>
+
+      {entry.sets.map((set, i) => (
+        <SetRow
+          key={i}
+          index={i}
+          set={set}
+          point={point?.sets[i] ?? null}
+          repUnit={exercise.repUnit}
+          fallbackWeight={entry.sets[i - 1]?.weight ?? previous?.point.top?.weight ?? null}
+          fallbackReps={entry.sets[i - 1]?.reps ?? previous?.point.top?.reps ?? null}
+          onValue={(field, value) => onValue(i, field, value)}
+          onRemove={() => onRemoveSet(i)}
+        />
+      ))}
+
+      <button type="button" className={s.addSet} onClick={onAddSet}>
+        ＋ セットを追加
+      </button>
+
+      <div className={s.exFoot}>
+        <span>{point?.workSets ?? 0} セット</span>
+        {/* 推定1RM はこのカードにだけ出す */}
+        {point?.oneRm != null && (
+          <span>
+            推定1RM {fmt(point.oneRm)} kg{point.measured ? ' *' : ''}
+            {point.top?.weight != null && ` （${point.top.weight}×${point.top.reps} から）`}
+          </span>
+        )}
+        <b>
+          {Math.round(volume).toLocaleString()} kg
+          {delta != null && (
+            <span className={`${ui.hint} ${TONE_CLASS[tone]}`}> {fmtDelta(delta, 0)}</span>
+          )}
+        </b>
+      </div>
+    </section>
+  );
+}

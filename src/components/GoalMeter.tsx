@@ -23,8 +23,6 @@ export function GoalMeter({ settings, stats, projection, onOpenSettings }: Props
         </header>
         <p className={ui.emptyState}>
           目標体重を決めると、到達予測日と進捗バーが出ます。
-          <br />
-          ゴールがあるほうが続きます。
         </p>
         <div className={ui.btnRow}>
           <button type="button" className={`${ui.btn} ${ui.btnPrimary}`} onClick={onOpenSettings}>

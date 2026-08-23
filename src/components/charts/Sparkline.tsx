@@ -6,11 +6,29 @@ interface Props {
   points: readonly { t: number; v: number }[];
   color?: string;
   height?: number;
+  /** 最新点の丸。地の色で縁取るので、面の色が違う場所に置くときは切る */
+  dot?: boolean;
   ariaLabel: string;
 }
 
-/** ヒーロー数値に添える 12〜30 点の軌跡。軸も目盛りも持たない「形だけ」の図 */
-export function Sparkline({ points, color = 'var(--s-weight)', height = 44, ariaLabel }: Props) {
+/**
+ * ヒーロー数値に添える 12〜30 点の軌跡。軸も目盛りも持たない「形だけ」の図。
+ *
+ * 系列ごとに 1 つ描く。体重と除脂肪体重を 1 本の軸に重ねると、
+ * 差（＝体脂肪量）は正しく見えるが縦幅が 14kg ほどに広がり、
+ * それぞれの ±0.5kg の動きが潰れて読めなくなる。
+ * ここで見たいのは差の絶対量ではなく「それぞれの形」なので、別々に描く。
+ *
+ * 線と点の太さは height に追従させる。一覧の行（24px 前後）に
+ * ヒーロー用の太さのまま置くと、線が図を塗り潰してしまう。
+ */
+export function Sparkline({
+  points,
+  color = 'var(--s-weight)',
+  height = 44,
+  dot = true,
+  ariaLabel,
+}: Props) {
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
 
   const values = points.map((p) => p.v);
@@ -24,6 +42,8 @@ export function Sparkline({ points, color = 'var(--s-weight)', height = 44, aria
   );
   const y = linearScale([min - pad, max + pad], [height - 5, 5]);
   const last = points[points.length - 1];
+  const stroke = Math.max(1.5, height / 22);
+  const dotRadius = Math.max(2.5, height / 11);
 
   return (
     <div className={s.wrap} ref={wrapRef}>
@@ -33,12 +53,19 @@ export function Sparkline({ points, color = 'var(--s-weight)', height = 44, aria
             d={linePath(points.map((p) => ({ x: x(p.t), y: y(p.v) })))}
             fill="none"
             stroke={color}
-            strokeWidth={2}
+            strokeWidth={stroke}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          {last && (
-            <circle cx={x(last.t)} cy={y(last.v)} r={4} fill={color} stroke="var(--surface)" strokeWidth={2} />
+          {dot && last && (
+            <circle
+              cx={x(last.t)}
+              cy={y(last.v)}
+              r={dotRadius}
+              fill={color}
+              stroke="var(--surface)"
+              strokeWidth={stroke}
+            />
           )}
         </svg>
       )}

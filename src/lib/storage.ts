@@ -1,8 +1,29 @@
-import type { AppData, DayEntry, Entries, Measurement, Settings, ThemePref } from '../types';
+import type {
+  AppData,
+  DayEntry,
+  Entries,
+  Exercise,
+  ExerciseTarget,
+  GroupGoals,
+  LoadMode,
+  Measurement,
+  MuscleGroup,
+  SessionExercise,
+  Settings,
+  SubGroup,
+  ThemePref,
+  WorkSet,
+  Workouts,
+} from '../types';
+import { SUB_GROUP_WEIGHT, SUB_GROUP_WEIGHT_RANGE } from './exerciseCatalog';
+import { THEME_IDS } from './themes';
 import { seedEntries } from './seed';
 
+/** キー名はスキーマ版ではなく保存先のアドレス。v2 でも変えない（変えると既存データが見えなくなる） */
 const DATA_KEY = 'bodymake.data.v1';
 const SEEDED_KEY = 'bodymake.seeded.v1';
+
+export const DATA_VERSION = 2;
 
 export const DEFAULT_SETTINGS: Settings = {
   heightCm: null,
@@ -12,8 +33,31 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
 };
 
+const EMPTY_GROUP_GOALS: GroupGoals = {
+  chest: null,
+  back: null,
+  legs: null,
+  shoulders: null,
+  arms: null,
+  core: null,
+};
+
 export function emptyData(): AppData {
-  return { version: 1, settings: { ...DEFAULT_SETTINGS }, entries: {} };
+  return {
+    version: 2,
+    settings: { ...DEFAULT_SETTINGS },
+    entries: {},
+    exercises: [],
+    workouts: {},
+    groupGoals: { ...EMPTY_GROUP_GOALS },
+  };
+}
+
+function sanitizeGroupGoals(raw: unknown): GroupGoals {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const out = { ...EMPTY_GROUP_GOALS };
+  for (const g of GROUPS) out[g] = int(o[g], GROUP_GOAL_RANGE[0], GROUP_GOAL_RANGE[1]);
+  return out;
 }
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -25,9 +69,27 @@ function num(value: unknown, min: number, max: number): number | null {
   return Math.round(n * 10) / 10;
 }
 
+/** レップのように小数を許さない値。四捨五入してから値域を見る */
+function int(value: unknown, min: number, max: number): number | null {
+  const n = typeof value === 'string' ? Number(value) : value;
+  if (typeof n !== 'number' || !Number.isFinite(n)) return null;
+  const rounded = Math.round(n);
+  if (rounded < min || rounded > max) return null;
+  return rounded;
+}
+
 export const WEIGHT_RANGE: [number, number] = [20, 300];
 export const BODYFAT_RANGE: [number, number] = [1, 70];
 export const HEIGHT_RANGE: [number, number] = [100, 250];
+
+/** セットの重量は体重と値域が違う（自重種目の追加重量は 0 もありうる） */
+export const SET_WEIGHT_RANGE: [number, number] = [0, 500];
+export const REPS_RANGE: [number, number] = [1, 100];
+export const RM_DIVISOR_RANGE: [number, number] = [20, 60];
+export const FACTOR_RANGE: [number, number] = [0, 2];
+export const TARGET_WEIGHT_RANGE: [number, number] = [0, 500];
+export const TARGET_REPS_RANGE: [number, number] = [1, 200];
+export const GROUP_GOAL_RANGE: [number, number] = [1, 50];
 
 export function parseWeight(value: unknown): number | null {
   return num(value, WEIGHT_RANGE[0], WEIGHT_RANGE[1]);
@@ -35,6 +97,14 @@ export function parseWeight(value: unknown): number | null {
 
 export function parseBodyFat(value: unknown): number | null {
   return num(value, BODYFAT_RANGE[0], BODYFAT_RANGE[1]);
+}
+
+export function parseSetWeight(value: unknown): number | null {
+  return num(value, SET_WEIGHT_RANGE[0], SET_WEIGHT_RANGE[1]);
+}
+
+export function parseReps(value: unknown): number | null {
+  return int(value, REPS_RANGE[0], REPS_RANGE[1]);
 }
 
 function sanitizeMeasurement(raw: unknown): Measurement {
@@ -62,6 +132,137 @@ export function sanitizeEntries(raw: unknown): Entries {
   return out;
 }
 
+const GROUPS: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
+
+
+const LOAD_MODES: LoadMode[] = ['standard', 'perSide', 'bodyweight'];
+
+/** 「負荷の種類 + 片手ぶんか」で持っていた頃のデータを読み替える */
+function sanitizeLoadMode(o: Record<string, unknown>): LoadMode {
+  if (LOAD_MODES.includes(o.loadMode as LoadMode)) return o.loadMode as LoadMode;
+  if (o.loadType === 'bodyweight' || o.loadType === 'assisted') return 'bodyweight';
+  return o.perSide === true ? 'perSide' : 'standard';
+}
+
+function sanitizeGoal(o: Record<string, unknown>): ExerciseTarget | null {
+  const raw = (o.goal ?? null) as Record<string, unknown> | null;
+  if (raw && raw.type === 'reps') {
+    const value = int(raw.value, TARGET_REPS_RANGE[0], TARGET_REPS_RANGE[1]);
+    return value == null ? null : { type: 'reps', value };
+  }
+  if (raw && raw.type === 'weight') {
+    const value = num(raw.value, TARGET_WEIGHT_RANGE[0], TARGET_WEIGHT_RANGE[1]);
+    return value == null ? null : { type: 'weight', value };
+  }
+  // 目標を重量固定で持っていた頃のデータを拾う
+  const legacy = num(o.targetWeight, TARGET_WEIGHT_RANGE[0], TARGET_WEIGHT_RANGE[1]);
+  return legacy == null ? null : { type: 'weight', value: legacy };
+}
+
+/** 主部位と重複するもの・未知の値・重複は落とす */
+/** num() は小数第 1 位までなので 0.25 が潰れる。係数だけ第 2 位まで見る */
+function subWeight(value: unknown): number | null {
+  const n = typeof value === 'string' ? Number(value) : value;
+  if (typeof n !== 'number' || !Number.isFinite(n)) return null;
+  if (n < SUB_GROUP_WEIGHT_RANGE[0] || n > SUB_GROUP_WEIGHT_RANGE[1]) return null;
+  return Math.round(n * 100) / 100;
+}
+
+function sanitizeSubGroups(raw: unknown, primary: MuscleGroup): SubGroup[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SubGroup[] = [];
+  for (const item of raw) {
+    // 係数を持たせる前のバックアップは部位名の配列。既定の割合で読む
+    const o = typeof item === 'string' ? { group: item } : ((item ?? {}) as Record<string, unknown>);
+    const g = o.group as MuscleGroup;
+    if (!GROUPS.includes(g) || g === primary || out.some((x) => x.group === g)) continue;
+    out.push({
+      group: g,
+      weight: subWeight(o.weight) ?? SUB_GROUP_WEIGHT,
+    });
+  }
+  return out;
+}
+
+function sanitizeExercise(raw: unknown, order: number): Exercise | null {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const id = typeof o.id === 'string' ? o.id.trim() : '';
+  const name = typeof o.name === 'string' ? o.name.trim().slice(0, 40) : '';
+  // ID と名前が無い種目はログから参照できず、画面にも出せないので落とす
+  if (!id || !name) return null;
+
+  const group = GROUPS.includes(o.group as MuscleGroup) ? (o.group as MuscleGroup) : 'chest';
+
+  return {
+    id,
+    name,
+    group,
+    subGroups: sanitizeSubGroups(o.subGroups, group),
+    loadMode: sanitizeLoadMode(o),
+    repUnit: o.repUnit === 'seconds' ? 'seconds' : 'reps',
+    bodyweightFactor: num(o.bodyweightFactor, FACTOR_RANGE[0], FACTOR_RANGE[1]),
+    rmDivisor: num(o.rmDivisor, RM_DIVISOR_RANGE[0], RM_DIVISOR_RANGE[1]) ?? 30,
+    goal: sanitizeGoal(o),
+    order: int(o.order, 0, 9999) ?? order,
+  };
+}
+
+export function sanitizeExercises(raw: unknown): Exercise[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Exercise[] = [];
+  const seen = new Set<string>();
+  raw.forEach((item, i) => {
+    const ex = sanitizeExercise(item, i);
+    // 同じ ID が二重にいるとログの参照先が曖昧になるため、先勝ちで落とす
+    if (!ex || seen.has(ex.id)) return;
+    seen.add(ex.id);
+    out.push(ex);
+  });
+  return out.sort((a, b) => a.order - b.order).map((ex, i) => ({ ...ex, order: i }));
+}
+
+function sanitizeWorkSet(raw: unknown): WorkSet | null {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const set: WorkSet = {
+    weight: parseSetWeight(o.weight),
+    reps: parseReps(o.reps),
+  };
+  if (set.weight == null && set.reps == null) return null;
+  return set;
+}
+
+/**
+ * 同一種目は 1 日 1 エントリ。重複していたらセットを連結して 1 つにまとめる
+ * （落とすとユーザーの記録が消えるため、統合するほうを選ぶ）。
+ * 存在しない種目を指すログは表示も編集もできないので落とす。
+ */
+export function sanitizeWorkouts(raw: unknown, knownIds: ReadonlySet<string>): Workouts {
+  const out: Workouts = {};
+  if (!raw || typeof raw !== 'object') return out;
+
+  for (const [date, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!ISO_RE.test(date) || !Array.isArray(value)) continue;
+
+    const byId = new Map<string, SessionExercise>();
+    for (const item of value) {
+      const o = (item ?? {}) as Record<string, unknown>;
+      const exerciseId = typeof o.exerciseId === 'string' ? o.exerciseId : '';
+      if (!exerciseId || !knownIds.has(exerciseId)) continue;
+      if (!Array.isArray(o.sets)) continue;
+
+      const sets = o.sets.map(sanitizeWorkSet).filter((s): s is WorkSet => s !== null);
+      if (sets.length === 0) continue;
+
+      const existing = byId.get(exerciseId);
+      if (existing) existing.sets.push(...sets);
+      else byId.set(exerciseId, { exerciseId, sets });
+    }
+
+    if (byId.size > 0) out[date] = [...byId.values()];
+  }
+  return out;
+}
+
 function sanitizeSettings(raw: unknown): Settings {
   const o = (raw ?? {}) as Record<string, unknown>;
   const theme = o.theme;
@@ -70,16 +271,26 @@ function sanitizeSettings(raw: unknown): Settings {
     targetWeight: parseWeight(o.targetWeight),
     targetBodyFat: parseBodyFat(o.targetBodyFat),
     targetDate: typeof o.targetDate === 'string' && ISO_RE.test(o.targetDate) ? o.targetDate : null,
-    theme: theme === 'light' || theme === 'dark' ? (theme as ThemePref) : 'system',
+    // 知らない配色を持つバックアップは 'system' に落とす
+    theme: THEME_IDS.includes(theme as ThemePref) ? (theme as ThemePref) : 'system',
   };
 }
 
+/**
+ * v1 は entries と settings しか持たない。足りないキーを空で補うだけで移行が済む。
+ * 逆にロールバックすると exercises / workouts は落ちるが、それは許容している（docs 参照）。
+ */
 export function sanitizeData(raw: unknown): AppData {
   const o = (raw ?? {}) as Record<string, unknown>;
+  const exercises = sanitizeExercises(o.exercises);
+  const knownIds = new Set(exercises.map((e) => e.id));
   return {
-    version: 1,
+    version: 2,
     settings: sanitizeSettings(o.settings),
     entries: sanitizeEntries(o.entries),
+    exercises,
+    workouts: sanitizeWorkouts(o.workouts, knownIds),
+    groupGoals: sanitizeGroupGoals(o.groupGoals),
   };
 }
 
@@ -92,7 +303,9 @@ export function loadData(): AppData {
     stored = null;
   }
 
-  if (stored && Object.keys(stored.entries).length > 0) return stored;
+  // 以降どの分岐でも base を土台にする。再構築すると筋トレのキーが落ちる
+  const base = stored ?? emptyData();
+  if (Object.keys(base.entries).length > 0) return base;
 
   // 初回起動時のみエクセルの記録を投入する。ユーザーが全消ししたあとに復活させない
   let seeded = false;
@@ -107,10 +320,10 @@ export function loadData(): AppData {
     } catch {
       /* プライベートモード等で書けなくても続行する */
     }
-    return { version: 1, settings: stored?.settings ?? { ...DEFAULT_SETTINGS }, entries: seedEntries() };
+    return { ...base, entries: seedEntries() };
   }
 
-  return stored ?? emptyData();
+  return base;
 }
 
 export function saveData(data: AppData): void {

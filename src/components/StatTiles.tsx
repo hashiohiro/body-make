@@ -40,19 +40,8 @@ export function StatTiles({ stats }: { stats: Stats }) {
       deltaLabel: '開始比',
     },
     {
-      key: 'leanMass',
-      label: '除脂肪体重',
-      value: fmt(stats.currentLeanMass),
-      unit: 'kg',
-      delta: fmtDelta(stats.leanMassDelta),
-      // 除脂肪体重は「維持」が正解。±0.5kg を中立域として色を付けない
-      tone: deltaTone(stats.leanMassDelta, false, 0.5),
-      color: 'var(--s-lean)',
-      deltaLabel: '開始比',
-    },
-    {
       key: 'streak',
-      label: '連続記録',
+      label: '体組成の連続記録',
       value: String(stats.streak),
       unit: '日',
       delta: `直近30日 ${Math.round(stats.recordRate * 100)}%`,
@@ -61,6 +50,7 @@ export function StatTiles({ stats }: { stats: Stats }) {
       deltaLabel: '',
     },
   ];
+
 
   return (
     <div className={s.grid}>

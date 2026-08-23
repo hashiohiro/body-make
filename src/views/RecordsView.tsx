@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { QuickEntry } from '../components/QuickEntry';
+import { TrainingView } from './TrainingView';
 import { formatMD, weekdayJa } from '../lib/date';
 import { fmt } from '../lib/format';
 import type { BodyData } from '../hooks/useBodyData';
@@ -11,13 +13,46 @@ interface Props {
   onDateChange: (date: string) => void;
 }
 
+type Mode = 'weight' | 'training';
+
 export function RecordsView({ body, date, onDateChange }: Props) {
   const { daily, data, setValue, removeDay } = body;
+  const [mode, setMode] = useState<Mode>('weight');
   const rows = [...daily].reverse();
   const selected = data.entries[date];
 
+  // 体重もトレーニングも「その日に何をしたか」の記録なので、同じタブの中で切り替える
+  const tabs = (
+    <div className={ui.chipRow} role="group" aria-label="記録の種類">
+      {([
+        ['weight', '体組成'],
+        ['training', 'トレーニング'],
+      ] as [Mode, string][]).map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          className={ui.chip}
+          aria-pressed={mode === id}
+          onClick={() => setMode(id)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (mode === 'training') {
+    return (
+      <>
+        {tabs}
+        <TrainingView body={body} date={date} onDateChange={onDateChange} />
+      </>
+    );
+  }
+
   return (
     <>
+      {tabs}
       <QuickEntry
         date={date}
         entries={data.entries}

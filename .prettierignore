@@ -1,0 +1,18 @@
+# 生成物
+dist
+dev-dist
+node_modules
+.wrangler
+
+# 生成・取得したもの。整形すると差分の出どころが分からなくなる
+package-lock.json
+THIRD-PARTY-NOTICES.txt
+LICENSE
+LICENSE.txt
+
+# エディタ設定
+.idea
+
+# 手で書いている文書。整形すると設計記録の差分が読めなくなる。
+# 揃えたくなったら外す
+*.md

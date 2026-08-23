@@ -8,6 +8,8 @@ import s from './charts.module.scss';
 export interface SeriesPoint {
   t: number;
   v: number;
+  /** ツールチップに添える補足（例: 換算元のセット「120×3」） */
+  note?: string;
 }
 
 export interface ChartSeries {
@@ -31,6 +33,8 @@ export interface TimeSeriesChartProps {
   /** 目標値などの参照線 */
   reference?: { value: number; label: string } | null;
   emptyMessage?: string;
+  /** 既定は系列が 2 本以上のとき。同じ量を点と線で描く場合は明示的に消す */
+  legend?: boolean;
 }
 
 const MARGIN = { top: 14, right: 50, bottom: 24, left: 40 } as const;
@@ -44,6 +48,7 @@ export function TimeSeriesChart({
   digits = 1,
   reference = null,
   emptyMessage = 'まだ記録がありません',
+  legend,
 }: TimeSeriesChartProps) {
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
@@ -99,7 +104,7 @@ export function TimeSeriesChart({
     ? Math.min(Math.max(x(activeTime) - 60, 4), Math.max(4, width - 128))
     : 0;
 
-  const showLegend = series.length >= 2;
+  const showLegend = legend ?? series.length >= 2;
 
   return (
     <figure>
@@ -281,7 +286,10 @@ export function TimeSeriesChart({
                 <div key={serie.id} className={s.tipRow}>
                   <i className={s.keyDot} style={{ background: serie.color }} aria-hidden="true" />
                   {serie.label}
-                  <b>{p ? `${p.v.toFixed(digits)}${unit}` : '—'}</b>
+                  <b>
+                    {p ? `${p.v.toFixed(digits)}${unit}` : '—'}
+                    {p?.note ? ` · ${p.note}` : ''}
+                  </b>
                 </div>
               );
             })}
