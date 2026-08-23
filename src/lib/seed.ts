@@ -6,7 +6,13 @@ import type { Entries } from '../types';
  */
 export const SEED_SOURCE = '体重推移_final.xlsx';
 
-type Row = [iso: string, amW: number | null, amBf: number | null, pmW: number | null, pmBf: number | null];
+type Row = [
+  iso: string,
+  amW: number | null,
+  amBf: number | null,
+  pmW: number | null,
+  pmBf: number | null,
+];
 
 const ROWS: Row[] = [
   ['2026-07-26', 73.3, 19.9, 73.9, 19.3],

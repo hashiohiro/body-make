@@ -48,7 +48,13 @@ export function Sparkline({
   return (
     <div className={s.wrap} ref={wrapRef}>
       {points.length >= 2 && width > 0 && (
-        <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label={ariaLabel}>
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          width={width}
+          height={height}
+          role="img"
+          aria-label={ariaLabel}
+        >
           <path
             d={linePath(points.map((p) => ({ x: x(p.t), y: y(p.v) })))}
             fill="none"

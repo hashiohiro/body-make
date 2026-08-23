@@ -11,10 +11,11 @@ const MAX_WEEKS = 12;
 
 type ValueId = 'sets' | 'volume';
 
-const VALUES: { id: ValueId; label: string; pick: (w: WeekSetCount, g: MuscleGroup) => number }[] = [
-  { id: 'sets', label: 'セット数', pick: (w, g) => w.setsByGroup[g] },
-  { id: 'volume', label: '挙上量', pick: (w, g) => Math.round(w.volumeByGroup[g]) },
-];
+const VALUES: { id: ValueId; label: string; pick: (w: WeekSetCount, g: MuscleGroup) => number }[] =
+  [
+    { id: 'sets', label: 'セット数', pick: (w, g) => w.setsByGroup[g] },
+    { id: 'volume', label: '挙上量', pick: (w, g) => Math.round(w.volumeByGroup[g]) },
+  ];
 
 interface Props {
   weeks: readonly WeekSetCount[];
@@ -82,12 +83,18 @@ export function GroupSetsHeatmap({ weeks }: Props) {
                         key={w.start}
                         style={
                           n > 0
-                            ? { background: `color-mix(in srgb, var(--s-lean) ${(n / max) * 60}%, transparent)` }
+                            ? {
+                                background: `color-mix(in srgb, var(--s-lean) ${(n / max) * 60}%, transparent)`,
+                              }
                             : undefined
                         }
                       >
                         {n > 0 ? (
-                          valueId === 'sets' ? formatSets(n) : n.toLocaleString()
+                          valueId === 'sets' ? (
+                            formatSets(n)
+                          ) : (
+                            n.toLocaleString()
+                          )
                         ) : (
                           <span className={ui.cellEmpty}>—</span>
                         )}

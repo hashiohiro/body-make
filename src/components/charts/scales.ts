@@ -47,7 +47,10 @@ export function tickDecimals(step: number): number {
 
 export type Scale = (value: number) => number;
 
-export function linearScale(domain: readonly [number, number], range: readonly [number, number]): Scale {
+export function linearScale(
+  domain: readonly [number, number],
+  range: readonly [number, number],
+): Scale {
   const [d0, d1] = domain;
   const [r0, r1] = range;
   const span = d1 - d0;
@@ -56,9 +59,7 @@ export function linearScale(domain: readonly [number, number], range: readonly [
 }
 
 /** 欠測をまたぐ折れ線は繋がず、区間ごとに分割した path を返す */
-export function linePath(
-  points: readonly { x: number; y: number | null }[],
-): string {
+export function linePath(points: readonly { x: number; y: number | null }[]): string {
   let d = '';
   let pen = false;
   for (const p of points) {
@@ -90,7 +91,13 @@ export function roundedTopRect(x: number, y: number, w: number, h: number, r: nu
  * ゼロを挟んで上下に伸びる棒。データ側の端だけ角丸にし、ゼロ側は直角のまま残す。
  * yZero / yValue は画面座標（下向きが正）。
  */
-export function divergingBar(x: number, w: number, yZero: number, yValue: number, r: number): string {
+export function divergingBar(
+  x: number,
+  w: number,
+  yZero: number,
+  yValue: number,
+  r: number,
+): string {
   const h = Math.abs(yValue - yZero);
   const radius = Math.max(0, Math.min(r, w / 2, h));
 

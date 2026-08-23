@@ -103,7 +103,10 @@ export function useBodyData(): BodyData {
 
   const daily = useMemo(() => buildDaily(data.entries), [data.entries]);
   const weeks = useMemo(() => buildWeeks(daily), [daily]);
-  const stats = useMemo(() => computeStats(daily, weeks, data.settings), [daily, weeks, data.settings]);
+  const stats = useMemo(
+    () => computeStats(daily, weeks, data.settings),
+    [daily, weeks, data.settings],
+  );
   const projection = useMemo(
     () => computeProjection(daily, stats, data.settings),
     [daily, stats, data.settings],
@@ -133,7 +136,10 @@ export function useBodyData(): BodyData {
         // 4 項目すべて空になった日はキーごと落とす（欠測日と未記録日を同じ扱いにする）
         const day = next.entries[date]!;
         const blank =
-          day.am.weight == null && day.am.bodyFat == null && day.pm.weight == null && day.pm.bodyFat == null;
+          day.am.weight == null &&
+          day.am.bodyFat == null &&
+          day.pm.weight == null &&
+          day.pm.bodyFat == null;
         if (blank) {
           const { [date]: _removed, ...rest } = next.entries;
           next.entries = rest;

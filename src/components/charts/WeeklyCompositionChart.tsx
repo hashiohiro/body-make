@@ -21,10 +21,7 @@ export function WeeklyCompositionChart({ weeks, height = 250 }: Props) {
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
 
-  const rows = useMemo(
-    () => weeks.filter((w) => w.leanMass != null && w.fatMass != null),
-    [weeks],
-  );
+  const rows = useMemo(() => weeks.filter((w) => w.leanMass != null && w.fatMass != null), [weeks]);
 
   const scale = useMemo(() => {
     const totals = rows.map((w) => (w.leanMass ?? 0) + (w.fatMass ?? 0));
@@ -88,8 +85,20 @@ export function WeeklyCompositionChart({ weeks, height = 250 }: Props) {
 
             {scale.ticks.map((tick) => (
               <g key={tick}>
-                <line className={s.grid} x1={MARGIN.left} x2={MARGIN.left + plotW} y1={y(tick)} y2={y(tick)} />
-                <text className={s.tickLabel} x={MARGIN.left - 7} y={y(tick)} textAnchor="end" dy="0.32em">
+                <line
+                  className={s.grid}
+                  x1={MARGIN.left}
+                  x2={MARGIN.left + plotW}
+                  y1={y(tick)}
+                  y2={y(tick)}
+                />
+                <text
+                  className={s.tickLabel}
+                  x={MARGIN.left - 7}
+                  y={y(tick)}
+                  textAnchor="end"
+                  dy="0.32em"
+                >
                   {tick.toFixed(decimals)}
                 </text>
               </g>
@@ -113,17 +122,22 @@ export function WeeklyCompositionChart({ weeks, height = 250 }: Props) {
                   onPointerDown={() => setActive(i)}
                 >
                   {/* 当たり判定は棒より広く取り、細い棒でも触りやすくする */}
+                  <rect className={s.hit} x={bandX(i)} y={MARGIN.top} width={band} height={plotH} />
                   <rect
-                    className={s.hit}
-                    x={bandX(i)}
-                    y={MARGIN.top}
-                    width={band}
-                    height={plotH}
+                    x={x}
+                    y={leanTop + SEGMENT_GAP}
+                    width={barW}
+                    height={leanH}
+                    fill="var(--s-lean)"
                   />
-                  <rect x={x} y={leanTop + SEGMENT_GAP} width={barW} height={leanH} fill="var(--s-lean)" />
                   <path d={roundedTopRect(x, totalTop, barW, fatH, 4)} fill="var(--s-fat)" />
                   {(labelEvery || i === rows.length - 1) && (
-                    <text className={s.endLabel} x={x + barW / 2} y={totalTop - 7} textAnchor="middle">
+                    <text
+                      className={s.endLabel}
+                      x={x + barW / 2}
+                      y={totalTop - 7}
+                      textAnchor="middle"
+                    >
                       {total.toFixed(1)}
                     </text>
                   )}

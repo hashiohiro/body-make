@@ -49,8 +49,7 @@ export function computeEnergyBalance(
     if (days <= 0) continue;
 
     const weightDelta = to.weight - from.weight;
-    const fatDelta =
-      to.fatMass != null && from.fatMass != null ? to.fatMass - from.fatMass : null;
+    const fatDelta = to.fatMass != null && from.fatMass != null ? to.fatMass - from.fatMass : null;
 
     points.push({
       key: to.start,

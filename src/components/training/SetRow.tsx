@@ -91,7 +91,12 @@ export function SetRow({
         onCommit={(v) => onValue('weight', v)}
       />
 
-      <button type="button" className={s.rowBtn} aria-label={`${index + 1}セット目を削除`} onClick={onRemove}>
+      <button
+        type="button"
+        className={s.rowBtn}
+        aria-label={`${index + 1}セット目を削除`}
+        onClick={onRemove}
+      >
         ×
       </button>
     </div>

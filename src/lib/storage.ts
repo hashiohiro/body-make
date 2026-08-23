@@ -124,7 +124,12 @@ export function sanitizeEntries(raw: unknown): Entries {
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     if (!ISO_RE.test(key)) continue;
     const day = sanitizeDay(value);
-    if (day.am.weight == null && day.am.bodyFat == null && day.pm.weight == null && day.pm.bodyFat == null) {
+    if (
+      day.am.weight == null &&
+      day.am.bodyFat == null &&
+      day.pm.weight == null &&
+      day.pm.bodyFat == null
+    ) {
       continue;
     }
     out[key] = day;
@@ -133,7 +138,6 @@ export function sanitizeEntries(raw: unknown): Entries {
 }
 
 const GROUPS: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
-
 
 const LOAD_MODES: LoadMode[] = ['standard', 'perSide', 'bodyweight'];
 
@@ -173,7 +177,8 @@ function sanitizeSubGroups(raw: unknown, primary: MuscleGroup): SubGroup[] {
   const out: SubGroup[] = [];
   for (const item of raw) {
     // 係数を持たせる前のバックアップは部位名の配列。既定の割合で読む
-    const o = typeof item === 'string' ? { group: item } : ((item ?? {}) as Record<string, unknown>);
+    const o =
+      typeof item === 'string' ? { group: item } : ((item ?? {}) as Record<string, unknown>);
     const g = o.group as MuscleGroup;
     if (!GROUPS.includes(g) || g === primary || out.some((x) => x.group === g)) continue;
     out.push({

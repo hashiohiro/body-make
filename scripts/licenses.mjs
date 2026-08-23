@@ -78,7 +78,8 @@ function classify(rawSource) {
   if (virt) return virt[1];
 
   // 自作コード
-  if (source.includes(`/${OWN_SOURCE_DIR}/`) || source.startsWith(`${OWN_SOURCE_DIR}/`)) return null;
+  if (source.includes(`/${OWN_SOURCE_DIR}/`) || source.startsWith(`${OWN_SOURCE_DIR}/`))
+    return null;
 
   // ビルドツールが OS の一時ディレクトリで生成したコード。
   // POSIX の /tmp/<hash>/ と Windows の AppData/Local/Temp/<hash>/ の両方を拾う
@@ -122,9 +123,7 @@ for (const key of [...found.keys()].sort()) {
   const declared = DECLARED[key];
   if (!declared) undeclared.push(key);
   const mark = declared ? ' ' : '!';
-  console.log(
-    `${mark} ${key.padEnd(28)} ${licenseOf(key).padEnd(7)} ${declared ?? '★ 未記載'}`,
-  );
+  console.log(`${mark} ${key.padEnd(28)} ${licenseOf(key).padEnd(7)} ${declared ?? '★ 未記載'}`);
   for (const a of [...found.get(key)].sort()) console.log(`      ↳ ${a}`);
 }
 

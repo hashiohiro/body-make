@@ -11,9 +11,12 @@ export function useToast() {
     timer.current = setTimeout(() => setMessage(null), 2600);
   }, []);
 
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   return { message, show };
 }

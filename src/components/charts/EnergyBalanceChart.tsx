@@ -110,7 +110,11 @@ export function EnergyBalanceChart({ points, height = 250 }: Props) {
               const labelY = positive ? yValue - 7 : yValue + 14;
 
               return (
-                <g key={point.key} onPointerEnter={() => setActive(i)} onPointerDown={() => setActive(i)}>
+                <g
+                  key={point.key}
+                  onPointerEnter={() => setActive(i)}
+                  onPointerDown={() => setActive(i)}
+                >
                   <rect className={s.hit} x={bandX(i)} y={MARGIN.top} width={band} height={plotH} />
 
                   <path
@@ -143,11 +147,7 @@ export function EnergyBalanceChart({ points, height = 250 }: Props) {
                         // 棒との差そのものが体組成計の荒れ具合の目安なので、両方の値を読めるようにする
                         <text
                           className={s.tickLabel}
-                          x={
-                            x + barW + 10 + 34 < MARGIN.left + plotW
-                              ? x + barW + 10
-                              : x - 10
-                          }
+                          x={x + barW + 10 + 34 < MARGIN.left + plotW ? x + barW + 10 : x - 10}
                           y={y(point.kcalFat)}
                           dy="0.32em"
                           textAnchor={x + barW + 10 + 34 < MARGIN.left + plotW ? 'start' : 'end'}
@@ -201,7 +201,8 @@ export function EnergyBalanceChart({ points, height = 250 }: Props) {
             style={{ left: Math.min(Math.max(barX(active) - 60, 4), Math.max(4, width - 168)) }}
           >
             <div className={s.tipDate}>
-              {formatMD(points[active]!.from)}〜{formatMD(points[active]!.to)}（{points[active]!.days}日）
+              {formatMD(points[active]!.from)}〜{formatMD(points[active]!.to)}（
+              {points[active]!.days}日）
             </div>
             <div className={s.tipRow}>
               <i
@@ -219,7 +220,9 @@ export function EnergyBalanceChart({ points, height = 250 }: Props) {
               <i className={s.keyLine} style={{ background: 'var(--ink-2)' }} aria-hidden="true" />
               体脂肪量ベース
               <b>
-                {points[active]!.kcalFat == null ? '—' : `${kcal(points[active]!.kcalFat!)} kcal/日`}
+                {points[active]!.kcalFat == null
+                  ? '—'
+                  : `${kcal(points[active]!.kcalFat!)} kcal/日`}
               </b>
             </div>
             <div className={s.tipRow}>

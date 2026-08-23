@@ -27,12 +27,27 @@ interface Metric {
 }
 
 const METRICS: Metric[] = [
-  { id: 'volume', label: '挙上量', unit: 'kg', digits: 0, needsWeight: true, pick: (p) => (p.volume > 0 ? p.volume : null) },
+  {
+    id: 'volume',
+    label: '挙上量',
+    unit: 'kg',
+    digits: 0,
+    needsWeight: true,
+    pick: (p) => (p.volume > 0 ? p.volume : null),
+  },
   { id: 'sets', label: 'セット数', unit: 'セット', digits: 0, pick: (p) => p.workSets },
   // レップ数に左右されない「その日いちばん重かった重量」。推定1RM と並べると、
   // 重量が上がったのか同じ重量で回数が伸びたのかを切り分けられる
   // 最大重量と目標は「バーに載せた数字」で見る。挙上量と推定1RM は換算後の負荷
-  { id: 'maxWeight', label: '最大重量', unit: 'kg', digits: 1, weightLike: true, needsWeight: true, pick: (p) => p.top?.weight ?? null },
+  {
+    id: 'maxWeight',
+    label: '最大重量',
+    unit: 'kg',
+    digits: 1,
+    weightLike: true,
+    needsWeight: true,
+    pick: (p) => p.top?.weight ?? null,
+  },
   { id: 'maxReps', label: '最大回数', unit: '', digits: 0, pick: (p) => p.maxReps },
   { id: 'oneRm', label: '推定1RM', unit: 'kg', digits: 1, needsWeight: true, pick: (p) => p.oneRm },
 ];

@@ -52,7 +52,8 @@ export function StreakStrip({ daily, stats, trainingDates }: Props) {
           未記録
         </span>
         <span className={s.legendItem}>
-          <i className={`${s.swatch} ${s.half}`} aria-hidden="true" />1回
+          <i className={`${s.swatch} ${s.half}`} aria-hidden="true" />
+          1回
         </span>
         <span className={s.legendItem}>
           <i className={`${s.swatch} ${s.full}`} aria-hidden="true" />
@@ -62,7 +63,9 @@ export function StreakStrip({ daily, stats, trainingDates }: Props) {
           <i className={`${s.swatch} ${s.trained}`} aria-hidden="true" />
           トレ
         </span>
-        <span className={s.stats}>最長 {stats.bestStreak}日 · 通算 {stats.recordedDays}日</span>
+        <span className={s.stats}>
+          最長 {stats.bestStreak}日 · 通算 {stats.recordedDays}日
+        </span>
       </div>
     </section>
   );

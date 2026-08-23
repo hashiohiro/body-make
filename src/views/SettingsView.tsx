@@ -290,7 +290,11 @@ export function SettingsView({ body, section, onOpen, onToast }: Props) {
           Excel 用に書き出す<small>読み込みには使えません</small>
         </div>
         <div className={ui.btnRow}>
-          <button type="button" className={ui.btn} onClick={() => exportCsv(daily, weeks, sessions)}>
+          <button
+            type="button"
+            className={ui.btn}
+            onClick={() => exportCsv(daily, weeks, sessions)}
+          >
             CSVで書き出し
           </button>
         </div>
@@ -313,7 +317,9 @@ export function SettingsView({ body, section, onOpen, onToast }: Props) {
             type="button"
             className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
             onClick={() => {
-              if (confirm('体組成とトレーニングの実績を削除します。種目は残ります。元に戻せません。')) {
+              if (
+                confirm('体組成とトレーニングの実績を削除します。種目は残ります。元に戻せません。')
+              ) {
                 clearRecords();
                 onToast('実績データを削除しました');
               }

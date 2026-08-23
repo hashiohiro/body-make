@@ -140,7 +140,11 @@ describe('有効重量', () => {
 
 describe('トップセット', () => {
   it('ランプアップを含む並びでも最大重量のセットが選ばれる', () => {
-    const r = resolveSets(ex(), sets([60, 5], [80, 3], [100, 2], [120, 3], [90, 10], [90, 9]), null);
+    const r = resolveSets(
+      ex(),
+      sets([60, 5], [80, 3], [100, 2], [120, 3], [90, 10], [90, 9]),
+      null,
+    );
     expect(r.roles).toEqual(['work', 'work', 'work', 'top', 'work', 'work']);
     expect(r.topIndex).toBe(3);
   });
@@ -284,7 +288,11 @@ describe('主指標と履歴', () => {
   });
 
   it('セット構成を「60kg×10,10,9」形式にまとめる', () => {
-    const point = buildExercisePoint(ex(), entry(sets([40, 10], [60, 10], [60, 10], [60, 9])), null);
+    const point = buildExercisePoint(
+      ex(),
+      entry(sets([40, 10], [60, 10], [60, 10], [60, 9])),
+      null,
+    );
     expect(summarizeSets(point)).toBe('40kg×10 / 60kg×10,10,9');
   });
 });
@@ -295,7 +303,17 @@ describe('サニタイズと移行', () => {
   it('値域外は null に落ちる', () => {
     const data = sanitizeData({
       exercises: [{ id: 'a', name: 'A' }],
-      workouts: { '2026-03-01': [{ exerciseId: 'a', sets: [{ weight: 600, reps: 0 }, { weight: 60, reps: 10.4 }] }] },
+      workouts: {
+        '2026-03-01': [
+          {
+            exerciseId: 'a',
+            sets: [
+              { weight: 600, reps: 0 },
+              { weight: 60, reps: 10.4 },
+            ],
+          },
+        ],
+      },
     });
     // 重量 600 / レップ 0 はどちらも値域外 → 両方 null のセットごと落ちる
     expect(data.workouts['2026-03-01']![0]!.sets).toEqual([{ weight: 60, reps: 10 }]);
@@ -337,7 +355,9 @@ describe('サニタイズと移行', () => {
     const v1 = {
       version: 1,
       settings: { heightCm: 170, theme: 'dark' },
-      entries: { '2026-03-01': { am: { weight: 70, bodyFat: 20 }, pm: { weight: null, bodyFat: null } } },
+      entries: {
+        '2026-03-01': { am: { weight: 70, bodyFat: 20 }, pm: { weight: null, bodyFat: null } },
+      },
     };
     const data = sanitizeData(v1);
     expect(data.version).toBe(2);
@@ -351,7 +371,9 @@ describe('サニタイズと移行', () => {
     const original = sanitizeData({
       exercises: [{ id: 'ex_bench', name: 'ベンチプレス', mechanic: 'compound', group: 'chest' }],
       workouts: { '2026-03-01': [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }] },
-      entries: { '2026-03-01': { am: { weight: 70, bodyFat: null }, pm: { weight: null, bodyFat: null } } },
+      entries: {
+        '2026-03-01': { am: { weight: 70, bodyFat: null }, pm: { weight: null, bodyFat: null } },
+      },
     });
     const roundTripped = sanitizeData(JSON.parse(JSON.stringify(original)));
     expect(roundTripped).toEqual(original);

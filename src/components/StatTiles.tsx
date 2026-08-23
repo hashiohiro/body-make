@@ -51,7 +51,6 @@ export function StatTiles({ stats }: { stats: Stats }) {
     },
   ];
 
-
   return (
     <div className={s.grid}>
       {tiles.map((tile) => (

@@ -22,7 +22,8 @@ export default defineConfig({
       manifest: {
         name: 'BodyMake — ボディメイク進捗',
         short_name: 'BodyMake',
-        description: '体重・体脂肪率の朝夕記録から、週次トレンドと体組成の変化を可視化するトラッカー',
+        description:
+          '体重・体脂肪率の朝夕記録から、週次トレンドと体組成の変化を可視化するトラッカー',
         lang: 'ja',
         dir: 'ltr',
         start_url: './',
@@ -35,7 +36,12 @@ export default defineConfig({
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: 'icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          {
+            src: 'icons/icon-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
         ],
       },
       devOptions: { enabled: false },

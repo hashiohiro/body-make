@@ -344,7 +344,6 @@ export function summarizeSets(point: ExercisePoint): string {
     .join(' / ');
 }
 
-
 /* ------------------------------------------------------------------ *
  * 週次の配分（部位別セット数）
  * ------------------------------------------------------------------ */
@@ -649,7 +648,7 @@ export interface ExerciseGoal {
  * 回数目標はそのセッションの最大レップ数（自重種目・時間種目で使う）。
  */
 const currentOf = (type: GoalType, p: ExercisePoint) =>
-  type === 'weight' ? p.top?.weight ?? null : p.maxReps;
+  type === 'weight' ? (p.top?.weight ?? null) : p.maxReps;
 
 export function exerciseGoals(
   sessions: readonly SessionPoint[],

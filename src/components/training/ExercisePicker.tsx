@@ -33,7 +33,11 @@ export function ExercisePicker({ exercises, usedIds, onPick }: Props) {
   return (
     <>
       <div className={ui.btnRow}>
-        <button type="button" className={`${ui.btn} ${ui.btnPrimary}`} onClick={() => setOpen(true)}>
+        <button
+          type="button"
+          className={`${ui.btn} ${ui.btnPrimary}`}
+          onClick={() => setOpen(true)}
+        >
           ＋ 種目を追加
         </button>
         {usedIds.size > 0 && <span className={ui.hint}>この日 {usedIds.size}種目</span>}

@@ -50,7 +50,9 @@ export function hasAnyValue(day: { am: Measurement; pm: Measurement }): boolean 
  * 欠測日を明示的に null で持つことで、記録率・ストリーク・移動平均が同じ配列から出せる。
  */
 export function buildDaily(entries: Entries): DailyPoint[] {
-  const keys = Object.keys(entries).filter((k) => hasAnyValue(entries[k]!)).sort();
+  const keys = Object.keys(entries)
+    .filter((k) => hasAnyValue(entries[k]!))
+    .sort();
   if (keys.length === 0) return [];
 
   const first = keys[0]!;
@@ -217,9 +219,7 @@ export function computeStats(daily: DailyPoint[], weeks: WeekPoint[], settings: 
   const recordRate = recent.length ? recent.filter((d) => d.slots > 0).length / recent.length : 0;
 
   const bmi =
-    settings.heightCm && currentWeight
-      ? currentWeight / (settings.heightCm / 100) ** 2
-      : null;
+    settings.heightCm && currentWeight ? currentWeight / (settings.heightCm / 100) ** 2 : null;
 
   return {
     first: daily[0] ?? null,
@@ -248,7 +248,11 @@ export function computeStats(daily: DailyPoint[], weeks: WeekPoint[], settings: 
   };
 }
 
-export function computeProjection(daily: DailyPoint[], stats: Stats, settings: Settings): Projection {
+export function computeProjection(
+  daily: DailyPoint[],
+  stats: Stats,
+  settings: Settings,
+): Projection {
   const none: Projection = {
     pacePerWeek: null,
     etaDate: null,

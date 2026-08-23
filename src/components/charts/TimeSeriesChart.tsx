@@ -100,9 +100,10 @@ export function TimeSeriesChart({
     setActive(best);
   }
 
-  const tipLeft = activeTime != null && width > 0
-    ? Math.min(Math.max(x(activeTime) - 60, 4), Math.max(4, width - 128))
-    : 0;
+  const tipLeft =
+    activeTime != null && width > 0
+      ? Math.min(Math.max(x(activeTime) - 60, 4), Math.max(4, width - 128))
+      : 0;
 
   const showLegend = legend ?? series.length >= 2;
 
@@ -145,7 +146,13 @@ export function TimeSeriesChart({
                   y1={y(tick)}
                   y2={y(tick)}
                 />
-                <text className={s.tickLabel} x={MARGIN.left - 7} y={y(tick)} textAnchor="end" dy="0.32em">
+                <text
+                  className={s.tickLabel}
+                  x={MARGIN.left - 7}
+                  y={y(tick)}
+                  textAnchor="end"
+                  dy="0.32em"
+                >
                   {tick.toFixed(decimals)}
                 </text>
               </g>
@@ -207,7 +214,14 @@ export function TimeSeriesChart({
               .map((serie) => (
                 <g key={serie.id}>
                   {serie.points.map((p) => (
-                    <circle key={p.t} cx={x(p.t)} cy={y(p.v)} r={3} fill={serie.color} opacity={0.75} />
+                    <circle
+                      key={p.t}
+                      cx={x(p.t)}
+                      cy={y(p.v)}
+                      r={3}
+                      fill={serie.color}
+                      opacity={0.75}
+                    />
                   ))}
                 </g>
               ))}

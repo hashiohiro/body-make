@@ -108,7 +108,9 @@ export function TrainingView({ body, date, onDateChange }: Props) {
             entry={entry}
             point={session?.exercises.find((p) => p.exerciseId === entry.exerciseId) ?? null}
             previous={previousPoint(sessions, entry.exerciseId, date)}
-            onValue={(index, field, value) => setSetValue(date, entry.exerciseId, index, field, value)}
+            onValue={(index, field, value) =>
+              setSetValue(date, entry.exerciseId, index, field, value)
+            }
             onAddSet={() => addSet(date, entry.exerciseId)}
             onRemoveSet={(index) => removeSet(date, entry.exerciseId, index)}
             onRemove={() => removeDayExercise(date, entry.exerciseId)}

@@ -24,10 +24,12 @@ export function RecordsView({ body, date, onDateChange }: Props) {
   // 体重もトレーニングも「その日に何をしたか」の記録なので、同じタブの中で切り替える
   const tabs = (
     <div className={ui.chipRow} role="group" aria-label="記録の種類">
-      {([
-        ['weight', '体組成'],
-        ['training', 'トレーニング'],
-      ] as [Mode, string][]).map(([id, label]) => (
+      {(
+        [
+          ['weight', '体組成'],
+          ['training', 'トレーニング'],
+        ] as [Mode, string][]
+      ).map(([id, label]) => (
         <button
           key={id}
           type="button"
@@ -104,13 +106,19 @@ export function RecordsView({ body, date, onDateChange }: Props) {
                   ) : (
                     <>
                       {fmt(point.weight)} kg
-                      <small>{point.bodyFat == null ? '体脂肪率なし' : `${fmt(point.bodyFat)} %`}</small>
+                      <small>
+                        {point.bodyFat == null ? '体脂肪率なし' : `${fmt(point.bodyFat)} %`}
+                      </small>
                     </>
                   )}
                 </span>
                 <span className={s.slots} aria-label={`記録回数 ${point.slots}`}>
-                  <i className={`${s.dot} ${point.am.weight != null || point.am.bodyFat != null ? s.dotOn : ''}`} />
-                  <i className={`${s.dot} ${point.pm.weight != null || point.pm.bodyFat != null ? s.dotOn : ''}`} />
+                  <i
+                    className={`${s.dot} ${point.am.weight != null || point.am.bodyFat != null ? s.dotOn : ''}`}
+                  />
+                  <i
+                    className={`${s.dot} ${point.pm.weight != null || point.pm.bodyFat != null ? s.dotOn : ''}`}
+                  />
                 </span>
               </button>
             ))}

@@ -18,66 +18,72 @@
 // 体重・体脂肪・除脂肪の 3 本は常に見分けられる必要があり、
 // テーマのアクセント 1 色から識別可能な 3 色は作れないため。
 $light-series: (
-  s-weight:       #2a78d6,
-  s-fat:          #eb6834,
-  s-lean:         #1baf7a,
-  s-weight-wash:  rgba(42, 120, 214, 0.1),
-  s-fat-wash:     rgba(235, 104, 52, 0.1),
+  s-weight: #2a78d6,
+  s-fat: #eb6834,
+  s-lean: #1baf7a,
+  s-weight-wash: rgba(42, 120, 214, 0.1),
+  s-fat-wash: rgba(235, 104, 52, 0.1),
   // カロリー収支の発散型 2 極（寒色↔暖色で「反対」と読ませる）。中点はゼロ線のグレー
-  s-deficit:      #2a78d6,
-  s-surplus:      #e34948,
+  s-deficit: #2a78d6,
+  s-surplus: #e34948,
 );
 
 $dark-series: (
-  s-weight:       #3987e5,
-  s-fat:          #d95926,
-  s-lean:         #199e70,
-  s-weight-wash:  rgba(57, 135, 229, 0.14),
-  s-fat-wash:     rgba(217, 89, 38, 0.14),
-  s-deficit:      #3987e5,
-  s-surplus:      #e66767,
+  s-weight: #3987e5,
+  s-fat: #d95926,
+  s-lean: #199e70,
+  s-weight-wash: rgba(57, 135, 229, 0.14),
+  s-fat-wash: rgba(217, 89, 38, 0.14),
+  s-deficit: #3987e5,
+  s-surplus: #e66767,
 );
 
 $light-shadow: (0 1px 2px rgba(11, 11, 11, 0.05), 0 1px 10px rgba(11, 11, 11, 0.03));
 $dark-shadow: (0 1px 2px rgba(0, 0, 0, 0.4));
 
-$light: map.merge($light-series, (
-  plane:          #f9f9f7,
-  surface:        #fcfcfb,
-  surface-sunken: #f2f1ed,
-  border:         rgba(11, 11, 11, 0.1),
-  ink:            #0b0b0b,
-  ink-2:          #52514e,
-  ink-muted:      #898781,
-  grid:           #e1e0d9,
-  axis:           #c3c2b7,
-  good:           #0ca30c,
-  good-text:      #006300,
-  warning:        #fab219,
-  critical:       #d03b3b,
-  accent:         #2a78d6,
-  accent-soft:    rgba(42, 120, 214, 0.12),
-  shadow:         $light-shadow,
-));
+$light: map.merge(
+  $light-series,
+  (
+    plane: #f9f9f7,
+    surface: #fcfcfb,
+    surface-sunken: #f2f1ed,
+    border: rgba(11, 11, 11, 0.1),
+    ink: #0b0b0b,
+    ink-2: #52514e,
+    ink-muted: #898781,
+    grid: #e1e0d9,
+    axis: #c3c2b7,
+    good: #0ca30c,
+    good-text: #006300,
+    warning: #fab219,
+    critical: #d03b3b,
+    accent: #2a78d6,
+    accent-soft: rgba(42, 120, 214, 0.12),
+    shadow: $light-shadow,
+  )
+);
 
-$dark: map.merge($dark-series, (
-  plane:          #0d0d0d,
-  surface:        #1a1a19,
-  surface-sunken: #232321,
-  border:         rgba(255, 255, 255, 0.1),
-  ink:            #ffffff,
-  ink-2:          #c3c2b7,
-  ink-muted:      #898781,
-  grid:           #2c2c2a,
-  axis:           #383835,
-  good:           #0ca30c,
-  good-text:      #0ca30c,
-  warning:        #fab219,
-  critical:       #d03b3b,
-  accent:         #3987e5,
-  accent-soft:    rgba(57, 135, 229, 0.18),
-  shadow:         $dark-shadow,
-));
+$dark: map.merge(
+  $dark-series,
+  (
+    plane: #0d0d0d,
+    surface: #1a1a19,
+    surface-sunken: #232321,
+    border: rgba(255, 255, 255, 0.1),
+    ink: #ffffff,
+    ink-2: #c3c2b7,
+    ink-muted: #898781,
+    grid: #2c2c2a,
+    axis: #383835,
+    good: #0ca30c,
+    good-text: #0ca30c,
+    warning: #fab219,
+    critical: #d03b3b,
+    accent: #3987e5,
+    accent-soft: rgba(57, 135, 229, 0.18),
+    shadow: $dark-shadow,
+  )
+);
 
 /// ReRail（別アプリ）の配色定義を、このアプリのトークンへ写す。
 ///
@@ -101,10 +107,19 @@ $dark: map.merge($dark-series, (
 /// 暗い地に彩度の高い文字を置くと発光して見えるので、色相は保ったまま彩度だけ落とす。
 /// もともと低彩度に設計されている配色（Solarized・Sakura）は落とす量を減らす。
 @function rerail(
-  $from, $via, $to,
-  $accent, $success, $warning, $danger,
-  $ink, $ink-2, $ink-muted,
-  $surface, $sunken, $border,
+  $from,
+  $via,
+  $to,
+  $accent,
+  $success,
+  $warning,
+  $danger,
+  $ink,
+  $ink-2,
+  $ink-muted,
+  $surface,
+  $sunken,
+  $border,
   $dark: true,
   $calm: 1
 ) {
@@ -127,59 +142,100 @@ $dark: map.merge($dark-series, (
     $good-text: px(color.scale($success, $saturation: $accent-drop, $lightness: -25%));
   }
 
-  @return map.merge($series, (
-    plane:          $from,
-    plane-image:    linear-gradient(
-                      160deg,
-                      $from 0%,
-                      px(color.scale($via, $saturation: $plane-drop)) 55%,
-                      $to-calm 100%
-                    ),
-    surface:        $surface,
-    surface-sunken: $sunken,
-    border:         $border,
-    ink:            $ink,
-    ink-2:          px(color.scale($ink-2, $saturation: $text-drop)),
-    ink-muted:      px(color.scale($ink-muted, $saturation: $text-drop)),
-    grid:           rgba($a, 0.14),
-    axis:           rgba($a, 0.28),
-    good:           px(color.scale($success, $saturation: $accent-drop)),
-    good-text:      $good-text,
-    warning:        px(color.scale($warning, $saturation: $accent-drop)),
-    critical:       px(color.scale($danger, $saturation: $accent-drop)),
-    accent:         $a,
-    accent-soft:    rgba($a, 0.14),
-    shadow:         $shadow,
-  ));
+  @return map.merge(
+    $series,
+    (
+      plane: $from,
+      plane-image: linear-gradient(
+          160deg,
+          $from 0%,
+          px(color.scale($via, $saturation: $plane-drop)) 55%,
+          $to-calm 100%
+        ),
+      surface: $surface,
+      surface-sunken: $sunken,
+      border: $border,
+      ink: $ink,
+      ink-2: px(color.scale($ink-2, $saturation: $text-drop)),
+      ink-muted: px(color.scale($ink-muted, $saturation: $text-drop)),
+      grid: rgba($a, 0.14),
+      axis: rgba($a, 0.28),
+      good: px(color.scale($success, $saturation: $accent-drop)),
+      good-text: $good-text,
+      warning: px(color.scale($warning, $saturation: $accent-drop)),
+      critical: px(color.scale($danger, $saturation: $accent-drop)),
+      accent: $a,
+      accent-soft: rgba($a, 0.14),
+      shadow: $shadow,
+    )
+  );
 }
 
 $themes: (
   indigo-night: rerail(
-    #1e1b4b, #312e81, #581c87,
-    #6366f1, #10b981, #f59e0b, #ef4444,
-    #ffffff, #a5b4fc, #818cf8,
-    rgba(49, 46, 129, 0.7), rgba(30, 27, 75, 0.5), rgba(99, 102, 241, 0.2)
-  ),
+      #1e1b4b,
+      #312e81,
+      #581c87,
+      #6366f1,
+      #10b981,
+      #f59e0b,
+      #ef4444,
+      #ffffff,
+      #a5b4fc,
+      #818cf8,
+      rgba(49, 46, 129, 0.7),
+      rgba(30, 27, 75, 0.5),
+      rgba(99, 102, 241, 0.2)
+    ),
   ocean-blue: rerail(
-    #0f172a, #1e3a5f, #164e63,
-    #0ea5e9, #10b981, #f59e0b, #ef4444,
-    #ffffff, #7dd3fc, #38bdf8,
-    rgba(30, 58, 95, 0.7), rgba(15, 23, 42, 0.5), rgba(14, 165, 233, 0.2)
-  ),
+      #0f172a,
+      #1e3a5f,
+      #164e63,
+      #0ea5e9,
+      #10b981,
+      #f59e0b,
+      #ef4444,
+      #ffffff,
+      #7dd3fc,
+      #38bdf8,
+      rgba(30, 58, 95, 0.7),
+      rgba(15, 23, 42, 0.5),
+      rgba(14, 165, 233, 0.2)
+    ),
   sakura: rerail(
-    #fce9ec, #fdf2f4, #fff5f7,
-    #e8627c, #4caf50, #ff9800, #f44336,
-    #a64a61, #d16b80, #e8a0ae,
-    rgba(255, 255, 255, 0.8), rgba(232, 98, 124, 0.1), rgba(232, 98, 124, 0.2),
-    $dark: false, $calm: 0.4
-  ),
+      #fce9ec,
+      #fdf2f4,
+      #fff5f7,
+      #e8627c,
+      #4caf50,
+      #ff9800,
+      #f44336,
+      #a64a61,
+      #d16b80,
+      #e8a0ae,
+      rgba(255, 255, 255, 0.8),
+      rgba(232, 98, 124, 0.1),
+      rgba(232, 98, 124, 0.2),
+      $dark: false,
+      $calm: 0.4
+    ),
   solarized-light: rerail(
-    #fdf6e3, #eee8d5, #fdf6e3,
-    #268bd2, #859900, #b58900, #dc322f,
-    #586e75, #657b83, #93a1a1,
-    rgba(238, 232, 213, 0.75), rgba(147, 161, 161, 0.16), rgba(147, 161, 161, 0.32),
-    $dark: false, $calm: 0.3
-  ),
+      #fdf6e3,
+      #eee8d5,
+      #fdf6e3,
+      #268bd2,
+      #859900,
+      #b58900,
+      #dc322f,
+      #586e75,
+      #657b83,
+      #93a1a1,
+      rgba(238, 232, 213, 0.75),
+      rgba(147, 161, 161, 0.16),
+      rgba(147, 161, 161, 0.32),
+      $dark: false,
+      $calm: 0.3
+    ),
 );
 
 /// 地が明るい配色。フォームやスクロールバーの既定色を OS へ伝えるのに使う

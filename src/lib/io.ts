@@ -1,4 +1,12 @@
-import type { AppData, DailyPoint, Entries, Exercise, SessionPoint, WeekPoint, Workouts } from '../types';
+import type {
+  AppData,
+  DailyPoint,
+  Entries,
+  Exercise,
+  SessionPoint,
+  WeekPoint,
+  Workouts,
+} from '../types';
 import { GROUP_LABELS, GROUP_ORDER } from './exerciseCatalog';
 import { buildWeeklySets, formatSets } from './training';
 import { addDays, todayISO, weekdayJa } from './date';
@@ -87,7 +95,10 @@ export function exportCsv(
   sessions: readonly SessionPoint[] = [],
 ): void {
   const rows = buildCsvRows(daily, weeks, sessions);
-  download(`bodymake-${todayISO()}.csv`, new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }));
+  download(
+    `bodymake-${todayISO()}.csv`,
+    new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }),
+  );
 }
 
 /** 行の組み立てだけ分けておく（テストから中身を確かめられるように） */

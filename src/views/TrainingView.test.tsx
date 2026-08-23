@@ -29,7 +29,12 @@ function seedExercises(...ids: string[]) {
 }
 
 function seedData(ids: string[], workouts: Record<string, unknown>) {
-  const exercises = ids.map((id, i) => fromCatalog(CATALOG.find((c) => c.id === id)!, i));
+  const exercises = ids.map((id, i) =>
+    fromCatalog(
+      CATALOG.find((c) => c.id === id)!,
+      i,
+    ),
+  );
   localStorage.setItem(
     'bodymake.data.v1',
     JSON.stringify({ version: 2, settings: {}, entries: {}, exercises, workouts }),
@@ -112,7 +117,9 @@ describe('トレ画面', () => {
     typeSet(setRows()[1]!, '60', '10');
     fireEvent.click(screen.getByText('＋ セットを追加'));
     typeSet(setRows()[2]!, '60', '10');
-    expect(within(screen.getByRole('button', { expanded: false })).getByText('胸・肩・腕')).toBeTruthy();
+    expect(
+      within(screen.getByRole('button', { expanded: false })).getByText('胸・肩・腕'),
+    ).toBeTruthy();
 
     fireEvent.click(row);
     const table = screen.getByRole('table');
@@ -290,9 +297,7 @@ describe('設定（カテゴリ別の画面遷移）', () => {
   function SettingsHarness({ section }: { section: string | null }) {
     const body = useBodyData();
     const [current, setCurrent] = useState<string | null>(section);
-    return (
-      <SettingsView body={body} section={current} onOpen={setCurrent} onToast={() => {}} />
-    );
+    return <SettingsView body={body} section={current} onOpen={setCurrent} onToast={() => {}} />;
   }
 
   it('カテゴリ一覧から選ぶと、その設定だけが出る', () => {
@@ -487,7 +492,10 @@ describe('種目の目標', () => {
     const { exerciseGoals } = await import('../lib/training');
     const { buildSessions } = await import('../lib/training');
 
-    const bench = fromCatalog(CATALOG.find((c) => c.id === 'ex_bench')!, 0);
+    const bench = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
     bench.goal = { type: 'weight', value: 100 };
     const sessions = buildSessions(
       {
@@ -511,7 +519,10 @@ describe('種目の目標', () => {
 
   it('目標を設定していない種目は出てこない', async () => {
     const { exerciseGoals } = await import('../lib/training');
-    const bench = fromCatalog(CATALOG.find((c) => c.id === 'ex_bench')!, 0);
+    const bench = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
     expect(exerciseGoals([], [bench])).toEqual([]);
   });
 });
@@ -519,14 +530,25 @@ describe('種目の目標', () => {
 describe('目標の種類', () => {
   it('回数目標は最大レップ数で判定する', async () => {
     const { exerciseGoals, buildSessions } = await import('../lib/training');
-    const pullup = fromCatalog(CATALOG.find((c) => c.id === 'ex_pullup')!, 0);
+    const pullup = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_pullup')!,
+      0,
+    );
     pullup.goal = { type: 'reps', value: 10 };
     const sessions = buildSessions(
       {
         '2026-03-01': [{ exerciseId: 'ex_pullup', sets: [{ weight: null, reps: 4 }] }],
         '2026-03-04': [{ exerciseId: 'ex_pullup', sets: [{ weight: null, reps: 4 }] }],
         '2026-03-08': [{ exerciseId: 'ex_pullup', sets: [{ weight: null, reps: 4 }] }],
-        '2026-03-11': [{ exerciseId: 'ex_pullup', sets: [{ weight: null, reps: 5 }, { weight: null, reps: 7 }] }],
+        '2026-03-11': [
+          {
+            exerciseId: 'ex_pullup',
+            sets: [
+              { weight: null, reps: 5 },
+              { weight: null, reps: 7 },
+            ],
+          },
+        ],
       },
       [pullup],
       [],
@@ -552,7 +574,11 @@ describe('目標の種類', () => {
 describe('重量の数え方', () => {
   it('左右に1つずつ持つ種目だけ2倍で計上する', async () => {
     const { buildExercisePoint } = await import('../lib/training');
-    const base = fromCatalog(CATALOG.find((c) => c.id === 'ex_curl')!, 0, 'dumbbell');
+    const base = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_curl')!,
+      0,
+      'dumbbell',
+    );
     const entry = { exerciseId: base.id, sets: [{ weight: 20, reps: 10 }] };
 
     // ダンベル20kg×2 と バーベル40kg を同じ負荷として扱う
@@ -563,7 +589,10 @@ describe('重量の数え方', () => {
 
   it('秒で計る種目は目標も秒で判定する', async () => {
     const { exerciseGoals, buildSessions } = await import('../lib/training');
-    const plank = fromCatalog(CATALOG.find((c) => c.id === 'ex_plank')!, 0);
+    const plank = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_plank')!,
+      0,
+    );
     plank.goal = { type: 'reps', value: 120 };
     expect(plank.repUnit).toBe('seconds');
 
@@ -588,7 +617,11 @@ describe('重量の数え方', () => {
 describe('目標と負荷の数え方', () => {
   it('重量目標は記録した数字で判定する（左右2つ持つ種目でも2倍しない）', async () => {
     const { exerciseGoals, buildSessions } = await import('../lib/training');
-    const curl = fromCatalog(CATALOG.find((c) => c.id === 'ex_curl')!, 0, 'dumbbell');
+    const curl = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_curl')!,
+      0,
+      'dumbbell',
+    );
     curl.goal = { type: 'weight', value: 30 };
     expect(curl.loadMode).toBe('perSide');
 
@@ -617,12 +650,19 @@ describe('目標と負荷の数え方', () => {
 describe('秒で数える種目', () => {
   it('挙上量に計上せず、重量の指標も出さない（種目側のフラグを持たない）', async () => {
     const { buildExercisePoint } = await import('../lib/training');
-    const plank = fromCatalog(CATALOG.find((c) => c.id === 'ex_plank')!, 0);
+    const plank = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_plank')!,
+      0,
+    );
     // 挙上量に計上しないのは「秒だから」であって、種目側の設定によるものではない
     expect(plank.repUnit).toBe('seconds');
     expect(plank.loadMode).toBe('standard');
 
-    const point = buildExercisePoint(plank, { exerciseId: plank.id, sets: [{ weight: null, reps: 60 }] }, 70);
+    const point = buildExercisePoint(
+      plank,
+      { exerciseId: plank.id, sets: [{ weight: null, reps: 60 }] },
+      70,
+    );
     expect(point.volume).toBe(0);
     expect(point.workSets).toBe(1);
     expect(point.metric).toBe(60);
@@ -630,10 +670,17 @@ describe('秒で数える種目', () => {
 
   it('回で数えるが重量を記録しない種目は、そのままでも挙上量が0になる', async () => {
     const { buildExercisePoint } = await import('../lib/training');
-    const roller = fromCatalog(CATALOG.find((c) => c.id === 'ex_ab_roller')!, 0);
+    const roller = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_ab_roller')!,
+      0,
+    );
     expect(roller.loadMode).toBe('standard');
 
-    const point = buildExercisePoint(roller, { exerciseId: roller.id, sets: [{ weight: null, reps: 12 }] }, 70);
+    const point = buildExercisePoint(
+      roller,
+      { exerciseId: roller.id, sets: [{ weight: null, reps: 12 }] },
+      70,
+    );
     expect(point.volume).toBe(0);
     expect(point.workSets).toBe(1);
   });
@@ -643,9 +690,22 @@ describe('CSV 書き出し', () => {
   it('筋トレはセット単位の明細と週次の部位別セット数を出す', async () => {
     const { buildCsvRows } = await import('../lib/io');
     const { buildSessions } = await import('../lib/training');
-    const bench = fromCatalog(CATALOG.find((c) => c.id === 'ex_bench')!, 0);
+    const bench = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
     const sessions = buildSessions(
-      { '2026-03-10': [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }, { weight: 60, reps: 8 }] }] },
+      {
+        '2026-03-10': [
+          {
+            exerciseId: 'ex_bench',
+            sets: [
+              { weight: 60, reps: 10 },
+              { weight: 60, reps: 8 },
+            ],
+          },
+        ],
+      },
       [bench],
       [],
     );
@@ -654,12 +714,12 @@ describe('CSV 書き出し', () => {
     expect(csv).toContain('# 筋トレログ（セット単位）');
     // 主部位と補助部位は別の列に出す（ピボットの軸を壊さないため）。
     // 係数は種目ごとに違うので、部位名だけだと Excel 側で挙上量を割り戻せない
-    expect(csv.some((r) => r.includes('ベンチプレス（バーベル）,胸,肩×0.5・腕×0.5,1,60.0,10,回'))).toBe(
-      true,
-    );
-    expect(csv.some((r) => r.includes('ベンチプレス（バーベル）,胸,肩×0.5・腕×0.5,2,60.0,8,回'))).toBe(
-      true,
-    );
+    expect(
+      csv.some((r) => r.includes('ベンチプレス（バーベル）,胸,肩×0.5・腕×0.5,1,60.0,10,回')),
+    ).toBe(true);
+    expect(
+      csv.some((r) => r.includes('ベンチプレス（バーベル）,胸,肩×0.5・腕×0.5,2,60.0,8,回')),
+    ).toBe(true);
     expect(csv).toContain('# 週次の部位別セット数');
 
     // 部位別セット数は係数ぶんの端数が出る。胸 2 / 肩 1 / 腕 1、合計 4
@@ -677,12 +737,24 @@ describe('全体状況の指標', () => {
     const thisWeek = startOfWeek(todayISO());
     const past = addDays(thisWeek, -20);
 
-    const bench = fromCatalog(CATALOG.find((c) => c.id === 'ex_bench')!, 0); // 胸
-    const squat = fromCatalog(CATALOG.find((c) => c.id === 'ex_squat')!, 1); // 脚
+    const bench = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    ); // 胸
+    const squat = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_squat')!,
+      1,
+    ); // 脚
     const sessions = buildSessions(
       {
         [thisWeek]: [
-          { exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }, { weight: 60, reps: 8 }] },
+          {
+            exerciseId: 'ex_bench',
+            sets: [
+              { weight: 60, reps: 10 },
+              { weight: 60, reps: 8 },
+            ],
+          },
         ],
         [past]: [{ exerciseId: 'ex_squat', sets: [{ weight: 100, reps: 5 }] }],
       },
@@ -704,7 +776,10 @@ describe('全体状況の指標', () => {
       d.setDate(d.getDate() - back);
       return d.toISOString().slice(0, 10);
     };
-    const bench = fromCatalog(CATALOG.find((c) => c.id === 'ex_bench')!, 0);
+    const bench = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
     const stats = (workouts: Record<string, unknown>) =>
       computeTrainingStats(buildSessions(workouts as never, [bench], []));
 
@@ -713,7 +788,13 @@ describe('全体状況の指標', () => {
       stats({
         [iso(RECENT_DAYS + 10)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
         [iso(3)]: [
-          { exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }, { weight: 60, reps: 10 }] },
+          {
+            exerciseId: 'ex_bench',
+            sets: [
+              { weight: 60, reps: 10 },
+              { weight: 60, reps: 10 },
+            ],
+          },
         ],
       }).recentBests,
     ).toBe(0);
@@ -761,7 +842,10 @@ describe('部位別セット数の目標', () => {
 describe('補助部位', () => {
   it('補助部位は0.5セットとして数える', async () => {
     const { buildSessions, buildWeeklySets } = await import('../lib/training');
-    const bench = fromCatalog(CATALOG.find((c) => c.id === 'ex_bench')!, 0);
+    const bench = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
     expect(bench.group).toBe('chest');
     expect(bench.subGroups).toEqual([
       { group: 'shoulders', weight: 0.5 },
@@ -771,7 +855,13 @@ describe('補助部位', () => {
     const sessions = buildSessions(
       {
         '2026-03-10': [
-          { exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }, { weight: 60, reps: 10 }] },
+          {
+            exerciseId: 'ex_bench',
+            sets: [
+              { weight: 60, reps: 10 },
+              { weight: 60, reps: 10 },
+            ],
+          },
         ],
       },
       [bench],
@@ -793,12 +883,18 @@ describe('補助部位', () => {
   it('1セット相当に満たない部位は「やった部位」に数えない', async () => {
     const { buildSessions, sessionGroups } = await import('../lib/training');
     const { CATALOG, fromCatalog } = await import('../lib/exerciseCatalog');
-    const raise = fromCatalog(CATALOG.find((c) => c.id === 'ex_front_raise')!, 0);
+    const raise = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_front_raise')!,
+      0,
+    );
     expect(raise.subGroups).toEqual([{ group: 'chest', weight: 0.25 }]);
 
     const day = (sets: number) => ({
       '2026-03-10': [
-        { exerciseId: 'ex_front_raise', sets: Array.from({ length: sets }, () => ({ weight: 8, reps: 12 })) },
+        {
+          exerciseId: 'ex_front_raise',
+          sets: Array.from({ length: sets }, () => ({ weight: 8, reps: 12 })),
+        },
       ],
     });
 
@@ -814,7 +910,10 @@ describe('補助部位', () => {
     const { CATALOG, fromCatalog } = await import('../lib/exerciseCatalog');
 
     // デッドリフトの脚は主働筋なので既定より重く、グリップは実感の割に小さい
-    const dead = fromCatalog(CATALOG.find((c) => c.id === 'ex_deadlift')!, 0);
+    const dead = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_deadlift')!,
+      0,
+    );
     expect(dead.subGroups).toEqual([
       { group: 'legs', weight: 1 },
       { group: 'arms', weight: 0.25 },
@@ -1030,7 +1129,10 @@ describe('バーベル／ダンベルの切り替え', () => {
 describe('種目の削除', () => {
   it('記録がある種目は、消える日数を伝えてから消す', async () => {
     const { ExerciseManager } = await import('../components/training/ExerciseManager');
-    const bench = fromCatalog(CATALOG.find((c) => c.id === 'ex_bench')!, 0);
+    const bench = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
     const onRemove = vi.fn();
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
 

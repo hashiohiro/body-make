@@ -21,9 +21,7 @@ export function GoalMeter({ settings, stats, projection, onOpenSettings }: Props
         <header className={ui.cardHeader}>
           <h2 className={ui.cardTitle}>目標</h2>
         </header>
-        <p className={ui.emptyState}>
-          目標体重を決めると、到達予測日と進捗バーが出ます。
-        </p>
+        <p className={ui.emptyState}>目標体重を決めると、到達予測日と進捗バーが出ます。</p>
         <div className={ui.btnRow}>
           <button type="button" className={`${ui.btn} ${ui.btnPrimary}`} onClick={onOpenSettings}>
             目標を設定する
@@ -64,9 +62,7 @@ export function GoalMeter({ settings, stats, projection, onOpenSettings }: Props
         <div className={s.etaRow}>
           <span>現在のペース（直近28日）</span>
           <span>
-            <b>
-              {pace == null ? '—' : `${pace > 0 ? '+' : '−'}${Math.abs(pace).toFixed(2)}`}
-            </b>
+            <b>{pace == null ? '—' : `${pace > 0 ? '+' : '−'}${Math.abs(pace).toFixed(2)}`}</b>
             {' kg/週'}
           </span>
         </div>

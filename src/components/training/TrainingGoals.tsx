@@ -106,7 +106,10 @@ export function TrainingGoals({ goals, stats, onOpenGoals }: Props) {
                 </div>
 
                 <div className={s.meter}>
-                  <div className={s.meterFill} style={{ width: `${(goal.progress ?? 0) * 100}%` }} />
+                  <div
+                    className={s.meterFill}
+                    style={{ width: `${(goal.progress ?? 0) * 100}%` }}
+                  />
                 </div>
 
                 <div className={s.goalFoot}>
@@ -114,7 +117,11 @@ export function TrainingGoals({ goals, stats, onOpenGoals }: Props) {
                     目標 {fmt(goal.target, goal.digits)} {goal.unit}
                   </span>
                   <span>
-                    {goal.reached ? '到達' : goal.progress == null ? '—' : fmtPercent(goal.progress)}
+                    {goal.reached
+                      ? '到達'
+                      : goal.progress == null
+                        ? '—'
+                        : fmtPercent(goal.progress)}
                   </span>
                 </div>
               </div>
