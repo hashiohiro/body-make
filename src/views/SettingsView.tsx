@@ -1,11 +1,8 @@
 import { Fragment, useMemo, useRef } from 'react';
 import { ExerciseManager } from '../components/training/ExerciseManager';
-import { GROUP_LABELS, GROUP_ORDER } from '../lib/exerciseCatalog';
 import { exportCsv, exportJson, readImportFile } from '../lib/io';
 import { SEED_SOURCE } from '../lib/seed';
 import { THEME_OPTIONS } from '../lib/themes';
-import { BODYFAT_RANGE, GROUP_GOAL_RANGE, HEIGHT_RANGE, WEIGHT_RANGE } from '../lib/storage';
-import { NumericInput } from '../components/NumericInput';
 import type { BodyData } from '../hooks/useBodyData';
 import type { ThemePref } from '../types';
 import ui from '../styles/ui.module.scss';
@@ -18,11 +15,14 @@ import s from './SettingsView.module.scss';
  * カテゴリは「何についての設定か」で切る。階層は 1 段だけで、
  * 1 つの画面に複数のカードが載る。
  * 遷移先は URL に載せる（`#settings/general`）ので、戻る操作とリロードで位置が保たれる。
+ *
+ * 置くのは「滅多に変えない定義」だけ。目標体重も週のセット数も種目の目標も、
+ * 進捗を見ながら何度も変わるので目標タブが持つ。
+ * 頻度の違うものを同じ階層に置いたのが、画面を往復する原因だった。
  */
 export const SETTINGS_SECTIONS = [
   { id: 'general', label: '一般', hint: '表示・データ・このアプリについて' },
-  { id: 'body', label: '体組成', hint: '身体と目標' },
-  { id: 'training', label: 'トレーニング', hint: '種目と目標' },
+  { id: 'training', label: 'トレーニング', hint: '種目の追加・並び・詳細設定' },
 ] as const;
 
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
@@ -52,7 +52,6 @@ export function SettingsView({ body, section, onOpen, onToast }: Props) {
     upsertExercise,
     removeExercise,
     moveExercise,
-    setGroupGoal,
   } = body;
 
   // 種目を消すとその記録も消えるので、何日ぶんが消えるかを確認ダイアログに出す
@@ -112,120 +111,18 @@ export function SettingsView({ body, section, onOpen, onToast }: Props) {
     );
   }
 
-  /* ---------------- 体組成 ---------------- */
-
-  if (section === 'body') {
-    return (
-      <>
-        <section className={ui.card}>
-          <header className={ui.cardHeader}>
-            <h2 className={ui.cardTitle}>身体</h2>
-          </header>
-
-          <div className={ui.formRow}>
-            <label htmlFor="height">
-              身長
-              <small>BMI の計算に使います（任意）</small>
-            </label>
-            <NumericInput
-              id="height"
-              value={settings.heightCm}
-              min={HEIGHT_RANGE[0]}
-              max={HEIGHT_RANGE[1]}
-              placeholder="cm"
-              onCommit={(v) => updateSettings({ heightCm: v })}
-            />
-          </div>
-        </section>
-
-        <section className={ui.card}>
-          <header className={ui.cardHeader}>
-            <h2 className={ui.cardTitle}>目標</h2>
-          </header>
-
-          <div className={ui.formRow}>
-            <label htmlFor="target-weight">
-              目標体重
-              <small>到達予測と進捗バーの基準になります</small>
-            </label>
-            <NumericInput
-              id="target-weight"
-              value={settings.targetWeight}
-              min={WEIGHT_RANGE[0]}
-              max={WEIGHT_RANGE[1]}
-              placeholder="kg"
-              onCommit={(v) => updateSettings({ targetWeight: v })}
-            />
-          </div>
-
-          <div className={ui.formRow}>
-            <label htmlFor="target-bf">目標体脂肪率</label>
-            <NumericInput
-              id="target-bf"
-              value={settings.targetBodyFat}
-              min={BODYFAT_RANGE[0]}
-              max={BODYFAT_RANGE[1]}
-              placeholder="%"
-              onCommit={(v) => updateSettings({ targetBodyFat: v })}
-            />
-          </div>
-
-          <div className={ui.formRow}>
-            <label htmlFor="target-date">
-              目標日
-              <small>必要ペースを逆算します</small>
-            </label>
-            <input
-              id="target-date"
-              type="date"
-              value={settings.targetDate ?? ''}
-              onChange={(e) => updateSettings({ targetDate: e.target.value || null })}
-            />
-          </div>
-        </section>
-      </>
-    );
-  }
-
   /* ---------------- トレーニング ---------------- */
 
   if (section === 'training') {
     return (
-      <>
-        <section className={ui.card}>
-          <header className={ui.cardHeader}>
-            <h2 className={ui.cardTitle}>週の部位別セット数の目標</h2>
-          </header>
-
-          {GROUP_ORDER.map((group) => (
-            <div className={ui.formRow} key={group}>
-              <label htmlFor={`group-goal-${group}`}>{GROUP_LABELS[group]}</label>
-              <NumericInput
-                id={`group-goal-${group}`}
-                value={data.groupGoals[group]}
-                min={GROUP_GOAL_RANGE[0]}
-                max={GROUP_GOAL_RANGE[1]}
-                placeholder="セット"
-                onCommit={(v) => setGroupGoal(group, v == null ? null : Math.round(v))}
-              />
-            </div>
-          ))}
-
-          <p className={ui.note}>
-            決めた部位だけ、ホームで目標までの進捗として出ます。決めなければセット数だけを出します。
-            種目の補助部位は、既定で0.5セットとして数えます。
-          </p>
-        </section>
-
-        <ExerciseManager
-          exercises={data.exercises}
-          usage={usage}
-          onAdd={addExercises}
-          onUpdate={upsertExercise}
-          onRemove={removeExercise}
-          onMove={moveExercise}
-        />
-      </>
+      <ExerciseManager
+        exercises={data.exercises}
+        usage={usage}
+        onAdd={addExercises}
+        onUpdate={upsertExercise}
+        onRemove={removeExercise}
+        onMove={moveExercise}
+      />
     );
   }
 

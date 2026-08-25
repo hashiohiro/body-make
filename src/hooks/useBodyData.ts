@@ -22,17 +22,23 @@ export type SetField = 'weight' | 'reps';
 const EMPTY_SET: WorkSet = { weight: null, reps: null };
 
 /**
- * 空の器を残さない。空セット → 空種目 → 日付キー、の順に落とす。
- * 既存の setValue が「4 項目すべて空になった日はキーごと落とす」のと同じ作法。
+ * 空の器を残さない。ただし落とすのは **いま触った種目** だけ。
+ *
+ * 以前はその日ぜんぶを掃いていて、値の入っていないセットを一括で消していた。
+ * 追加した直後の種目は「空のセットが 1 行ある」状態なので、
+ * どこか 1 つのセットを消しただけで、まだ打っていない種目まで巻き添えで消えていた。
+ *
+ * セットが 1 行でも残っていれば、中身が空でもそのまま残す。
+ * 空欄は「まだ打っていない」であって「消してよい」ではない。
  */
-function pruneDay(workouts: Workouts, date: string): Workouts {
+function pruneEntry(workouts: Workouts, date: string, exerciseId: string): Workouts {
   const day = workouts[date];
   if (!day) return workouts;
 
-  const kept = day
-    .map((e) => ({ ...e, sets: e.sets.filter((s) => s.weight != null || s.reps != null) }))
-    .filter((e) => e.sets.length > 0);
+  const entry = day.find((e) => e.exerciseId === exerciseId);
+  if (!entry || entry.sets.length > 0) return workouts;
 
+  const kept = day.filter((e) => e.exerciseId !== exerciseId);
   const next = { ...workouts };
   if (kept.length === 0) delete next[date];
   else next[date] = kept;
@@ -85,6 +91,8 @@ export interface BodyData {
     value: number | null,
   ) => void;
   copySets: (date: string, exerciseId: string, sets: readonly WorkSet[]) => void;
+  /** 前回の 1 日ぶんを丸ごと複製する。中身が入っている日には何もしない */
+  copyDay: (date: string, from: string) => void;
 
   setGroupGoal: (group: MuscleGroup, value: number | null) => void;
   upsertExercise: (exercise: Exercise) => void;
@@ -248,7 +256,7 @@ export function useBodyData(): BodyData {
         ...e,
         sets: e.sets.filter((_, i) => i !== index),
       }));
-      return { ...prev, workouts: pruneDay(workouts, date) };
+      return { ...prev, workouts: pruneEntry(workouts, date, exerciseId) };
     });
   }, []);
 
@@ -273,6 +281,29 @@ export function useBodyData(): BodyData {
         sets: sets.map((s) => ({ weight: s.weight, reps: s.reps })),
       })),
     }));
+  }, []);
+
+  /**
+   * 前回の構成をその日に写す。種目カード単位の複製（copySets）を日の単位に上げたもの。
+   * 入るのは前回の実績のコピーで、予定でも指示でもない。値はすべて手で直せる。
+   */
+  const copyDay = useCallback((date: string, from: string) => {
+    setData((prev) => {
+      const src = prev.workouts[from];
+      if (!src || src.length === 0) return prev;
+      // すでに何か入っている日は黙って上書きしない（ExerciseCard の複製と同じ作法）
+      if ((prev.workouts[date] ?? []).length > 0) return prev;
+      return {
+        ...prev,
+        workouts: {
+          ...prev.workouts,
+          [date]: src.map((e) => ({
+            exerciseId: e.exerciseId,
+            sets: e.sets.map((set) => ({ weight: set.weight, reps: set.reps })),
+          })),
+        },
+      };
+    });
   }, []);
 
   /* ---- 種目マスタ ---- */
@@ -354,6 +385,7 @@ export function useBodyData(): BodyData {
     removeSet,
     setSetValue,
     copySets,
+    copyDay,
     setGroupGoal,
     upsertExercise,
     addExercises,

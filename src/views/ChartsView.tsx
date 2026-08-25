@@ -9,6 +9,7 @@ import { addDays, isoToTime, todayISO } from '../lib/date';
 import { computeEnergyBalance, ENERGY_WINDOWS, weeksShort } from '../lib/energy';
 import type { EnergyWindow } from '../lib/energy';
 import type { BodyData } from '../hooks/useBodyData';
+import type { Domain } from '../types';
 import ui from '../styles/ui.module.scss';
 
 type RangeId = '30' | '90' | 'all';
@@ -19,11 +20,20 @@ const RANGES: { id: RangeId; label: string; days: number | null }[] = [
   { id: 'all', label: '全期間', days: null },
 ];
 
-type Mode = 'body' | 'training';
+interface Props {
+  body: BodyData;
+  /** 体組成／トレーニングの切り替えはヘッダが持つ */
+  domain: Domain;
+  /** 目標画面の行から来たときに、その種目の詳細を開いた状態で出す */
+  exerciseId?: string | null;
+}
 
-export function ChartsView({ body }: { body: BodyData }) {
+/**
+ * 推移。タブではなく、ホームで見ている数字の下位画面として置く（）。
+ * 中身は体組成／トレーニングの切り替えに従う。
+ */
+export function ChartsView({ body, domain: mode, exerciseId }: Props) {
   const { daily, weeks, sessions, data } = body;
-  const [mode, setMode] = useState<Mode>('body');
   const [range, setRange] = useState<RangeId>('all');
   const [energyWindow, setEnergyWindow] = useState<EnergyWindow>(1);
 
@@ -91,26 +101,6 @@ export function ChartsView({ body }: { body: BodyData }) {
 
   return (
     <>
-      {/* 体組成とトレーニングは別の物差しなので、同じ画面に混ぜず切り替える */}
-      <div className={ui.chipRow} role="group" aria-label="グラフの種類">
-        {(
-          [
-            ['body', '体組成'],
-            ['training', 'トレーニング'],
-          ] as [Mode, string][]
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={ui.chip}
-            aria-pressed={mode === id}
-            onClick={() => setMode(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
       {/* フィルタはすべてのグラフに効く 1 行としてカードの外に置く */}
       <div className={ui.chipRow} role="group" aria-label="表示期間">
         {RANGES.map((r) => (
@@ -127,7 +117,12 @@ export function ChartsView({ body }: { body: BodyData }) {
       </div>
 
       {mode === 'training' && (
-        <TrainingCharts sessions={sessions} exercises={data.exercises} from={from} />
+        <TrainingCharts
+          sessions={sessions}
+          exercises={data.exercises}
+          from={from}
+          initialOpenId={exerciseId ?? null}
+        />
       )}
 
       {mode === 'body' && (

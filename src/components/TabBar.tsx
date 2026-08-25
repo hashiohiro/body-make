@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import s from './TabBar.module.scss';
 
-export type TabId = 'home' | 'charts' | 'records' | 'settings';
+export type TabId = 'home' | 'goals' | 'records' | 'settings';
 
 const ICONS: Record<TabId, ReactNode> = {
   home: (
@@ -10,10 +10,11 @@ const ICONS: Record<TabId, ReactNode> = {
       <path d="M6 10.5V20h12v-9.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
-  charts: (
+  // 旗。設定の歯車と同じ「丸」の語彙にならないよう、的ではなく旗にする
+  goals: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <path d="M4 19h16" strokeLinecap="round" />
-      <path d="M5 15l4.5-4.5 3.5 3L19 7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 21V4" strokeLinecap="round" />
+      <path d="M6 4.8h11l-2.2 3.6L17 12H6z" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
   records: (
@@ -35,12 +36,12 @@ const ICONS: Record<TabId, ReactNode> = {
 
 const LABELS: Record<TabId, string> = {
   home: 'ホーム',
-  charts: 'グラフ',
+  goals: '目標',
   records: '記録',
   settings: '設定',
 };
 
-const ORDER: TabId[] = ['home', 'charts', 'records', 'settings'];
+const ORDER: TabId[] = ['home', 'goals', 'records', 'settings'];
 
 interface Props {
   active: TabId;

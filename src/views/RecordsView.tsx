@@ -1,9 +1,9 @@
-import { useState } from 'react';
 import { QuickEntry } from '../components/QuickEntry';
 import { TrainingView } from './TrainingView';
 import { formatMD, weekdayJa } from '../lib/date';
 import { fmt } from '../lib/format';
 import type { BodyData } from '../hooks/useBodyData';
+import type { Domain } from '../types';
 import ui from '../styles/ui.module.scss';
 import s from './RecordsView.module.scss';
 
@@ -11,57 +11,22 @@ interface Props {
   body: BodyData;
   date: string;
   onDateChange: (date: string) => void;
+  /** 体組成／トレーニングの切り替えはヘッダが持つ */
+  domain: Domain;
 }
 
-type Mode = 'weight' | 'training';
-
-export function RecordsView({ body, date, onDateChange }: Props) {
+export function RecordsView({ body, date, onDateChange, domain }: Props) {
   const { daily, data, setValue, removeDay } = body;
-  const [mode, setMode] = useState<Mode>('weight');
   const rows = [...daily].reverse();
   const selected = data.entries[date];
 
-  // 体重もトレーニングも「その日に何をしたか」の記録なので、同じタブの中で切り替える
-  const tabs = (
-    <div className={ui.chipRow} role="group" aria-label="記録の種類">
-      {(
-        [
-          ['weight', '体組成'],
-          ['training', 'トレーニング'],
-        ] as [Mode, string][]
-      ).map(([id, label]) => (
-        <button
-          key={id}
-          type="button"
-          className={ui.chip}
-          aria-pressed={mode === id}
-          onClick={() => setMode(id)}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-
-  if (mode === 'training') {
-    return (
-      <>
-        {tabs}
-        <TrainingView body={body} date={date} onDateChange={onDateChange} />
-      </>
-    );
+  if (domain === 'training') {
+    return <TrainingView body={body} date={date} onDateChange={onDateChange} />;
   }
 
   return (
     <>
-      {tabs}
-      <QuickEntry
-        date={date}
-        entries={data.entries}
-        daily={daily}
-        onDateChange={onDateChange}
-        onValue={setValue}
-      />
+      <QuickEntry date={date} entries={data.entries} daily={daily} onValue={setValue} />
 
       {selected && (
         <div className={ui.btnRow} style={{ marginTop: 0, marginBottom: 12 }}>

@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Sparkline } from '../charts/Sparkline';
 import { ExerciseDetailDialog } from './ExerciseDetailDialog';
-import { GroupSetsHeatmap } from './GroupSetsHeatmap';
-import { GroupTrendChart } from './GroupTrendChart';
 import { METRICS, baselineOf, lastOf } from './metrics';
 import { GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
 import { deltaTone, fmt, fmtDelta } from '../../lib/format';
-import { buildWeeklySets, exerciseHistory } from '../../lib/training';
+import { exerciseHistory } from '../../lib/training';
 import type { Exercise, MuscleGroup, SessionPoint } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
@@ -18,16 +16,18 @@ interface Props {
   exercises: readonly Exercise[];
   /** 表示期間の開始日 */
   from: string;
+  /** 目標画面の行から来たときの初期選択。以後は一覧のタップが優先される */
+  initialOpenId?: string | null;
 }
 
 /**
- * トレーニングのグラフ。粗いほうから細かいほうへ並べる。
+ * 種目ごとの推移。
  *
  * 種目ごとの詳細（大きいグラフ・週の内訳・元データ）はここに常駐させず、
  * 一覧の行を選んだときにダイアログで出す。
  * 1 種目ぶんの詳細が画面に居座ると、一覧を見比べるのに毎回その脇を通ることになる。
  */
-export function TrainingCharts({ sessions, exercises, from }: Props) {
+export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Props) {
   // 記録のある種目だけを選択肢にする
   const recorded = useMemo(() => {
     const counts = new Map<string, number>();
@@ -41,7 +41,7 @@ export function TrainingCharts({ sessions, exercises, from }: Props) {
       .sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0));
   }, [sessions, exercises]);
 
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialOpenId ?? null);
   const [metricId, setMetricId] = useState<string | null>(null);
   const [group, setGroup] = useState<MuscleGroup | 'all'>('all');
 
@@ -60,8 +60,6 @@ export function TrainingCharts({ sessions, exercises, from }: Props) {
     metrics.find((m) => m.id === metricId) ??
     metrics.find((m) => m.id === fallbackId) ??
     metrics[0]!;
-
-  const weeklySets = useMemo(() => buildWeeklySets(sessions, from), [sessions, from]);
 
   /*
    * 一覧は「切り替えないと見えない」を無くすためのもの。
@@ -95,11 +93,6 @@ export function TrainingCharts({ sessions, exercises, from }: Props) {
 
   return (
     <>
-      {/* 全体の配分 → 週ごとの数字 → 種目ごとの推移、と粗いほうから細かいほうへ並べる */}
-      <GroupTrendChart weeks={weeklySets} />
-
-      <GroupSetsHeatmap weeks={weeklySets} />
-
       <section className={ui.card}>
         <header className={ui.cardHeader}>
           <h2 className={ui.cardTitle}>種目別の推移</h2>

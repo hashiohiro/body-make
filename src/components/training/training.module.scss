@@ -1,36 +1,5 @@
 @use '../../styles/mixins' as *;
 
-/* ---- 日付ナビ（QuickEntry と同じ形にそろえる） ---- */
-
-.dateRow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.dateInput {
-  flex: 1;
-  min-width: 0;
-  min-height: 40px;
-  padding: 9px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
-  background: var(--surface-sunken);
-  @include tabular;
-}
-
-.nav {
-  flex: none;
-  width: 40px;
-  min-height: 40px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
-  background: var(--surface);
-  color: var(--ink-2);
-  font-size: 15px;
-  line-height: 1;
-}
-
 /* ---- 種目カード ---- */
 
 .exHead {
@@ -129,6 +98,41 @@
 
 .setRow + .setRow {
   margin-top: 6px;
+}
+
+/* 重量欄を出さないとき。自重種目と秒で数える種目 */
+.setRowSolo {
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+}
+
+.setActions {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 8px;
+
+  .addSet {
+    flex: 1;
+    margin-top: 0;
+  }
+}
+
+/* 加重を開くための小さな逃げ道。既定の入力欄には出さない */
+.weightToggle {
+  flex: none;
+  padding: 0 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12px;
+
+  &[aria-pressed='true'] {
+    border-style: solid;
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
 }
 
 .setIndex {
@@ -698,15 +702,36 @@
 }
 
 /* 固定幅にすると文字が見切れたりカードをはみ出すので、比率で収める */
-.goalInputs {
+/* ---- 種目の目標を決めるフォーム ---- */
+
+.goalForm {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
 }
 
+.goalValueRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 決める値なので、フォームの中でいちばん大きく出す */
 .goalValue {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 640;
   text-align: center;
   @include tabular;
 
@@ -715,11 +740,31 @@
     -webkit-appearance: none;
     margin: 0;
   }
+
+  &[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
 }
 
 .goalUnit {
-  font-size: 12px;
+  flex: none;
+  width: 2.5em;
+  font-size: 13px;
   color: var(--ink-muted);
+}
+
+/* 決める材料。事実だけを出し、値は入れない */
+.goalFacts {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-muted);
+  @include tabular;
+
+  b {
+    color: var(--ink);
+    font-weight: 640;
+  }
 }
 
 .miniBtn {
@@ -796,4 +841,18 @@
   font-size: 11px;
   color: var(--ink-muted);
   @include tabular;
+}
+
+/* ---- 目標画面 ---- */
+
+/* 目安のチップ。下の 6 部位ぶんの入力と組にして読ませる */
+.presetRow {
+  margin-bottom: 10px;
+}
+
+/* 種目の目標の行に置く、推移と変更への入口 */
+.goalActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
 }

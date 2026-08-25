@@ -226,6 +226,17 @@ export function buildExercisePoint(
   };
 }
 
+/**
+ * 値が 1 つも入っていないエントリは、記録ではなく入力の途中で作られた器。
+ *
+ * 種目を選んだ時点で空のセットが 1 行できる。それを実績として数えると、
+ * 打つ前から記録一覧にその日が並び、通算回数もストリークも増えてしまう。
+ * 「書いたものはすべて数える」（設計 §4.2）の裏側で、書いていないものは数えない。
+ */
+function hasAnySet(entry: SessionExercise): boolean {
+  return entry.sets.some((set) => set.weight != null || set.reps != null);
+}
+
 export function buildSessions(
   workouts: Workouts,
   exercises: readonly Exercise[],
@@ -239,6 +250,7 @@ export function buildSessions(
     .map((date) => {
       const bodyWeight = bodyWeightAt(date);
       const points = (workouts[date] ?? [])
+        .filter(hasAnySet)
         .map((entry) => {
           const exercise = byId.get(entry.exerciseId);
           return exercise ? buildExercisePoint(exercise, entry, bodyWeight) : null;

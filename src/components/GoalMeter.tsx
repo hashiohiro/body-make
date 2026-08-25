@@ -1,5 +1,8 @@
+import { useState } from 'react';
+import { NumericInput } from './NumericInput';
 import { formatRelativeDays, formatYMD, todayISO, diffDays } from '../lib/date';
 import { fmt, fmtPercent } from '../lib/format';
+import { BODYFAT_RANGE, HEIGHT_RANGE, WEIGHT_RANGE } from '../lib/storage';
 import type { Projection, Settings, Stats } from '../types';
 import ui from '../styles/ui.module.scss';
 import s from './GoalMeter.module.scss';
@@ -8,23 +11,113 @@ interface Props {
   settings: Settings;
   stats: Stats;
   projection: Projection;
-  onOpenSettings: () => void;
+  onUpdate: (patch: Partial<Settings>) => void;
 }
 
-export function GoalMeter({ settings, stats, projection, onOpenSettings }: Props) {
+/**
+ * 体組成の目標と、その進捗。
+ *
+ * 目標値の編集をこのカードの中に持つ。設定タブへ飛ばすと、
+ * 「あと 3.2kg」を見る場所と、その 3.2kg を決め直す場所が離れたままになる。
+ */
+export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
+  const [editing, setEditing] = useState(false);
   const target = settings.targetWeight;
   const current = stats.currentWeight;
+
+  const editor = (
+    <div className={s.editor}>
+      <div className={ui.formRow}>
+        <label htmlFor="target-weight">
+          目標体重
+          <small>到達予測と進捗バーの基準になります</small>
+        </label>
+        <span className={ui.inputUnit}>
+          <NumericInput
+            id="target-weight"
+            value={settings.targetWeight}
+            min={WEIGHT_RANGE[0]}
+            max={WEIGHT_RANGE[1]}
+            placeholder="—"
+            onCommit={(v) => onUpdate({ targetWeight: v })}
+          />
+          <span>kg</span>
+        </span>
+      </div>
+
+      <div className={ui.formRow}>
+        <label htmlFor="target-bf">目標体脂肪率</label>
+        <span className={ui.inputUnit}>
+          <NumericInput
+            id="target-bf"
+            value={settings.targetBodyFat}
+            min={BODYFAT_RANGE[0]}
+            max={BODYFAT_RANGE[1]}
+            placeholder="—"
+            onCommit={(v) => onUpdate({ targetBodyFat: v })}
+          />
+          <span>%</span>
+        </span>
+      </div>
+
+      <div className={ui.formRow}>
+        <label htmlFor="target-date">
+          目標日
+          <small>必要ペースを逆算します</small>
+        </label>
+        <input
+          id="target-date"
+          type="date"
+          value={settings.targetDate ?? ''}
+          onChange={(e) => onUpdate({ targetDate: e.target.value || null })}
+        />
+      </div>
+
+      {/*
+        身長そのものは目標ではないが、目標体重と BMI は同じ話題なので同じ面に置く。
+        別の画面に分けると、身長を入れる理由が画面の中で完結しない
+      */}
+      <div className={ui.formRow}>
+        <label htmlFor="height">
+          身長
+          <small>BMI の計算に使います（任意）</small>
+        </label>
+        <span className={ui.inputUnit}>
+          <NumericInput
+            id="height"
+            value={settings.heightCm}
+            min={HEIGHT_RANGE[0]}
+            max={HEIGHT_RANGE[1]}
+            placeholder="—"
+            onCommit={(v) => onUpdate({ heightCm: v })}
+          />
+          <span>cm</span>
+        </span>
+      </div>
+    </div>
+  );
 
   if (target == null || current == null) {
     return (
       <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>目標</h2>
-        </header>
-        <p className={ui.emptyState}>目標体重を決めると、到達予測日と進捗バーが出ます。</p>
+        {!editing && (
+          <p className={ui.emptyState}>
+            {target == null
+              ? '目標体重を決めると、到達予測日と進捗バーが出ます。'
+              : '体重を記録すると、目標までの進捗が出ます。'}
+          </p>
+        )}
+
+        {editing && editor}
+
         <div className={ui.btnRow}>
-          <button type="button" className={`${ui.btn} ${ui.btnPrimary}`} onClick={onOpenSettings}>
-            目標を設定する
+          <button
+            type="button"
+            className={`${ui.btn} ${editing ? ui.btnGhost : ui.btnPrimary}`}
+            aria-expanded={editing}
+            onClick={() => setEditing((v) => !v)}
+          >
+            {editing ? '閉じる' : target == null ? '目標を決める' : '目標を変更'}
           </button>
         </div>
       </section>
@@ -102,11 +195,34 @@ export function GoalMeter({ settings, stats, projection, onOpenSettings }: Props
             </span>
           </div>
         )}
+
+        {/* 身長を入れる理由をこの画面で完結させる。入れていなければ何も出さない */}
+        {settings.heightCm != null && stats.bmi != null && (
+          <div className={s.etaRow}>
+            <span>BMI（身長 {fmt(settings.heightCm, 0)}cm）</span>
+            <span>
+              <b>{fmt(stats.bmi)}</b>
+            </span>
+          </div>
+        )}
       </div>
 
       {settings.targetDate && diffDays(settings.targetDate, todayISO()) <= 0 && (
-        <p className={ui.note}>目標日を過ぎています。設定から次の期限を決め直しましょう。</p>
+        <p className={ui.note}>目標日を過ぎています。次の期限を決め直しましょう。</p>
       )}
+
+      {editing && editor}
+
+      <div className={ui.btnRow}>
+        <button
+          type="button"
+          className={`${ui.btn} ${editing ? ui.btnGhost : ''}`}
+          aria-expanded={editing}
+          onClick={() => setEditing((v) => !v)}
+        >
+          {editing ? '閉じる' : '目標を変更'}
+        </button>
+      </div>
     </section>
   );
 }

@@ -7,7 +7,10 @@ interface Props {
   max: number;
   step?: number;
   placeholder?: string;
-  className?: string;
+  // CSS Modules のクラス名は string | undefined で来る
+  className?: string | undefined;
+  /** 見出しラベルを置けない場所（一覧の行の中など）で使う */
+  ariaLabel?: string | undefined;
   onCommit: (value: number | null) => void;
 }
 
@@ -20,6 +23,7 @@ export function NumericInput({
   step = 0.1,
   placeholder,
   className,
+  ariaLabel,
   onCommit,
 }: Props) {
   const field = useNumericField(value, min, max, onCommit);
@@ -34,6 +38,7 @@ export function NumericInput({
       min={min}
       max={max}
       placeholder={placeholder}
+      aria-label={ariaLabel}
       value={field.text}
       onChange={(e) => field.handleChange(e.target.value)}
       onBlur={field.handleBlur}

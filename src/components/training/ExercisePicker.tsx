@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CatalogPicker } from './CatalogPicker';
 import { Modal } from '../Modal';
 import { GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
 import type { Exercise } from '../../types';
@@ -10,6 +11,8 @@ interface Props {
   usedIds: ReadonlySet<string>;
   /** その日に入れる／外すの切り替え。押すたびに増えることはない */
   onToggle: (id: string) => void;
+  /** カタログからの追加。種目マスタの置き場所は設定のままで、入口だけをここにも出す */
+  onAddExercises: (exercises: readonly Exercise[]) => void;
 }
 
 /**
@@ -19,14 +22,43 @@ interface Props {
  * 挿入されるぶんだけピッカーが下へ押し出され、続けて選ぶたびに
  * 指の下で一覧が動く（1 件ずつ閉じていた頃は起きなかった）。
  */
-export function ExercisePicker({ exercises, usedIds, onToggle }: Props) {
+export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }: Props) {
   const [open, setOpen] = useState(false);
+  const [catalog, setCatalog] = useState(false);
 
+  // 開いているときだけ置く。閉じた dialog を記録画面に常駐させない
+  const catalogModal = catalog && (
+    <Modal open title="種目を追加" onClose={() => setCatalog(false)}>
+      <CatalogPicker exercises={exercises} onAdd={onAddExercises} />
+      <p className={ui.note}>
+        並べ替え・削除・種目ごとの設定は、設定 &gt; トレーニング でまとめて行えます。
+      </p>
+    </Modal>
+  );
+
+  /*
+   * 種目が 1 つも無いとき、以前は「設定 > トレーニング から追加してください」とだけ出していた。
+   * 初めて開いた人がその場では何もできない行き止まりになるので、ここから追加できるようにする。
+   */
   if (exercises.length === 0) {
     return (
-      <p className={ui.emptyState}>
-        種目がありません。設定 &gt; トレーニング から追加してください。
-      </p>
+      <>
+        <p className={ui.emptyState}>
+          まだ種目がありません。
+          <br />
+          カタログから、自分がやる種目を選んでください。
+        </p>
+        <div className={ui.btnRow}>
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.btnPrimary}`}
+            onClick={() => setCatalog(true)}
+          >
+            ＋ カタログから追加
+          </button>
+        </div>
+        {catalogModal}
+      </>
     );
   }
 
@@ -40,7 +72,6 @@ export function ExercisePicker({ exercises, usedIds, onToggle }: Props) {
         >
           ＋ 種目を追加
         </button>
-        {usedIds.size > 0 && <span className={ui.hint}>この日 {usedIds.size}種目</span>}
       </div>
 
       <Modal open={open} title="種目を追加" onClose={() => setOpen(false)}>
@@ -73,8 +104,24 @@ export function ExercisePicker({ exercises, usedIds, onToggle }: Props) {
               </div>
             );
           })}
+
+          {/* やる種目が増えたときの逃げ道。設定タブを探しに行かせない */}
+          <div className={ui.btnRow}>
+            <button
+              type="button"
+              className={`${ui.btn} ${ui.btnSm}`}
+              onClick={() => {
+                setOpen(false);
+                setCatalog(true);
+              }}
+            >
+              ＋ カタログから種目を増やす
+            </button>
+          </div>
         </div>
       </Modal>
+
+      {catalogModal}
     </>
   );
 }

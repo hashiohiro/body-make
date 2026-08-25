@@ -44,6 +44,8 @@ interface Props {
   set: WorkSet;
   point: SetPoint | null;
   repUnit: RepUnit;
+  /** 重量欄を出すか。自重種目と秒で数える種目では畳む（ExerciseCard が決める） */
+  showWeight: boolean;
   fallbackWeight: number | null;
   fallbackReps: number | null;
   onValue: (field: 'weight' | 'reps', value: number | null) => void;
@@ -55,6 +57,7 @@ export function SetRow({
   set,
   point,
   repUnit,
+  showWeight,
   fallbackWeight,
   fallbackReps,
   onValue,
@@ -63,7 +66,7 @@ export function SetRow({
   const role = point?.role ?? 'work';
 
   return (
-    <div className={s.setRow} data-set-row={index}>
+    <div className={`${s.setRow} ${showWeight ? '' : s.setRowSolo}`} data-set-row={index}>
       <span className={`${s.setIndex} ${role === 'top' ? s.setIndexTop : ''}`}>
         {role === 'top' ? 'TOP' : index + 1}
       </span>
@@ -78,18 +81,22 @@ export function SetRow({
         onCommit={(v) => onValue('reps', v)}
       />
 
-      <span className={s.times} aria-hidden="true">
-        ×
-      </span>
+      {showWeight && (
+        <>
+          <span className={s.times} aria-hidden="true">
+            ×
+          </span>
 
-      <NumberCell
-        value={set.weight}
-        fallback={fallbackWeight}
-        min={SET_WEIGHT_RANGE[0]}
-        max={SET_WEIGHT_RANGE[1]}
-        ariaLabel={`${index + 1}セット目の重量`}
-        onCommit={(v) => onValue('weight', v)}
-      />
+          <NumberCell
+            value={set.weight}
+            fallback={fallbackWeight}
+            min={SET_WEIGHT_RANGE[0]}
+            max={SET_WEIGHT_RANGE[1]}
+            ariaLabel={`${index + 1}セット目の重量`}
+            onCommit={(v) => onValue('weight', v)}
+          />
+        </>
+      )}
 
       <button
         type="button"

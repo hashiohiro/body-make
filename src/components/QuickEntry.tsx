@@ -1,4 +1,3 @@
-import { addDays, todayISO } from '../lib/date';
 import { dayAverageBodyFat, dayAverageWeight, emptyDay } from '../lib/derive';
 import { fmt } from '../lib/format';
 import { BODYFAT_RANGE, WEIGHT_RANGE } from '../lib/storage';
@@ -12,7 +11,6 @@ interface Props {
   date: string;
   entries: Entries;
   daily: readonly DailyPoint[];
-  onDateChange: (date: string) => void;
   onValue: (date: string, slot: SlotId, field: MeasurementField, value: number | null) => void;
 }
 
@@ -37,9 +35,14 @@ function lastKnown(
   return null;
 }
 
-export function QuickEntry({ date, entries, daily, onDateChange, onValue }: Props) {
+/**
+ * その日の体組成を入れる。
+ *
+ * 日付ナビは持たない。日付は記録タブ全体の状態（体組成とトレーニングで同じ日を見続ける）で、
+ * 置き場所はヘッダに 1 つ。カードには入力欄だけを残す。
+ */
+export function QuickEntry({ date, entries, daily, onValue }: Props) {
   const entry = entries[date] ?? emptyDay();
-  const today = todayISO();
   const avgWeight = dayAverageWeight(entry);
   const avgBodyFat = dayAverageBodyFat(entry);
 
@@ -48,42 +51,6 @@ export function QuickEntry({ date, entries, daily, onDateChange, onValue }: Prop
       <header className={ui.cardHeader}>
         <h2 className={ui.cardTitle}>体組成</h2>
       </header>
-
-      <div className={s.dateRow}>
-        <button
-          type="button"
-          className={s.nav}
-          onClick={() => onDateChange(addDays(date, -1))}
-          aria-label="前の日"
-        >
-          ‹
-        </button>
-        <input
-          className={s.dateInput}
-          type="date"
-          value={date}
-          max={today}
-          onChange={(e) => e.target.value && onDateChange(e.target.value)}
-          aria-label="記録する日付"
-        />
-        <button
-          type="button"
-          className={s.nav}
-          onClick={() => onDateChange(addDays(date, 1))}
-          disabled={date >= today}
-          aria-label="次の日"
-        >
-          ›
-        </button>
-        <button
-          type="button"
-          className={`${ui.btn} ${ui.btnSm}`}
-          onClick={() => onDateChange(today)}
-          disabled={date === today}
-        >
-          今日
-        </button>
-      </div>
 
       <div className={s.slots}>
         {SLOTS.map((slot) => {

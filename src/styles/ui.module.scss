@@ -23,6 +23,27 @@
   }
 }
 
+/*
+ * カードそのものを次の画面への入口にする。
+ * 新しい部品を足さず、card と組にして 1 行だけを載せる。
+ */
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ink);
+
+  > span:last-child {
+    margin-left: auto;
+    color: var(--ink-muted);
+    font-size: 15px;
+  }
+}
+
 .cardHeader {
   display: flex;
   align-items: baseline;
@@ -108,6 +129,37 @@
   @include hide-scrollbar;
 }
 
+/*
+ * 二者択一の切り替え。チップを 2 つ並べるのと違い、
+ * 「どちらか一方」という関係が形で分かる（枠がひと続きになっている）
+ */
+.segmented {
+  display: flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+}
+
+.segment {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-muted);
+  font-size: 12px;
+  white-space: nowrap;
+
+  &[aria-pressed='true'] {
+    background: var(--surface);
+    color: var(--ink);
+    font-weight: 640;
+    box-shadow: var(--shadow);
+  }
+}
+
 .chip {
   flex: none;
   padding: 8px 14px;
@@ -174,7 +226,9 @@
   th {
     position: sticky;
     top: 0;
-    background: var(--surface);
+    // 行がこの下を流れる。面だけだと配色によっては透ける
+    @include opaque-surface;
+
     color: var(--ink-muted);
     font-size: 11px;
     font-weight: 500;
@@ -234,6 +288,27 @@
 
   select {
     text-align: left;
+  }
+}
+
+/*
+ * 入力欄と単位。
+ * 単位を placeholder に置くと、打ち始めた瞬間に消えて「何の数字か」が分からなくなる。
+ */
+.inputUnit {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  input {
+    width: 92px;
+  }
+
+  span {
+    width: 3em;
+    font-size: 12px;
+    color: var(--ink-muted);
   }
 }
 

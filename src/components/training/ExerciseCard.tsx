@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { formatMD } from '../../lib/date';
 import { deltaTone, fmt, fmtDelta } from '../../lib/format';
-import { GROUP_LABELS } from '../../lib/exerciseCatalog';
+import { GROUP_LABELS, catalogEquipment } from '../../lib/exerciseCatalog';
 import { summarizeSets } from '../../lib/training';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { Exercise, ExercisePoint, SessionExercise } from '../../types';
@@ -51,6 +52,26 @@ export function ExerciseCard({
   // まだ何も入っていないカードにだけ複製を出す。入力済みを黙って上書きしない
   const empty = entry.sets.every((set) => set.weight == null && set.reps == null);
 
+  /*
+   * 重量欄を出すか。
+   *
+   * 秒で数える種目では、重量を入れても挙上量に計上されない（counted の条件が repUnit==='reps'）。
+   * 効かない欄を置いて入力を求めるのはおかしいので、出さない。
+   *
+   * 自重種目の重量は「体重に足す追加重量」で、ベルトで足す人だけが使う。
+   * 既定では畳んで、必要な人がその種目のカードで開く。
+   * すでに入っている値は必ず見えるようにする（畳んで消えたように見せない）。
+   */
+  const weightCounts = exercise.repUnit === 'reps';
+  // 体重が負荷になる種目（腕立て・懸垂）と、器具を使わない種目（クランチ・デッドバグ）の両方
+  const bodyweight =
+    exercise.loadMode === 'bodyweight' || catalogEquipment(exercise.id) === 'bodyweight';
+  // 体重に足す追加重量か、記録した重量がそのまま負荷か
+  const additional = exercise.loadMode === 'bodyweight';
+  const hasWeight = entry.sets.some((set) => set.weight != null);
+  const [addWeight, setAddWeight] = useState(false);
+  const showWeight = weightCounts && (!bodyweight || hasWeight || addWeight);
+
   return (
     <section className={ui.card} id={`ex-card-${exercise.id}`}>
       <div className={s.exHead}>
@@ -83,11 +104,15 @@ export function ExerciseCard({
         )}
       </div>
 
-      <div className={s.setHead} aria-hidden="true">
+      <div className={`${s.setHead} ${showWeight ? '' : s.setRowSolo}`} aria-hidden="true">
         <span />
         <span>{exercise.repUnit === 'seconds' ? '秒数' : '回数'}</span>
-        <span />
-        <span>重量 kg</span>
+        {showWeight && (
+          <>
+            <span />
+            <span>{additional ? '追加重量 kg' : '重量 kg'}</span>
+          </>
+        )}
         <span />
       </div>
 
@@ -98,6 +123,7 @@ export function ExerciseCard({
           set={set}
           point={point?.sets[i] ?? null}
           repUnit={exercise.repUnit}
+          showWeight={showWeight}
           fallbackWeight={entry.sets[i - 1]?.weight ?? previous?.point.top?.weight ?? null}
           fallbackReps={entry.sets[i - 1]?.reps ?? previous?.point.top?.reps ?? null}
           onValue={(field, value) => onValue(i, field, value)}
@@ -105,9 +131,23 @@ export function ExerciseCard({
         />
       ))}
 
-      <button type="button" className={s.addSet} onClick={onAddSet}>
-        ＋ セットを追加
-      </button>
+      <div className={s.setActions}>
+        <button type="button" className={s.addSet} onClick={onAddSet}>
+          ＋ セットを追加
+        </button>
+
+        {/* 自重種目で、ベルトなどで加重した日だけ開く。値が入っていれば畳ませない */}
+        {weightCounts && bodyweight && !hasWeight && (
+          <button
+            type="button"
+            className={s.weightToggle}
+            aria-pressed={addWeight}
+            onClick={() => setAddWeight((v) => !v)}
+          >
+            {addWeight ? '加重をやめる' : '＋ 加重'}
+          </button>
+        )}
+      </div>
 
       <div className={s.exFoot}>
         <span>{point?.workSets ?? 0} セット</span>

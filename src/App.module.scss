@@ -6,16 +6,33 @@
   padding: 0 16px calc(var(--tab-h) + 28px + env(safe-area-inset-bottom));
 }
 
+/*
+ * 地は body と同じものを同じ位置に敷く。
+ *
+ * 単色 88% で塗っていたが、グラデーションの配色では背後が場所によって違う色になり、
+ * ヘッダだけが平坦な帯として浮いていた。
+ * background-attachment: fixed は body と同じくビューポート基準なので、位置がぴったり揃う。
+ *
+ * 横は左右いっぱいまで伸ばす。カードと同じ幅で止まると、
+ * 地の色が違って見える配色では板が乗っているように見える。
+ */
 .topbar {
   position: sticky;
   top: 0;
   z-index: 20;
+  display: grid;
+  gap: 8px;
+  margin: 0 -16px;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  background-color: var(--plane);
+  background-image: var(--plane-image);
+  background-attachment: fixed;
+}
+
+.topbarRow {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: calc(10px + env(safe-area-inset-top)) 0 10px;
-  background: color-mix(in srgb, var(--plane) 88%, transparent);
-  backdrop-filter: blur(12px);
 }
 
 .title {

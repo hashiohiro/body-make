@@ -3,7 +3,7 @@ import { ExerciseCard } from '../components/training/ExerciseCard';
 import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialog';
 import { ExercisePicker } from '../components/training/ExercisePicker';
 import { GROUP_LABELS } from '../lib/exerciseCatalog';
-import { addDays, formatMD, formatMDW, todayISO, weekdayJa } from '../lib/date';
+import { addDays, formatMD, formatMDW, weekdayJa } from '../lib/date';
 import { fmt } from '../lib/format';
 import { personalBest, pickVolume, previousPoint, sessionGroups } from '../lib/training';
 import type { BodyData } from '../hooks/useBodyData';
@@ -27,9 +27,10 @@ export function TrainingView({ body, date, onDateChange }: Props) {
     removeSet,
     setSetValue,
     copySets,
+    copyDay,
+    addExercises,
   } = body;
 
-  const today = todayISO();
   const dayEntries = data.workouts[date] ?? [];
   const byId = useMemo(() => new Map(data.exercises.map((e) => [e.id, e])), [data.exercises]);
 
@@ -39,6 +40,15 @@ export function TrainingView({ body, date, onDateChange }: Props) {
   );
 
   const session = useMemo(() => sessions.find((x) => x.date === date) ?? null, [sessions, date]);
+
+  /*
+   * その日より前の直近セッション。未来の記録から初期値を作らないよう、対象日より前だけを見る。
+   * 種目カードの「前回の構成で始める」を日の単位に上げたもの。
+   */
+  const previousSession = useMemo(
+    () => [...sessions].reverse().find((x) => x.date < date) ?? null,
+    [sessions, date],
+  );
   const [openDate, setOpenDate] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
 
@@ -70,41 +80,37 @@ export function TrainingView({ body, date, onDateChange }: Props) {
           <h2 className={ui.cardTitle}>トレーニング</h2>
         </header>
 
-        <div className={s.dateRow}>
-          <button
-            type="button"
-            className={s.nav}
-            onClick={() => onDateChange(addDays(date, -1))}
-            aria-label="前の日"
-          >
-            ‹
-          </button>
-          <input
-            className={s.dateInput}
-            type="date"
-            value={date}
-            max={today}
-            onChange={(e) => e.target.value && onDateChange(e.target.value)}
-            aria-label="記録する日付"
-          />
-          <button
-            type="button"
-            className={s.nav}
-            onClick={() => onDateChange(addDays(date, 1))}
-            disabled={date >= today}
-            aria-label="次の日"
-          >
-            ›
-          </button>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnSm}`}
-            onClick={() => onDateChange(today)}
-            disabled={date === today}
-          >
-            今日
-          </button>
-        </div>
+        {dayEntries.length === 0 && active.length > 0 && (
+          <p className={ui.emptyState}>{formatMDW(date)} の記録はまだありません。</p>
+        )}
+
+        {/* 入っている日には出さない。黙って上書きしない */}
+        {dayEntries.length === 0 && previousSession && (
+          <div className={ui.btnRow}>
+            <button
+              type="button"
+              className={ui.btn}
+              onClick={() => copyDay(date, previousSession.date)}
+            >
+              前回と同じ（{formatMD(previousSession.date)}{' '}
+              {sessionGroups(previousSession)
+                .map((g) => GROUP_LABELS[g])
+                .join('・')}{' '}
+              {previousSession.exercises.length}種目）
+            </button>
+          </div>
+        )}
+
+        {/*
+          種目を足す入口は一番上に置く。下に置くと、カードが増えるほど遠くなる
+          （日付ナビが抜けたぶん、ここがその日の操作の置き場所になった）
+        */}
+        <ExercisePicker
+          exercises={active}
+          usedIds={usedIds}
+          onToggle={toggle}
+          onAddExercises={addExercises}
+        />
       </section>
 
       {dayEntries.map((entry) => {
@@ -144,13 +150,6 @@ export function TrainingView({ body, date, onDateChange }: Props) {
           />
         );
       })}
-
-      <section className={ui.card}>
-        {dayEntries.length === 0 && active.length > 0 && (
-          <p className={ui.emptyState}>{formatMDW(date)} の記録はまだありません。</p>
-        )}
-        <ExercisePicker exercises={active} usedIds={usedIds} onToggle={toggle} />
-      </section>
 
       <section className={ui.card}>
         <header className={ui.cardHeader}>

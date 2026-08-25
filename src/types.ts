@@ -16,6 +16,9 @@ export interface DayEntry {
 /** キーは 'YYYY-MM-DD'（ローカル日付） */
 export type Entries = Record<string, DayEntry>;
 
+/** グラフと記録で共通の「どちらの記録を見るか」。タブをまたいで保つ */
+export type Domain = 'body' | 'training';
+
 export type ThemePref =
   | 'system'
   | 'light'

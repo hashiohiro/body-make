@@ -1,16 +1,15 @@
-import { GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
+import { GROUP_LABELS } from '../../lib/exerciseCatalog';
 import { addDays, formatMD, startOfWeek, todayISO, weekdayJa } from '../../lib/date';
 import { fmt } from '../../lib/format';
-import { formatSets, sessionGroups } from '../../lib/training';
+import { sessionGroups } from '../../lib/training';
 import type { TrainingStats } from '../../lib/training';
-import type { GroupGoals, SessionPoint } from '../../types';
+import type { SessionPoint } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
 interface Props {
   sessions: readonly SessionPoint[];
   stats: TrainingStats;
-  goals: GroupGoals;
 }
 
 /**
@@ -20,7 +19,7 @@ interface Props {
  * 種目をまたいだセット数の合計は出さない。スクワットとサイドレイズを同じ 1 セットとして
  * 足した数字は、何をやったのかを説明しない（部位別の内訳のほうが常に情報量が多い）。
  */
-export function TrainingSummary({ sessions, stats, goals }: Props) {
+export function TrainingSummary({ sessions, stats }: Props) {
   const latest = sessions[sessions.length - 1];
   if (!latest) return null;
 
@@ -86,59 +85,6 @@ export function TrainingSummary({ sessions, stats, goals }: Props) {
           </div>
         </section>
       </div>
-
-      <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>今週の部位別セット数</h2>
-        </header>
-
-        {GROUP_ORDER.map((group) => {
-          const sets = stats.thisWeekSetsByGroup[group];
-          const days = stats.daysSinceGroup[group];
-          const goal = goals[group];
-          return (
-            <div key={group} className={`${s.groupRow} ${sets > 0 ? '' : s.groupRowOff}`}>
-              <span>{GROUP_LABELS[group]}</span>
-
-              {/*
-                ゲージは目標を決めた部位にだけ出す。目標が無いのに棒を引くと、
-                基準をこちらで決めることになる（その週の最大部位を 100% にすると、
-                全体が半分の週でも同じ形になって多寡が読めない）。
-              */}
-              {goal != null ? (
-                <span className={s.groupBarTrack}>
-                  <span
-                    className={s.groupBarFill}
-                    style={{ width: `${Math.min(1, sets / goal) * 100}%` }}
-                  />
-                </span>
-              ) : (
-                <span />
-              )}
-
-              <span className={s.groupValue}>
-                {/*
-                  目標の有無で数字の置き場所を変えない。
-                  片方だけチップにすると、同じカードの中で読み方が 2 通りになる。
-                  単位はカードの見出しが持っているので、ここには出さない。
-                  今週やっていない部位は、代わりに何日空いているかを出す
-                */}
-                {goal != null ? (
-                  <>
-                    <b>{formatSets(sets)}</b> / {goal}
-                  </>
-                ) : sets > 0 ? (
-                  <b>{formatSets(sets)}</b>
-                ) : days == null ? (
-                  '—'
-                ) : (
-                  `${days}日`
-                )}
-              </span>
-            </div>
-          );
-        })}
-      </section>
     </>
   );
 }

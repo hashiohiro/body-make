@@ -69,3 +69,10 @@
     @include tabular;
   }
 }
+
+/* 目標値の編集。進捗のすぐ下に開く（設定タブへ飛ばさない） */
+.editor {
+  margin-top: 12px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
