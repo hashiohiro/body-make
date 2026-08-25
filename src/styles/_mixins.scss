@@ -24,13 +24,12 @@ $bp-wide: 560px;
 
 /// 半透明の面を、地の上に載っていない場所で使うための背景。
 ///
-/// ReRail 由来の配色は面（--surface）が半透明で、body の地（--plane と
-/// --plane-image）が透けることを前提にしている。
-/// トップレイヤーの <dialog> や、中身がその下を流れる sticky な帯には地が無いので、
-/// 面だけを敷くと後ろがそのまま透ける。地ごと敷いて、ページ上と同じ見え方にする。
+/// ReRail 由来の配色は面（--surface）が半透明で、body の地（--plane）が透けることを
+/// 前提にしている。トップレイヤーの <dialog> や、中身がその下を流れる sticky な帯には
+/// 地が無いので、面だけを敷くと後ろがそのまま透ける。地ごと敷いて、ページ上と同じ見え方にする。
 @mixin opaque-surface {
   background-color: var(--plane);
-  background-image: linear-gradient(var(--surface), var(--surface)), var(--plane-image);
+  background-image: linear-gradient(var(--surface), var(--surface));
 }
 
 @mixin card {

@@ -49,6 +49,22 @@ export interface AppData {
   workouts: Workouts;
   /** 週あたりの部位別セット数の目標 */
   groupGoals: GroupGoals;
+  /** よくやる種目の組み合わせ。名前を付けて呼び出す */
+  presets: Preset[];
+}
+
+/**
+ * その日の種目の組み合わせに名前を付けたもの。
+ *
+ * 持つのは **種目だけ**。重量もレップも、セット数も持たない。
+ * 値まで持たせると「今日やるべき重量」を先に決めることになり、
+ * 実績記録型（設計 §1.1）ではなく計画型になる。
+ */
+export interface Preset {
+  /** 生成後は不変 */
+  id: string;
+  name: string;
+  exerciseIds: string[];
 }
 
 /** 日次記録シートの 1 行に相当する導出値 */

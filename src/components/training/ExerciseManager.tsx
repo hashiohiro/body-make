@@ -24,7 +24,6 @@ interface Props {
   onAdd: (exercises: readonly Exercise[]) => void;
   onUpdate: (exercise: Exercise) => void;
   onRemove: (id: string) => void;
-  onMove: (id: string, delta: number) => void;
 }
 
 function numOrNull(raw: string): number | null {
@@ -57,7 +56,7 @@ const FILTER_THRESHOLD = 8;
  * 目標値はここに置かない。進捗を見ながら何度も変わるので目標タブが持つ。
  * 一覧には目標をタグとして出す。どの種目に目標があるかは、ここでも見えていたほうがいい。
  */
-export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, onMove }: Props) {
+export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove }: Props) {
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<MuscleGroup | 'all'>('all');
   const [editing, setEditing] = useState<string | null>(null);
@@ -296,234 +295,233 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, o
             </div>
           )}
 
-          {visible.map((ex, i) => (
-            <div key={ex.id}>
-              <div className={s.manageRow}>
-                <span className={s.manageName}>{ex.name}</span>
-                <span className={s.exTag}>
-                  {[ex.group, ...ex.subGroups.map((x) => x.group)]
-                    .map((g) => GROUP_LABELS[g])
-                    .join('·')}
-                </span>
-                {/* 目標は目標タブで決めるが、どの種目にあるかは一覧でも見えるようにする */}
-                {goalLabel(ex) && <span className={s.goalTag}>{goalLabel(ex)}</span>}
+          {/*
+            部位ごとに見出しを付ける。並び替えを持たないので、探し方は「何番目か」ではなく
+            「どの部位か」になる。見出しは主部位で切る（一覧の絞り込みと同じ切り方）
+          */}
+          {GROUP_ORDER.map((group) => {
+            const items = visible.filter((ex) => ex.group === group);
+            if (items.length === 0) return null;
 
-                {/* 並べ替えは全体の順序を動かすので、絞り込み中は無効にする */}
-                <button
-                  type="button"
-                  className={s.miniBtn}
-                  aria-label={`${ex.name}を上へ`}
-                  disabled={filter !== 'all' || i === 0}
-                  onClick={() => onMove(ex.id, -1)}
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  className={s.miniBtn}
-                  aria-label={`${ex.name}を下へ`}
-                  disabled={filter !== 'all' || i === visible.length - 1}
-                  onClick={() => onMove(ex.id, 1)}
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  className={s.miniBtn}
-                  aria-pressed={editing === ex.id}
-                  aria-label={`${ex.name}の設定`}
-                  onClick={() => openDetail(ex)}
-                >
-                  設定
-                </button>
-                <button
-                  type="button"
-                  className={s.miniBtn}
-                  aria-label={`${ex.name}を削除`}
-                  onClick={() => remove(ex)}
-                >
-                  ×
-                </button>
-              </div>
+            return (
+              <div key={group}>
+                <div className={s.manageGroup}>{GROUP_LABELS[group]}</div>
 
-              {editing === ex.id && (
-                <div className={s.newForm}>
-                  {/* フォーム次第で主働筋が変わる種目（ディップスなど）があるので、部位も変えられる */}
-                  <label className={s.newField}>
-                    部位
-                    <select
-                      value={ex.group}
-                      onChange={(e) => {
-                        const group = e.target.value as MuscleGroup;
-                        // 新しい主部位が補助部位に残っていると、その部位を二重に数える。
-                        // 保存時のサニタイズは読み込みでしか走らないので、ここで落とす
-                        onUpdate({
-                          ...ex,
-                          group,
-                          subGroups: ex.subGroups.filter((x) => x.group !== group),
-                        });
-                      }}
-                    >
-                      {GROUP_ORDER.map((g) => (
-                        <option key={g} value={g}>
-                          {GROUP_LABELS[g]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                {items.map((ex) => (
+                  <div key={ex.id}>
+                    <div className={s.manageRow}>
+                      <span className={s.manageName}>{ex.name}</span>
+                      {/* 主部位は見出しが持っているので、ここは補助部位だけ */}
+                      {ex.subGroups.length > 0 && (
+                        <span className={s.exTag}>
+                          {ex.subGroups.map((x) => GROUP_LABELS[x.group]).join('·')}
+                        </span>
+                      )}
+                      {/* 目標は目標タブで決めるが、どの種目にあるかは一覧でも見えるようにする */}
+                      {goalLabel(ex) && <span className={s.goalTag}>{goalLabel(ex)}</span>}
 
-                  <div className={s.newField}>
-                    補助的に使う部位
-                    <div className={s.pickerList}>
-                      {GROUP_ORDER.filter((g) => g !== ex.group).map((g) => {
-                        const on = ex.subGroups.some((x) => x.group === g);
-                        return (
-                          <button
-                            key={g}
-                            type="button"
-                            className={s.pickerBtn}
-                            aria-pressed={on}
-                            onClick={() =>
+                      <button
+                        type="button"
+                        className={s.miniBtn}
+                        aria-pressed={editing === ex.id}
+                        aria-label={`${ex.name}の設定`}
+                        onClick={() => openDetail(ex)}
+                      >
+                        設定
+                      </button>
+                      <button
+                        type="button"
+                        className={s.miniBtn}
+                        aria-label={`${ex.name}を削除`}
+                        onClick={() => remove(ex)}
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    {editing === ex.id && (
+                      <div className={s.newForm}>
+                        {/* フォーム次第で主働筋が変わる種目（ディップスなど）があるので、部位も変えられる */}
+                        <label className={s.newField}>
+                          部位
+                          <select
+                            value={ex.group}
+                            onChange={(e) => {
+                              const group = e.target.value as MuscleGroup;
+                              // 新しい主部位が補助部位に残っていると、その部位を二重に数える。
+                              // 保存時のサニタイズは読み込みでしか走らないので、ここで落とす
                               onUpdate({
                                 ...ex,
-                                subGroups: on
-                                  ? ex.subGroups.filter((x) => x.group !== g)
-                                  : [...ex.subGroups, { group: g, weight: SUB_GROUP_WEIGHT }],
-                              })
-                            }
+                                group,
+                                subGroups: ex.subGroups.filter((x) => x.group !== group),
+                              });
+                            }}
                           >
-                            {GROUP_LABELS[g]}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {/*
-                      関与の大きさは種目で違う。デッドリフトの脚は主働筋なので 1、
-                      体幹は姿勢の保持なので 0.5 が近い。既定のままでも困らないので、
-                      選んだ部位のぶんだけ出す
-                    */}
-                    {ex.subGroups.map((sub) => (
-                      <div key={sub.group} className={s.subWeightRow}>
-                        <span className={s.subWeightName}>{GROUP_LABELS[sub.group]}</span>
-                        <div className={s.pickerList}>
-                          {subWeightOptions(sub.weight).map((w) => (
-                            <button
-                              key={w}
-                              type="button"
-                              className={`${s.pickerBtn} ${s.stepBtn}`}
-                              aria-pressed={sub.weight === w}
-                              aria-label={`${GROUP_LABELS[sub.group]}を${w}で数える`}
-                              onClick={() =>
+                            {GROUP_ORDER.map((g) => (
+                              <option key={g} value={g}>
+                                {GROUP_LABELS[g]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <div className={s.newField}>
+                          補助的に使う部位
+                          <div className={s.pickerList}>
+                            {GROUP_ORDER.filter((g) => g !== ex.group).map((g) => {
+                              const on = ex.subGroups.some((x) => x.group === g);
+                              return (
+                                <button
+                                  key={g}
+                                  type="button"
+                                  className={s.pickerBtn}
+                                  aria-pressed={on}
+                                  onClick={() =>
+                                    onUpdate({
+                                      ...ex,
+                                      subGroups: on
+                                        ? ex.subGroups.filter((x) => x.group !== g)
+                                        : [...ex.subGroups, { group: g, weight: SUB_GROUP_WEIGHT }],
+                                    })
+                                  }
+                                >
+                                  {GROUP_LABELS[g]}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {/*
+                            関与の大きさは種目で違う。デッドリフトの脚は主働筋なので 1、
+                            体幹は姿勢の保持なので 0.5 が近い。既定のままでも困らないので、
+                            選んだ部位のぶんだけ出す
+                          */}
+                          {ex.subGroups.map((sub) => (
+                            <div key={sub.group} className={s.subWeightRow}>
+                              <span className={s.subWeightName}>{GROUP_LABELS[sub.group]}</span>
+                              <div className={s.pickerList}>
+                                {subWeightOptions(sub.weight).map((w) => (
+                                  <button
+                                    key={w}
+                                    type="button"
+                                    className={`${s.pickerBtn} ${s.stepBtn}`}
+                                    aria-pressed={sub.weight === w}
+                                    aria-label={`${GROUP_LABELS[sub.group]}を${w}で数える`}
+                                    onClick={() =>
+                                      onUpdate({
+                                        ...ex,
+                                        subGroups: ex.subGroups.map((x) =>
+                                          x.group === sub.group ? { ...x, weight: w } : x,
+                                        ),
+                                      })
+                                    }
+                                  >
+                                    ×{w}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          <small>
+                            主部位を1としたときの割合。ベンチが胸1・肩0.5・腕0.5なら、3セットで
+                            胸3・肩1.5・腕1.5
+                          </small>
+                        </div>
+
+                        {/*
+                          ここから下は計算の仕方。カタログから追加すれば既に埋まっていて、
+                          触る必要がほとんど無い。開いた瞬間に並べると
+                          「決めなければいけない項目」に見えるので、もう一段畳む
+                        */}
+                        <button
+                          type="button"
+                          className={`${ui.btn} ${ui.btnGhost} ${ui.btnSm}`}
+                          aria-expanded={calc}
+                          onClick={() => setCalc((v) => !v)}
+                        >
+                          {calc ? '計算方法を閉じる' : '計算方法を変える'}
+                        </button>
+
+                        {calc && (
+                          <>
+                            <label className={s.newField}>
+                              負荷の数え方
+                              <select
+                                value={ex.loadMode}
+                                onChange={(e) =>
+                                  onUpdate({ ...ex, loadMode: e.target.value as LoadMode })
+                                }
+                              >
+                                {LOAD_MODE_ORDER.map((m) => (
+                                  <option key={m} value={m}>
+                                    {LOAD_MODE_LABELS[m]}
+                                  </option>
+                                ))}
+                              </select>
+                              <small>{LOAD_MODE_HINTS[ex.loadMode]}</small>
+                            </label>
+
+                            <label className={s.newField}>
+                              回数の単位
+                              <select
+                                value={ex.repUnit}
+                                onChange={(e) =>
+                                  onUpdate({ ...ex, repUnit: e.target.value as RepUnit })
+                                }
+                              >
+                                {(Object.keys(REP_UNIT_LABELS) as RepUnit[]).map((u) => (
+                                  <option key={u} value={u}>
+                                    {u === 'reps' ? '回（レップ）' : '秒（プランクなど）'}
+                                  </option>
+                                ))}
+                              </select>
+                              <small>秒で数える種目は挙上量に計上しません</small>
+                            </label>
+
+                            {ex.loadMode === 'bodyweight' && (
+                              <label className={s.newField}>
+                                体重が乗る割合（懸垂 1.0 / 腕立て 0.65 など）
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  step={0.05}
+                                  min={FACTOR_RANGE[0]}
+                                  max={FACTOR_RANGE[1]}
+                                  value={ex.bodyweightFactor ?? ''}
+                                  onChange={(e) =>
+                                    onUpdate({ ...ex, bodyweightFactor: numOrNull(e.target.value) })
+                                  }
+                                />
+                              </label>
+                            )}
+                          </>
+                        )}
+
+                        {ex.repUnit === 'reps' && (
+                          <label className={s.newField}>
+                            1RM換算の分母（ベンチ 40 / スクワット・デッド 33.3 / 既定 30）
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              step={0.1}
+                              min={RM_DIVISOR_RANGE[0]}
+                              max={RM_DIVISOR_RANGE[1]}
+                              value={ex.rmDivisor}
+                              onChange={(e) =>
                                 onUpdate({
                                   ...ex,
-                                  subGroups: ex.subGroups.map((x) =>
-                                    x.group === sub.group ? { ...x, weight: w } : x,
-                                  ),
+                                  rmDivisor: numOrNull(e.target.value) ?? ex.rmDivisor,
                                 })
                               }
-                            >
-                              ×{w}
-                            </button>
-                          ))}
-                        </div>
+                            />
+                          </label>
+                        )}
                       </div>
-                    ))}
-                    <small>
-                      主部位を1としたときの割合。ベンチが胸1・肩0.5・腕0.5なら、3セットで
-                      胸3・肩1.5・腕1.5
-                    </small>
+                    )}
                   </div>
-
-                  {/*
-                    ここから下は計算の仕方。カタログから追加すれば既に埋まっていて、
-                    触る必要がほとんど無い。開いた瞬間に並べると
-                    「決めなければいけない項目」に見えるので、もう一段畳む
-                  */}
-                  <button
-                    type="button"
-                    className={`${ui.btn} ${ui.btnGhost} ${ui.btnSm}`}
-                    aria-expanded={calc}
-                    onClick={() => setCalc((v) => !v)}
-                  >
-                    {calc ? '計算方法を閉じる' : '計算方法を変える'}
-                  </button>
-
-                  {calc && (
-                    <>
-                      <label className={s.newField}>
-                        負荷の数え方
-                        <select
-                          value={ex.loadMode}
-                          onChange={(e) =>
-                            onUpdate({ ...ex, loadMode: e.target.value as LoadMode })
-                          }
-                        >
-                          {LOAD_MODE_ORDER.map((m) => (
-                            <option key={m} value={m}>
-                              {LOAD_MODE_LABELS[m]}
-                            </option>
-                          ))}
-                        </select>
-                        <small>{LOAD_MODE_HINTS[ex.loadMode]}</small>
-                      </label>
-
-                      <label className={s.newField}>
-                        回数の単位
-                        <select
-                          value={ex.repUnit}
-                          onChange={(e) => onUpdate({ ...ex, repUnit: e.target.value as RepUnit })}
-                        >
-                          {(Object.keys(REP_UNIT_LABELS) as RepUnit[]).map((u) => (
-                            <option key={u} value={u}>
-                              {u === 'reps' ? '回（レップ）' : '秒（プランクなど）'}
-                            </option>
-                          ))}
-                        </select>
-                        <small>秒で数える種目は挙上量に計上しません</small>
-                      </label>
-
-                      {ex.loadMode === 'bodyweight' && (
-                        <label className={s.newField}>
-                          体重が乗る割合（懸垂 1.0 / 腕立て 0.65 など）
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            step={0.05}
-                            min={FACTOR_RANGE[0]}
-                            max={FACTOR_RANGE[1]}
-                            value={ex.bodyweightFactor ?? ''}
-                            onChange={(e) =>
-                              onUpdate({ ...ex, bodyweightFactor: numOrNull(e.target.value) })
-                            }
-                          />
-                        </label>
-                      )}
-                    </>
-                  )}
-
-                  {ex.repUnit === 'reps' && (
-                    <label className={s.newField}>
-                      1RM換算の分母（ベンチ 40 / スクワット・デッド 33.3 / 既定 30）
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        step={0.1}
-                        min={RM_DIVISOR_RANGE[0]}
-                        max={RM_DIVISOR_RANGE[1]}
-                        value={ex.rmDivisor}
-                        onChange={(e) =>
-                          onUpdate({
-                            ...ex,
-                            rmDivisor: numOrNull(e.target.value) ?? ex.rmDivisor,
-                          })
-                        }
-                      />
-                    </label>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+                ))}
+              </div>
+            );
+          })}
 
           <p className={ui.note}>
             目標は目標タブで決めます。ここで決めるのは、種目そのものの性質だけです。

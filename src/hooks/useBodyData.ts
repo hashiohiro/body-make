@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildDaily, buildWeeks, computeProjection, computeStats, emptyDay } from '../lib/derive';
-import { emptyData, loadData, sanitizeData, saveData } from '../lib/storage';
+import { PRESET_NAME_MAX, emptyData, loadData, sanitizeData, saveData } from '../lib/storage';
 import { buildSessions, computeTrainingStats, exerciseGoals } from '../lib/training';
 import type { ImportPayload } from '../lib/io';
 import type {
@@ -9,6 +9,7 @@ import type {
   Exercise,
   Measurement,
   MuscleGroup,
+  Preset,
   SessionExercise,
   Settings,
   SlotId,
@@ -91,15 +92,17 @@ export interface BodyData {
     value: number | null,
   ) => void;
   copySets: (date: string, exerciseId: string, sets: readonly WorkSet[]) => void;
-  /** 前回の 1 日ぶんを丸ごと複製する。中身が入っている日には何もしない */
-  copyDay: (date: string, from: string) => void;
+  /** 過去の日から種目だけをまとめて足す。すでにある種目は飛ばす */
+  addDayExercises: (date: string, exerciseIds: readonly string[]) => void;
 
   setGroupGoal: (group: MuscleGroup, value: number | null) => void;
+  /** いまの組み合わせに名前を付けて残す */
+  addPreset: (name: string, exerciseIds: readonly string[]) => void;
+  removePreset: (id: string) => void;
   upsertExercise: (exercise: Exercise) => void;
   addExercises: (exercises: readonly Exercise[]) => void;
   /** 種目とその記録をまとめて消す。参照だけ残すと次回読み込みでログが黙って落ちるため */
   removeExercise: (id: string) => void;
-  moveExercise: (id: string, delta: number) => void;
 }
 
 export function useBodyData(): BodyData {
@@ -284,29 +287,46 @@ export function useBodyData(): BodyData {
   }, []);
 
   /**
-   * 前回の構成をその日に写す。種目カード単位の複製（copySets）を日の単位に上げたもの。
-   * 入るのは前回の実績のコピーで、予定でも指示でもない。値はすべて手で直せる。
+   * 過去の日の献立を、その日に写す。
+   *
+   * 入るのは **種目だけ** で、重量とレップは空のまま。
+   * 値まで写すと、打っていない数字が記録になる（設計 §1.3）。
+   * 値の複製は種目カードの「前回の構成で始める」が持っていて、そちらは 1 種目ぶんなので
+   * 見比べてから入れられる。
+   *
+   * すでにその日にある種目は飛ばす。同一種目は 1 日 1 エントリ。
    */
-  const copyDay = useCallback((date: string, from: string) => {
+  const addDayExercises = useCallback((date: string, exerciseIds: readonly string[]) => {
     setData((prev) => {
-      const src = prev.workouts[from];
-      if (!src || src.length === 0) return prev;
-      // すでに何か入っている日は黙って上書きしない（ExerciseCard の複製と同じ作法）
-      if ((prev.workouts[date] ?? []).length > 0) return prev;
-      return {
-        ...prev,
-        workouts: {
-          ...prev.workouts,
-          [date]: src.map((e) => ({
-            exerciseId: e.exerciseId,
-            sets: e.sets.map((set) => ({ weight: set.weight, reps: set.reps })),
-          })),
-        },
-      };
+      const day = prev.workouts[date] ?? [];
+      const known = new Set(day.map((e) => e.exerciseId));
+      const added = exerciseIds
+        .filter((id) => !known.has(id))
+        .map((exerciseId) => ({ exerciseId, sets: [{ ...EMPTY_SET }] }));
+      if (added.length === 0) return prev;
+      return { ...prev, workouts: { ...prev.workouts, [date]: [...day, ...added] } };
     });
   }, []);
 
   /* ---- 種目マスタ ---- */
+
+  /**
+   * 組み合わせに名前を付けて残す。持つのは種目だけで、重量もレップも持たない（types.ts の Preset）。
+   * 同じ中身でも別の名前で残せる（呼び方は人それぞれなので、重複は止めない）。
+   */
+  const addPreset = useCallback((name: string, exerciseIds: readonly string[]) => {
+    const trimmed = name.trim().slice(0, PRESET_NAME_MAX);
+    const ids = [...new Set(exerciseIds)];
+    if (!trimmed || ids.length === 0) return;
+    setData((prev) => {
+      const preset: Preset = { id: crypto.randomUUID(), name: trimmed, exerciseIds: ids };
+      return { ...prev, presets: [...prev.presets, preset] };
+    });
+  }, []);
+
+  const removePreset = useCallback((id: string) => {
+    setData((prev) => ({ ...prev, presets: prev.presets.filter((p) => p.id !== id) }));
+  }, []);
 
   const setGroupGoal = useCallback((group: MuscleGroup, value: number | null) => {
     setData((prev) => ({ ...prev, groupGoals: { ...prev.groupGoals, [group]: value } }));
@@ -352,18 +372,6 @@ export function useBodyData(): BodyData {
     });
   }, []);
 
-  const moveExercise = useCallback((id: string, delta: number) => {
-    setData((prev) => {
-      const list = [...prev.exercises].sort((a, b) => a.order - b.order);
-      const from = list.findIndex((e) => e.id === id);
-      const to = from + delta;
-      if (from < 0 || to < 0 || to >= list.length) return prev;
-      const [moved] = list.splice(from, 1);
-      list.splice(to, 0, moved!);
-      return { ...prev, exercises: list.map((e, i) => ({ ...e, order: i })) };
-    });
-  }, []);
-
   return {
     data,
     daily,
@@ -385,11 +393,12 @@ export function useBodyData(): BodyData {
     removeSet,
     setSetValue,
     copySets,
-    copyDay,
+    addDayExercises,
     setGroupGoal,
+    addPreset,
+    removePreset,
     upsertExercise,
     addExercises,
     removeExercise,
-    moveExercise,
   };
 }

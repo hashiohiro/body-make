@@ -51,7 +51,6 @@ export function SettingsView({ body, section, onOpen, onToast }: Props) {
     addExercises,
     upsertExercise,
     removeExercise,
-    moveExercise,
   } = body;
 
   // 種目を消すとその記録も消えるので、何日ぶんが消えるかを確認ダイアログに出す
@@ -121,7 +120,6 @@ export function SettingsView({ body, section, onOpen, onToast }: Props) {
         onAdd={addExercises}
         onUpdate={upsertExercise}
         onRemove={removeExercise}
-        onMove={moveExercise}
       />
     );
   }

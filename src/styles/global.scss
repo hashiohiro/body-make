@@ -21,9 +21,6 @@ html {
 body {
   margin: 0;
   background: var(--plane);
-  // グラデーションの配色でだけ地に重ねる。スクロールしても伸び縮みしないよう固定する
-  background-image: var(--plane-image);
-  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font);
   font-size: 15px;

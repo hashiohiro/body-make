@@ -2,22 +2,19 @@ import { useMemo, useState } from 'react';
 import { ExerciseCard } from '../components/training/ExerciseCard';
 import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialog';
 import { ExercisePicker } from '../components/training/ExercisePicker';
-import { GROUP_LABELS } from '../lib/exerciseCatalog';
-import { addDays, formatMD, formatMDW, weekdayJa } from '../lib/date';
-import { fmt } from '../lib/format';
-import { personalBest, pickVolume, previousPoint, sessionGroups } from '../lib/training';
+import { PresetCard } from '../components/training/PresetCard';
+import { GROUP_LABELS, GROUP_ORDER } from '../lib/exerciseCatalog';
+import { addDays } from '../lib/date';
+import { personalBest, pickVolume, previousPoint } from '../lib/training';
 import type { BodyData } from '../hooks/useBodyData';
-import ui from '../styles/ui.module.scss';
-import s from '../components/training/training.module.scss';
-import rs from './RecordsView.module.scss';
 
 interface Props {
   body: BodyData;
+  /** 記録する日。ヘッダの日付ナビが持つ */
   date: string;
-  onDateChange: (date: string) => void;
 }
 
-export function TrainingView({ body, date, onDateChange }: Props) {
+export function TrainingView({ body, date }: Props) {
   const {
     data,
     sessions,
@@ -27,8 +24,10 @@ export function TrainingView({ body, date, onDateChange }: Props) {
     removeSet,
     setSetValue,
     copySets,
-    copyDay,
+    addDayExercises,
     addExercises,
+    addPreset,
+    removePreset,
   } = body;
 
   const dayEntries = data.workouts[date] ?? [];
@@ -41,18 +40,30 @@ export function TrainingView({ body, date, onDateChange }: Props) {
 
   const session = useMemo(() => sessions.find((x) => x.date === date) ?? null, [sessions, date]);
 
-  /*
-   * その日より前の直近セッション。未来の記録から初期値を作らないよう、対象日より前だけを見る。
-   * 種目カードの「前回の構成で始める」を日の単位に上げたもの。
-   */
-  const previousSession = useMemo(
-    () => [...sessions].reverse().find((x) => x.date < date) ?? null,
-    [sessions, date],
-  );
-  const [openDate, setOpenDate] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const usedIds = new Set(dayEntries.map((e) => e.exerciseId));
+
+  /** 種目 ID の並びから、やる部位の並び（表示順）を作る */
+  const groupsOf = (ids: readonly string[]) => {
+    const groups = new Set(ids.map((id) => byId.get(id)?.group).filter(Boolean));
+    return GROUP_ORDER.filter((g) => groups.has(g))
+      .map((g) => GROUP_LABELS[g])
+      .join('・');
+  };
+
+  // 名前を付けて残した組み合わせ。中身の部位は、そのつど種目マスタから引き直す
+  const presets = useMemo(
+    () =>
+      data.presets.map((preset) => ({
+        ...preset,
+        groups: groupsOf(preset.exerciseIds),
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data.presets, data.exercises],
+  );
+
+  const currentIds = dayEntries.map((e) => e.exerciseId);
 
   /**
    * その日に入れる／外すの切り替え。
@@ -75,43 +86,19 @@ export function TrainingView({ body, date, onDateChange }: Props) {
 
   return (
     <>
-      <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>トレーニング</h2>
-        </header>
-
-        {dayEntries.length === 0 && active.length > 0 && (
-          <p className={ui.emptyState}>{formatMDW(date)} の記録はまだありません。</p>
-        )}
-
-        {/* 入っている日には出さない。黙って上書きしない */}
-        {dayEntries.length === 0 && previousSession && (
-          <div className={ui.btnRow}>
-            <button
-              type="button"
-              className={ui.btn}
-              onClick={() => copyDay(date, previousSession.date)}
-            >
-              前回と同じ（{formatMD(previousSession.date)}{' '}
-              {sessionGroups(previousSession)
-                .map((g) => GROUP_LABELS[g])
-                .join('・')}{' '}
-              {previousSession.exercises.length}種目）
-            </button>
-          </div>
-        )}
-
-        {/*
-          種目を足す入口は一番上に置く。下に置くと、カードが増えるほど遠くなる
-          （日付ナビが抜けたぶん、ここがその日の操作の置き場所になった）
-        */}
-        <ExercisePicker
-          exercises={active}
-          usedIds={usedIds}
-          onToggle={toggle}
-          onAddExercises={addExercises}
-        />
-      </section>
+      {/*
+        よくやる組み合わせ。呼び出しと保存を同じカードでやる。
+        ダイアログの中に畳むと「保存できること」に気づけない。
+        置き場所は種目カードより上。献立を選ぶのは記録を始める前なので、最初に目に入る位置にする
+      */}
+      <PresetCard
+        presets={presets}
+        currentIds={currentIds}
+        currentName={currentIds.length > 0 ? `${groupsOf(currentIds)}の日` : ''}
+        onAdd={(ids) => addDayExercises(date, ids)}
+        onSave={addPreset}
+        onRemove={removePreset}
+      />
 
       {dayEntries.map((entry) => {
         const exercise = byId.get(entry.exerciseId);
@@ -151,101 +138,16 @@ export function TrainingView({ body, date, onDateChange }: Props) {
         );
       })}
 
-      <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>記録一覧</h2>
-          <span className={ui.hint}>タップで内訳</span>
-        </header>
-
-        {sessions.length === 0 ? (
-          <p className={ui.emptyState}>まだ記録がありません。</p>
-        ) : (
-          <div className={rs.list}>
-            {[...sessions].reverse().map((point) => {
-              const groups = sessionGroups(point).map((g) => GROUP_LABELS[g]);
-              const open = openDate === point.date;
-
-              return (
-                <div key={point.date}>
-                  <button
-                    type="button"
-                    className={rs.row}
-                    aria-expanded={open}
-                    aria-current={point.date === date}
-                    onClick={() => setOpenDate(open ? null : point.date)}
-                  >
-                    <span className={rs.date}>
-                      {formatMD(point.date)}
-                      <br />
-                      {weekdayJa(point.date)}
-                    </span>
-                    <span className={rs.values}>{groups.join('・')}</span>
-                    <span className={rs.values}>{point.exercises.length}種目</span>
-                  </button>
-
-                  {open && (
-                    <div className={s.sessionDetail}>
-                      <div className={ui.tableScroll}>
-                        <table className={ui.table}>
-                          <thead>
-                            <tr>
-                              <th scope="col">種目</th>
-                              <th scope="col">セット</th>
-                              <th scope="col">挙上量</th>
-                              <th scope="col">推定1RM</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {point.exercises.map((ex) => (
-                              <tr key={ex.exerciseId}>
-                                <th scope="row">{ex.name}</th>
-                                <td>{ex.workSets}</td>
-                                <td>
-                                  {ex.volume > 0 ? (
-                                    `${Math.round(ex.volume).toLocaleString()} kg`
-                                  ) : (
-                                    <span className={ui.cellEmpty}>—</span>
-                                  )}
-                                </td>
-                                <td>
-                                  {ex.oneRm != null ? (
-                                    `${fmt(ex.oneRm)}${ex.measured ? ' *' : ''}`
-                                  ) : (
-                                    <span className={ui.cellEmpty}>—</span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <div className={ui.btnRow}>
-                        <button
-                          type="button"
-                          className={`${ui.btn} ${ui.btnSm}`}
-                          disabled={point.date === date}
-                          onClick={() => {
-                            onDateChange(point.date);
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                        >
-                          この日を編集
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        <p className={ui.note}>
-          推定1RMは記録からの換算値で、実際に挙げられる重量の予測ではありません。
-          <b>*</b> は1レップの実測。
-        </p>
-      </section>
+      {/*
+        種目を足す入口。画面の中に置くとカードが積み上がるほど遠くなるので、右下に固定する。
+        過去の日から写す動線もここに預ける。その日をどう始めるかの選択肢なので、同じ面にあるほうがいい
+      */}
+      <ExercisePicker
+        exercises={active}
+        usedIds={usedIds}
+        onToggle={toggle}
+        onAddExercises={addExercises}
+      />
 
       <ExerciseDetailDialog
         open={detailId != null}

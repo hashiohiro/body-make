@@ -23,8 +23,8 @@ import type { Domain, ThemePref } from '../types';
  */
 function Harness() {
   const body = useBodyData();
-  const [date, setDate] = useState(todayISO);
-  return <TrainingView body={body} date={date} onDateChange={setDate} />;
+  const [date] = useState(todayISO);
+  return <TrainingView body={body} date={date} />;
 }
 
 /** 種目マスタは設定タブにあるので、画面を触らず localStorage に用意する */
@@ -62,6 +62,18 @@ function pickerOpen(): boolean {
 
 const dialogOpen = pickerOpen;
 
+/** テスト内で日付をずらす。lib/date の addDays と同じ（同期で使いたいのでここに置く） */
+function isoAdd(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** 記録画面の右下の ＋ から種目ピッカーを開く */
+function openPicker() {
+  fireEvent.click(screen.getByRole('button', { name: '種目を追加' }));
+}
+
 function setRows(): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>('[data-set-row]')];
 }
@@ -77,12 +89,14 @@ afterEach(cleanup);
 describe('トレ画面', () => {
   it('種目が 1 つも無くても、その場でカタログから追加できる', () => {
     render(<Harness />);
+    openPicker();
+
     // 「設定から追加してください」だけを出す行き止まりにしない
     expect(screen.getByText(/まだ種目がありません/)).toBeTruthy();
-
     fireEvent.click(screen.getByRole('button', { name: '＋ カタログから追加' }));
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
-    expect(screen.getByRole('button', { name: '＋ 種目を追加' })).toBeTruthy();
+    // 追加済みになったので、カタログの一覧からは消える
+    expect(screen.queryByText('＋ ベンチプレス（バーベル）')).toBeNull();
   });
 
   it('日付ナビはカードではなくヘッダが持つ', () => {
@@ -95,7 +109,7 @@ describe('トレ画面', () => {
     seedExercises('ex_bench');
     render(<Harness />);
 
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
 
     // 1 セット目が用意されている
@@ -120,38 +134,10 @@ describe('トレ画面', () => {
     expect(screen.getByText(/60×10 から/)).toBeTruthy();
   });
 
-  it('記録一覧は日付・部位・種目数を出し、タップで種目ごとの内訳を開く', () => {
-    seedExercises('ex_bench');
-    render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
-    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
-    typeSet(setRows()[0]!, '60', '10');
-
-    // 一覧行: 部位と種目数だけ。種目をまたいだ合計は出さない
-    const row = screen.getByRole('button', { expanded: false });
-    // 1 セットでは肩と腕は 0.5 セット相当にしかならないので、部位としては出さない
-    expect(within(row).getByText('胸')).toBeTruthy();
-    expect(within(row).getByText('1種目')).toBeTruthy();
-
-    // 3 セットまで積むと肩と腕も 1 セット相当を超える
-    fireEvent.click(screen.getByText('＋ セットを追加'));
-    typeSet(setRows()[1]!, '60', '10');
-    fireEvent.click(screen.getByText('＋ セットを追加'));
-    typeSet(setRows()[2]!, '60', '10');
-    expect(
-      within(screen.getByRole('button', { expanded: false })).getByText('胸・肩・腕'),
-    ).toBeTruthy();
-
-    fireEvent.click(row);
-    const table = screen.getByRole('table');
-    expect(within(table).getByText(/ベンチプレス/)).toBeTruthy();
-    expect(within(table).getByText('1,800 kg')).toBeTruthy();
-  });
-
   it('書いたセットはすべて挙上量に数える（ウォームアップの区別を持たない）', () => {
     seedExercises('ex_squat');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText('＋ スクワット'));
 
     typeSet(setRows()[0]!, '60', '5');
@@ -166,14 +152,14 @@ describe('トレ画面', () => {
   it('セットを全部消すと、その種目がその日から消える', () => {
     seedExercises('ex_bench');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
 
     typeSet(setRows()[0]!, '60', '10');
     fireEvent.click(screen.getByLabelText('1セット目を削除'));
 
     expect(screen.queryByLabelText(/1セット目の重量/)).toBeNull();
-    expect(screen.getByText(/の記録はまだありません/)).toBeTruthy();
+    expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
   });
 
   it('総重量の下に通算の最高重量・最高挙上量と、そこまでの残りを出す', async () => {
@@ -185,7 +171,7 @@ describe('トレ画面', () => {
       [addDays(today, -1)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 50, reps: 10 }] }],
     });
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
 
     // 最高重量は換算後ではなく、バーに載せた数字
@@ -205,7 +191,7 @@ describe('トレ画面', () => {
   it('✓ をもう一度押すとその日から外れる', () => {
     seedExercises('ex_bench');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(1);
 
@@ -231,7 +217,7 @@ describe('トレ画面', () => {
   it('外すのを取り消したらその日に残る', () => {
     seedExercises('ex_bench');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
     typeSet(setRows()[0]!, '60', '10');
 
@@ -244,7 +230,7 @@ describe('トレ画面', () => {
   it('種目は続けて複数選べる', () => {
     seedExercises('ex_bench', 'ex_squat', 'ex_curl');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
 
     // 1 つ選ぶたびに閉じると、種目数ぶん開き直すことになる
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
@@ -259,7 +245,7 @@ describe('トレ画面', () => {
   it('セットを 1 つ消しても、まだ打っていない行は残る', () => {
     seedExercises('ex_bench');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
@@ -275,7 +261,7 @@ describe('トレ画面', () => {
   it('セットを消しても、まだ打っていない他の種目を巻き添えにしない', () => {
     seedExercises('ex_bench', 'ex_squat', 'ex_curl');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
     fireEvent.click(screen.getByText(/^＋ スクワット/));
     fireEvent.click(screen.getByText(/^＋ カール/));
@@ -290,10 +276,20 @@ describe('トレ画面', () => {
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(2);
   });
 
+  it('記録している最中でも、右下の＋から種目を追加できる', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+
+    // カードの追加ボタンは画面の外へ出ていくので、固定の入口を別に持つ
+    fireEvent.click(screen.getByRole('button', { name: '種目を追加' }));
+    expect(pickerOpen()).toBe(true);
+    expect(screen.getByText('＋ ベンチプレス（バーベル）')).toBeTruthy();
+  });
+
   it('種目を追加のボタンの隣に、この日の種目数を出さない', () => {
     seedExercises('ex_bench');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
@@ -304,7 +300,7 @@ describe('トレ画面', () => {
   it('自重種目では重量を聞かない。加重した日だけ開く', () => {
     seedExercises('ex_pushup');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText(/^＋ 腕立て伏せ/));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
@@ -320,7 +316,7 @@ describe('トレ画面', () => {
   it('秒で数える種目では重量を聞かない（挙上量に計上されないため）', () => {
     seedExercises('ex_plank');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText(/^＋ プランク/));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
@@ -334,7 +330,7 @@ describe('トレ画面', () => {
     // 体重を挙上量に足さない種目（loadMode は standard）でも、器具は要らない
     seedExercises('ex_crunch');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText(/^＋ クランチ/));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
@@ -360,7 +356,7 @@ describe('トレ画面', () => {
   it('± ボタンを置かない（1 行の幅を数値に回すため）', () => {
     seedExercises('ex_bench');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
 
     expect(screen.queryByLabelText(/を増やす$/)).toBeNull();
@@ -370,7 +366,7 @@ describe('トレ画面', () => {
   it('W ボタンを置かない（記録するかどうかは書くかどうかで決まる）', () => {
     seedExercises('ex_bench');
     render(<Harness />);
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
 
     expect(screen.queryByTitle(/ウォームアップ/)).toBeNull();
@@ -416,7 +412,6 @@ describe('種目管理（設定タブ）', () => {
         onAdd={body.addExercises}
         onUpdate={body.upsertExercise}
         onRemove={body.removeExercise}
-        onMove={body.moveExercise}
       />
     );
   }
@@ -485,15 +480,33 @@ describe('種目管理（設定タブ）', () => {
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
     fireEvent.click(screen.getByText('閉じる'));
 
-    const row = screen.getByText('ベンチプレス（バーベル）').closest('div')!;
-    expect(within(row).getByText('胸·肩·腕')).toBeTruthy();
+    // 主部位は見出しが持つので、行のタグは補助部位だけ
+    const row = () => screen.getByText('ベンチプレス（バーベル）').closest('div')!;
+    expect(within(row()).getByText('肩·腕')).toBeTruthy();
 
     fireEvent.click(screen.getByText('設定'));
     // 補助部位に肩を持ったまま主部位を肩にすると、肩を二重に数えてしまう
     fireEvent.change(screen.getByLabelText('部位'), { target: { value: 'shoulders' } });
 
-    expect(screen.getByText('肩·腕')).toBeTruthy();
-    expect(screen.queryByText('肩·肩·腕')).toBeNull();
+    expect(within(row()).getByText('腕')).toBeTruthy();
+    expect(within(row()).queryByText('肩·腕')).toBeNull();
+  });
+
+  it('一覧は部位ごとに並べ、上下の並び替えは持たない', () => {
+    render(<ManagerHarness />);
+    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
+    fireEvent.click(screen.getByText(/^＋ スクワット/));
+    fireEvent.click(screen.getByText('閉じる'));
+
+    // 見出しは主部位で切る。順番ではなく部位で探す
+    const headings = [...document.querySelectorAll('[class*="manageGroup"]')].map(
+      (el) => el.textContent,
+    );
+    expect(headings).toEqual(['胸', '脚']);
+
+    expect(screen.queryByLabelText(/を上へ$/)).toBeNull();
+    expect(screen.queryByLabelText(/を下へ$/)).toBeNull();
   });
 
   it('記録の無い種目は確認せずに削除する', () => {
@@ -575,15 +588,15 @@ describe('記録タブ', () => {
   }
 
   it('ヘッダの切り替えに従って体組成とトレーニングを出し分ける', () => {
-    // どちらの側にも記録一覧があるので、入力カードの見出しで区別する
+    // どちらの側にも記録一覧があるので、入力カードの見出しと種目の＋で区別する
     const { unmount } = render(<RecordsHarness domain="body" />);
     expect(screen.getByRole('heading', { name: '体組成' })).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'トレーニング' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '種目を追加' })).toBeNull();
     unmount();
 
     render(<RecordsHarness domain="training" />);
     expect(screen.queryByRole('heading', { name: '体組成' })).toBeNull();
-    expect(screen.getByRole('heading', { name: 'トレーニング' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '種目を追加' })).toBeTruthy();
   });
 });
 
@@ -1406,7 +1419,6 @@ describe('種目の削除', () => {
         onAdd={() => {}}
         onUpdate={() => {}}
         onRemove={onRemove}
-        onMove={() => {}}
       />,
     );
 
@@ -1547,31 +1559,139 @@ describe('目標画面', () => {
   });
 });
 
-describe('前回と同じ（日単位の複製）', () => {
-  it('その日が空のときだけ出て、種目とセット構成を丸ごと写す', async () => {
-    const { addDays } = await import('../lib/date');
-    const yesterday = addDays(todayISO(), -1);
-    seedData(['ex_bench'], {
-      [yesterday]: [
-        {
-          exerciseId: 'ex_bench',
-          sets: [
-            { weight: 60, reps: 10 },
-            { weight: 60, reps: 8 },
-          ],
-        },
+describe('プリセット（種目の組み合わせ）', () => {
+  /** 日を指定して記録画面を出す。プリセットは日をまたいで使うもの */
+  function DayHarness({ day }: { day: string }) {
+    const body = useBodyData();
+    const [date] = useState(day);
+    return <TrainingView body={body} date={date} />;
+  }
+
+  function addTwo() {
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByText(/^＋ 懸垂/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+  }
+
+  /** カードから、いまの組み合わせを保存する */
+  function save(name: string) {
+    fireEvent.click(screen.getByRole('button', { name: 'いまの組み合わせをプリセットに保存' }));
+    fireEvent.change(screen.getByLabelText('プリセットの名前'), { target: { value: name } });
+    fireEvent.click(screen.getByRole('button', { name: 'この名前で保存' }));
+  }
+
+  it('カードの中身が、その日の状態で入れ替わる', () => {
+    seedExercises('ex_bench', 'ex_pullup');
+    render(<Harness />);
+
+    // まだ何も入れていない日は、呼び出す場所（1 件も無ければその案内）
+    expect(screen.getByRole('heading', { name: 'プリセット' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'いまの組み合わせをプリセットに保存' })).toBeNull();
+
+    // 種目を入れると、同じ場所が保存する場所になる
+    addTwo();
+    expect(screen.getByRole('heading', { name: 'プリセット' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'いまの組み合わせをプリセットに保存' })).toBeTruthy();
+
+    // 保存済みの組み合わせなら、することが無いのでカードごと出さない
+    save('押す日');
+    expect(screen.queryByRole('heading', { name: 'プリセット' })).toBeNull();
+  });
+
+  it('カードで保存し、別の日にカードから呼び出せる', () => {
+    seedExercises('ex_bench', 'ex_pullup', 'ex_squat');
+    render(<Harness />);
+    addTwo();
+
+    // 名前の下書きは部位から作る。書き換えてもいい
+    fireEvent.click(screen.getByRole('button', { name: 'いまの組み合わせをプリセットに保存' }));
+    expect((screen.getByLabelText('プリセットの名前') as HTMLInputElement).value).toBe(
+      '胸・背中の日',
+    );
+    fireEvent.change(screen.getByLabelText('プリセットの名前'), { target: { value: '押す日' } });
+    fireEvent.click(screen.getByRole('button', { name: 'この名前で保存' }));
+    cleanup();
+
+    // 別の日に、同じ組み合わせを呼び出す
+    render(<DayHarness day={isoAdd(todayISO(), -1)} />);
+    expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '押す日をこの日に入れる' }));
+    expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(2);
+  });
+
+  it('削除は確認してから消す', () => {
+    seedExercises('ex_bench', 'ex_pullup');
+    render(<Harness />);
+    addTwo();
+    save('押す日');
+    cleanup();
+
+    render(<DayHarness day={isoAdd(todayISO(), -1)} />);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    // 記録は消えないが、付けた名前と組み合わせは戻せない
+    fireEvent.click(screen.getByRole('button', { name: '押す日を削除' }));
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('元に戻せません'));
+    expect(screen.getByText('押す日')).toBeTruthy();
+
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: '押す日を削除' }));
+    expect(screen.queryByText('押す日')).toBeNull();
+    confirmSpy.mockRestore();
+  });
+
+  it('入るのは種目だけ。重量と回数は持たない', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    typeSet(setRows()[0]!, '60', '10');
+
+    // 値を打ってから保存しても、持つのは種目だけ
+    save('押す日');
+
+    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    expect(stored.presets).toHaveLength(1);
+    expect(stored.presets[0].exerciseIds).toEqual(['ex_bench']);
+    expect(JSON.stringify(stored.presets[0])).not.toContain('60');
+  });
+
+  it('消した種目は組み合わせから抜け、空になった組み合わせは残さない', async () => {
+    const { sanitizeData } = await import('../lib/storage');
+    const bench = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
+
+    const data = sanitizeData({
+      exercises: [bench],
+      presets: [
+        { id: 'p1', name: '押す日', exerciseIds: [bench.id, 'ex_gone'] },
+        { id: 'p2', name: '引く日', exerciseIds: ['ex_gone'] },
+        { id: 'p3', name: '', exerciseIds: [bench.id] },
       ],
     });
 
-    render(<Harness />);
-    fireEvent.click(screen.getByRole('button', { name: /前回と同じ/ }));
+    expect(data.presets).toHaveLength(1);
+    expect(data.presets[0]).toEqual({ id: 'p1', name: '押す日', exerciseIds: [bench.id] });
+  });
 
-    // 2 セットぶんが重量入りで入る。差分だけ直せばいい
-    expect(setRows().length).toBe(2);
-    expect((within(setRows()[0]!).getByLabelText(/重量$/) as HTMLInputElement).value).toBe('60');
-
-    // 入っている日には二度と出さない（黙って上書きしない）
-    expect(screen.queryByRole('button', { name: /前回と同じ/ })).toBeNull();
+  it('プリセットはバックアップに含まれて往復する', async () => {
+    const { sanitizeData } = await import('../lib/storage');
+    const bench = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
+    const original = sanitizeData({
+      exercises: [bench],
+      presets: [{ id: 'p1', name: '押す日', exerciseIds: [bench.id] }],
+    });
+    const roundTripped = sanitizeData(JSON.parse(JSON.stringify(original)));
+    expect(roundTripped.presets).toEqual(original.presets);
   });
 });
 
@@ -1664,7 +1784,7 @@ describe('モーダル', () => {
     expect(document.body.style.position).toBe('');
 
     // showModal が止めるのは操作だけで、外をなぞると地のほうが動く
-    fireEvent.click(screen.getByText('＋ 種目を追加'));
+    openPicker();
     expect(document.body.style.position).toBe('fixed');
 
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
@@ -1674,6 +1794,7 @@ describe('モーダル', () => {
   it('開いたまま外されても、地の固定が残らない', () => {
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     render(<Harness />);
+    openPicker();
     // 種目が無いときのカタログは、開いているときだけ置く形
     fireEvent.click(screen.getByRole('button', { name: '＋ カタログから追加' }));
     expect(document.body.style.position).toBe('fixed');

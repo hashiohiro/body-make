@@ -101,8 +101,10 @@ $dark: map.merge(
 
 /// ReRail（別アプリ）の配色定義を、このアプリのトークンへ写す。
 ///
-/// 向こうは背景をグラデーション、面をガラス（半透明）で作っているので、
-/// 地を単色にすると別物になる。--plane-image で地に重ね、面は半透明のまま受ける。
+/// 向こうは背景をグラデーション、面をガラス（半透明）で作っているが、
+/// **地のグラデーションは持ち込まない**。スクロール位置や端末で切り出す位置が変わって
+/// ヘッダだけ色が違って見えるなど、面の色が場所によって揺れる原因になった。
+/// 地は単色（$from）で受け、面は半透明のまま重ねる。
 ///
 /// color.scale の結果はチャンネルが小数のまま出る。
 /// rgb(101.856, 104.448, 224.544) のような値は有効だが、読めないし CSS も太る
@@ -122,8 +124,6 @@ $dark: map.merge(
 /// もともと低彩度に設計されている配色（Solarized・Sakura）は落とす量を減らす。
 @function rerail(
   $from,
-  $via,
-  $to,
   $accent,
   $success,
   $warning,
@@ -140,11 +140,8 @@ $dark: map.merge(
   // 本文色がいちばん効く。アクセントは識別に使うので控えめに落とす
   $text-drop: -52% * $calm;
   $accent-drop: -20% * $calm;
-  $plane-drop: -28% * $calm;
 
   $a: px(color.scale($accent, $saturation: $accent-drop, $lightness: -4% * $calm));
-  // 終端を地に寄せて、グラデーションの振れ幅そのものを縮める
-  $to-calm: px(color.mix(color.scale($to, $saturation: $plane-drop), $from, 78%));
 
   $series: $dark-series;
   $shadow: $dark-shadow;
@@ -160,12 +157,6 @@ $dark: map.merge(
     $series,
     (
       plane: $from,
-      plane-image: linear-gradient(
-          160deg,
-          $from 0%,
-          px(color.scale($via, $saturation: $plane-drop)) 55%,
-          $to-calm 100%
-        ),
       surface: $surface,
       surface-sunken: $sunken,
       border: $border,
@@ -188,8 +179,6 @@ $dark: map.merge(
 $themes: (
   indigo-night: rerail(
       #1e1b4b,
-      #312e81,
-      #581c87,
       #6366f1,
       #10b981,
       #f59e0b,
@@ -203,8 +192,6 @@ $themes: (
     ),
   ocean-blue: rerail(
       #0f172a,
-      #1e3a5f,
-      #164e63,
       #0ea5e9,
       #10b981,
       #f59e0b,
@@ -218,8 +205,6 @@ $themes: (
     ),
   sakura: rerail(
       #fce9ec,
-      #fdf2f4,
-      #fff5f7,
       #e8627c,
       #4caf50,
       #ff9800,
@@ -234,8 +219,6 @@ $themes: (
       $calm: 0.4
     ),
   solarized-light: rerail(
-      #fdf6e3,
-      #eee8d5,
       #fdf6e3,
       #268bd2,
       #859900,
@@ -264,9 +247,6 @@ $light-themes: (sakura, solarized-light);
 :root {
   color-scheme: light;
   @include emit($light);
-
-  // 地に重ねる画像。単色の配色では何も重ねない
-  --plane-image: none;
 
   --radius: 14px;
   --radius-s: 9px;

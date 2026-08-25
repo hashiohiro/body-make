@@ -1,3 +1,5 @@
+@use '../styles/mixins' as *;
+
 .tabs {
   position: fixed;
   right: 0;
@@ -7,8 +9,11 @@
   display: flex;
   padding-bottom: env(safe-area-inset-bottom);
   border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(14px);
+  /*
+   * 半透明にすると、いちばん下まで送ったときに直前のカード（部位別の配分の色など）が
+   * 透けて、バーの色が場所によって変わる。地ごと敷いて、どこにいても同じ見え方にする
+   */
+  @include opaque-surface;
 }
 
 .tab {

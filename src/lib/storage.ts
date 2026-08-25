@@ -8,6 +8,7 @@ import type {
   LoadMode,
   Measurement,
   MuscleGroup,
+  Preset,
   SessionExercise,
   Settings,
   SubGroup,
@@ -50,6 +51,7 @@ export function emptyData(): AppData {
     exercises: [],
     workouts: {},
     groupGoals: { ...EMPTY_GROUP_GOALS },
+    presets: [],
   };
 }
 
@@ -212,6 +214,39 @@ function sanitizeExercise(raw: unknown, order: number): Exercise | null {
   };
 }
 
+/** 名前の長さの上限。種目名と同じにそろえる */
+export const PRESET_NAME_MAX = 40;
+
+/**
+ * 種目の組み合わせ。
+ *
+ * 存在しない種目を指す ID は落とす（種目を消したら、その種目だけ組み合わせから抜ける）。
+ * 中身が空になった組み合わせは、名前だけが残っても呼び出せないので落とす。
+ */
+export function sanitizePresets(raw: unknown, knownIds: ReadonlySet<string>): Preset[] {
+  if (!Array.isArray(raw)) return [];
+
+  const out: Preset[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const o = (item ?? {}) as Record<string, unknown>;
+    const id = typeof o.id === 'string' ? o.id : '';
+    const name = typeof o.name === 'string' ? o.name.trim().slice(0, PRESET_NAME_MAX) : '';
+    if (!id || !name || seen.has(id) || !Array.isArray(o.exerciseIds)) continue;
+
+    const exerciseIds = [
+      ...new Set(
+        o.exerciseIds.filter((x): x is string => typeof x === 'string' && knownIds.has(x)),
+      ),
+    ];
+    if (exerciseIds.length === 0) continue;
+
+    seen.add(id);
+    out.push({ id, name, exerciseIds });
+  }
+  return out;
+}
+
 export function sanitizeExercises(raw: unknown): Exercise[] {
   if (!Array.isArray(raw)) return [];
   const out: Exercise[] = [];
@@ -296,6 +331,7 @@ export function sanitizeData(raw: unknown): AppData {
     exercises,
     workouts: sanitizeWorkouts(o.workouts, knownIds),
     groupGoals: sanitizeGroupGoals(o.groupGoals),
+    presets: sanitizePresets(o.presets, knownIds),
   };
 }
 

@@ -24,9 +24,8 @@
   gap: 8px;
   margin: 0 -16px;
   padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  // 地と同じ色。ページと地続きに見せる（地はどの配色でも単色）
   background-color: var(--plane);
-  background-image: var(--plane-image);
-  background-attachment: fixed;
 }
 
 .topbarRow {

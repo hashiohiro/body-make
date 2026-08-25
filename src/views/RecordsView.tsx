@@ -21,7 +21,7 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
   const selected = data.entries[date];
 
   if (domain === 'training') {
-    return <TrainingView body={body} date={date} onDateChange={onDateChange} />;
+    return <TrainingView body={body} date={date} />;
   }
 
   return (
