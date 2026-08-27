@@ -642,7 +642,7 @@ export interface ExerciseGoal {
   /** 最初の 3 セッションの平均 */
   baseline: number | null;
   delta: number | null;
-  /** 0〜1。開始値 → 目標 の到達率 */
+  /** 0〜1。開始値 → 目標 の到達率。到達していれば 1（目標が開始値より下でも空にしない） */
   progress: number | null;
   reached: boolean;
 }
@@ -683,8 +683,19 @@ export function exerciseGoals(
         ? values.slice(0, BASELINE_SESSIONS).reduce((a, b) => a + b, 0) / BASELINE_SESSIONS
         : null;
 
-    const progress =
-      current != null && baseline != null && goal.value !== baseline
+    const reached = current != null && current >= goal.value;
+
+    /*
+     * 到達率は「開始値 → 目標」で測る。ただし **到達していれば無条件で満杯**。
+     *
+     * 比率だけで出していたとき、目標が開始値より下にあると分母が負になり、
+     * 目標をとうに超えていてもバーが空のままだった（「到達」と出ているのに色がつかない）。
+     * 目標を低く決め直した場合と、決めた時点ですでに超えていた場合の両方で起きる。
+     * 到達は current と目標だけで決まる事実なので、そちらにバーを合わせる。
+     */
+    const progress = reached
+      ? 1
+      : current != null && baseline != null && goal.value > baseline
         ? Math.min(1, Math.max(0, (current - baseline) / (goal.value - baseline)))
         : null;
 
@@ -700,7 +711,7 @@ export function exerciseGoals(
       baseline,
       delta: current != null && baseline != null ? current - baseline : null,
       progress,
-      reached: current != null && current >= goal.value,
+      reached,
     });
   }
 

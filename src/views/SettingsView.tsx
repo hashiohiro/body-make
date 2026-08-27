@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useRef } from 'react';
 import { ExerciseManager } from '../components/training/ExerciseManager';
+import { PresetManager } from '../components/training/PresetManager';
 import { exportCsv, exportJson, readImportFile } from '../lib/io';
 import { SEED_SOURCE } from '../lib/seed';
 import { THEME_OPTIONS } from '../lib/themes';
@@ -22,23 +23,50 @@ import s from './SettingsView.module.scss';
  */
 export const SETTINGS_SECTIONS = [
   { id: 'general', label: '一般', hint: '表示・データ・このアプリについて' },
-  { id: 'training', label: 'トレーニング', hint: '種目の追加・並び・詳細設定' },
+  { id: 'training', label: 'トレーニング', hint: 'マイ種目・プリセット' },
 ] as const;
 
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
+
+/**
+ * トレーニングの中は、扱うものが 2 つある。
+ *
+ * **マイ種目** … カタログから選んで自分の手元に置いた種目。記録で選べるのはここにあるものだけ。
+ * **プリセット** … その種目を組み合わせて名前を付けたもの。
+ *
+ * 1 枚に積むと、種目の一覧（数十件）の下にプリセットが埋もれる。
+ * 段を 1 つ増やすぶんの往復より、目当てのものが件数で見えているほうが速い。
+ */
+export const TRAINING_PAGES = [
+  { id: 'exercises', label: 'マイ種目', hint: '一覧・追加・種目ごとの設定' },
+  { id: 'presets', label: 'プリセット', hint: '組み合わせの確認・編集' },
+] as const;
+
+export type TrainingPageId = (typeof TRAINING_PAGES)[number]['id'];
 
 export function settingsSectionTitle(id: string): string | null {
   return SETTINGS_SECTIONS.find((sec) => sec.id === id)?.label ?? null;
 }
 
+/** 下位画面まで含めた見出し。`#settings/training/presets` は「プリセット」 */
+export function settingsTitle(section: string | null, page: string | null): string | null {
+  if (section == null) return null;
+  const inner = section === 'training' ? TRAINING_PAGES.find((p) => p.id === page) : null;
+  return inner?.label ?? settingsSectionTitle(section);
+}
+
 interface Props {
   body: BodyData;
   section: string | null;
-  onOpen: (section: SettingsSectionId | null) => void;
+  /** セクションの中の画面。`#settings/training/presets` の presets */
+  page?: string | null;
+  onOpen: (section: SettingsSectionId | null, page?: TrainingPageId | null) => void;
+  /** マイ種目の行から、その種目の目標へ（目標タブが持つ） */
+  onOpenGoal: (exerciseId: string) => void;
   onToast: (message: string) => void;
 }
 
-export function SettingsView({ body, section, onOpen, onToast }: Props) {
+export function SettingsView({ body, section, page = null, onOpen, onOpenGoal, onToast }: Props) {
   const {
     data,
     daily,
@@ -51,6 +79,9 @@ export function SettingsView({ body, section, onOpen, onToast }: Props) {
     addExercises,
     upsertExercise,
     removeExercise,
+    savePreset,
+    updatePreset,
+    removePreset,
   } = body;
 
   // 種目を消すとその記録も消えるので、何日ぶんが消えるかを確認ダイアログに出す
@@ -113,14 +144,59 @@ export function SettingsView({ body, section, onOpen, onToast }: Props) {
   /* ---------------- トレーニング ---------------- */
 
   if (section === 'training') {
+    const counts: Record<TrainingPageId, number> = {
+      exercises: data.exercises.length,
+      presets: data.presets.length,
+    };
+
+    if (page === 'presets') {
+      return (
+        <PresetManager
+          presets={data.presets}
+          exercises={data.exercises}
+          onCreate={savePreset}
+          onUpdate={updatePreset}
+          onRemove={removePreset}
+          onAddExercises={addExercises}
+        />
+      );
+    }
+
+    if (page === 'exercises') {
+      return (
+        <ExerciseManager
+          exercises={data.exercises}
+          usage={usage}
+          onAdd={addExercises}
+          onUpdate={upsertExercise}
+          onRemove={removeExercise}
+          onOpenGoal={onOpenGoal}
+        />
+      );
+    }
+
     return (
-      <ExerciseManager
-        exercises={data.exercises}
-        usage={usage}
-        onAdd={addExercises}
-        onUpdate={upsertExercise}
-        onRemove={removeExercise}
-      />
+      <section className={ui.card}>
+        <div className={s.menu}>
+          {TRAINING_PAGES.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={s.row}
+              onClick={() => onOpen('training', p.id)}
+            >
+              <span className={s.label}>
+                {p.label}
+                <small className={s.hint}>{p.hint}</small>
+              </span>
+              <span className={s.count}>{counts[p.id]}件</span>
+              <span className={s.chevron} aria-hidden="true">
+                ›
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
     );
   }
 

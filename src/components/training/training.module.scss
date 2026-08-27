@@ -46,6 +46,17 @@
   min-height: 0;
 }
 
+/* カード右上の操作（順番を変える・この日から外す）。まとめて右に寄せる */
+.exHeadBtns {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+
+  .exRemove {
+    margin-left: 0;
+  }
+}
+
 .exRemove {
   margin-left: auto;
   padding: 3px 8px;
@@ -592,11 +603,15 @@
 }
 
 /* 部位の行。タップで種目ごとの内訳を開く */
-.goalGroup {
+/*
+ * 目標ボードの部位 1 行。2 段に分ける。
+ *   上 … 部位名と、今週のセット数 / 目標
+ *   下 … 量のメーターと、その部位の種目目標の状態
+ * 横に 4 つ並べると、スマホ幅で数字が潰れる
+ */
+.boardRow {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) 38px;
-  align-items: center;
-  gap: 8px;
+  gap: 5px;
   width: 100%;
   padding: 11px 2px;
   border: 0;
@@ -605,30 +620,69 @@
   text-align: left;
   color: var(--ink);
 
-  &:last-of-type {
-    border-bottom: 0;
+  &:active {
+    background: var(--accent-soft);
+    border-radius: var(--radius-xs);
   }
 }
 
-.goalGroupName {
+.boardHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.boardName {
+  flex: 1;
+  min-width: 0;
   font-size: 14px;
   font-weight: 600;
 }
 
-.goalGroupCount {
-  font-size: 11px;
-  color: var(--ink-muted);
-  @include tabular;
-}
-
-.goalGroupRate {
+.boardSets {
   font-size: 12px;
-  text-align: right;
   color: var(--ink-2);
   @include tabular;
 }
 
-.goalDetail {
+.boardFoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .meter {
+    flex: 1;
+    margin: 0;
+  }
+}
+
+/* 開くことの合図。設定のカテゴリ一覧と同じ記号を使う */
+.chevron {
+  flex: none;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--ink-muted);
+}
+
+/*
+ * 右端の状態。**幅を固定する。**
+ * 文字数に合わせて伸縮させると、行ごとにメーターの長さが変わって
+ * 部位どうしの進み具合を目で比べられなくなる
+ */
+.boardStatus {
+  flex: 0 0 8em;
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--ink-muted);
+  @include tabular;
+}
+
+/*
+ * 種目 1 件のカード。目標画面の部位の中と、マイ種目の一覧で同じものを使う。
+ * 同じ種目を 2 つの画面で見るのに、違う形で出す理由がない
+ */
+.itemCard {
   padding: 10px 11px;
   margin-bottom: 8px;
   border-radius: var(--radius-s);
@@ -671,42 +725,6 @@
   font-size: 11px;
   font-weight: 620;
   color: var(--ink-muted);
-}
-
-.manageRow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-
-  &:last-of-type {
-    border-bottom: 0;
-  }
-}
-
-.manageName {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.manageArchived {
-  color: var(--ink-muted);
-  text-decoration: line-through;
-}
-
-.goalTag {
-  flex: none;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  font-size: 10px;
-  color: var(--accent);
-  @include tabular;
 }
 
 /* 固定幅にすると文字が見切れたりカードをはみ出すので、比率で収める */
@@ -858,8 +876,8 @@
   margin-bottom: 10px;
 }
 
-/* 種目の目標の行に置く、推移と変更への入口 */
-.goalActions {
+/* 種目カードの下に並べる入口（推移・変更／目標・設定・削除） */
+.itemActions {
   display: flex;
   gap: 6px;
   margin-top: 8px;
@@ -950,4 +968,91 @@
   background: var(--surface);
   color: var(--ink);
   font-size: 16px;
+}
+
+/* ---- プリセットの編集（設定側） ---- */
+
+/*
+ * 1 件ぶん。見出しの行は記録画面のプリセット行と同じ形にして、
+ * 中身は種目管理の「詳細設定」と同じ、行にぶら下がる沈んだパネルにする。
+ * この画面だけの見た目を作らない。
+ */
+.presetBlock {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
+
+  /* 中身をパネルでぶら下げるので、見出しの行は自前の区切り線を持たない */
+  .presetRow {
+    border-bottom: 0;
+  }
+}
+
+/* 中身のパネル。newForm（種目の詳細設定）と同じ器 */
+.presetBody {
+  margin-top: 6px;
+  padding: 4px 11px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+}
+
+/* 並びを持つ種目の 1 行（プリセットの中身／その日の種目） */
+.orderItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
+}
+
+.orderItemName {
+  flex: 1;
+  min-width: 0;
+  @include truncate;
+}
+
+/* 並びはやる順番なので、番号を出す。掴む前に現状が読める */
+.orderIndex {
+  flex: none;
+  min-width: 12px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  @include tabular;
+}
+
+/* 掴んでいる行。選択中のトグル（pickerBtn[aria-pressed]）と同じ見せ方 */
+.orderItemMoving {
+  margin: 2px 0;
+  padding: 7px 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-xs);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* 置き場所。行と行のあいだに出す。狙う先なので行と同じ高さを確保する */
+.orderSlot {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  margin: 2px 0;
+  padding: 4px 0;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-xs);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.presetPicker {
+  margin-top: 8px;
 }

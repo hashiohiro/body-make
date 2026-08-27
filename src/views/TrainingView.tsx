@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react';
 import { ExerciseCard } from '../components/training/ExerciseCard';
 import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialog';
 import { ExercisePicker } from '../components/training/ExercisePicker';
+import { OrderList } from '../components/training/OrderList';
 import { PresetCard } from '../components/training/PresetCard';
-import { GROUP_LABELS, GROUP_ORDER } from '../lib/exerciseCatalog';
+import { groupsOf } from '../lib/exerciseCatalog';
 import { addDays } from '../lib/date';
 import { personalBest, pickVolume, previousPoint } from '../lib/training';
 import type { BodyData } from '../hooks/useBodyData';
+import ui from '../styles/ui.module.scss';
 
 interface Props {
   body: BodyData;
@@ -20,13 +22,14 @@ export function TrainingView({ body, date }: Props) {
     sessions,
     addDayExercise,
     removeDayExercise,
+    reorderDayExercises,
     addSet,
     removeSet,
     setSetValue,
     copySets,
     addDayExercises,
     addExercises,
-    addPreset,
+    savePreset,
     removePreset,
   } = body;
 
@@ -41,25 +44,18 @@ export function TrainingView({ body, date }: Props) {
   const session = useMemo(() => sessions.find((x) => x.date === date) ?? null, [sessions, date]);
 
   const [detailId, setDetailId] = useState<string | null>(null);
+  /** 並べ替えで掴んでいる種目。カードは大きいので、掴んでいる間だけ一覧に畳む */
+  const [moving, setMoving] = useState<string | null>(null);
 
   const usedIds = new Set(dayEntries.map((e) => e.exerciseId));
 
-  /** 種目 ID の並びから、やる部位の並び（表示順）を作る */
-  const groupsOf = (ids: readonly string[]) => {
-    const groups = new Set(ids.map((id) => byId.get(id)?.group).filter(Boolean));
-    return GROUP_ORDER.filter((g) => groups.has(g))
-      .map((g) => GROUP_LABELS[g])
-      .join('・');
-  };
-
-  // 名前を付けて残した組み合わせ。中身の部位は、そのつど種目マスタから引き直す
+  // 名前を付けて残した組み合わせ。中身の部位は、そのつどマイ種目から引き直す
   const presets = useMemo(
     () =>
       data.presets.map((preset) => ({
         ...preset,
-        groups: groupsOf(preset.exerciseIds),
+        groups: groupsOf(data.exercises, preset.exerciseIds),
       })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [data.presets, data.exercises],
   );
 
@@ -94,49 +90,84 @@ export function TrainingView({ body, date }: Props) {
       <PresetCard
         presets={presets}
         currentIds={currentIds}
-        currentName={currentIds.length > 0 ? `${groupsOf(currentIds)}の日` : ''}
+        currentName={currentIds.length > 0 ? `${groupsOf(data.exercises, currentIds)}の日` : ''}
         onAdd={(ids) => addDayExercises(date, ids)}
-        onSave={addPreset}
+        onSave={savePreset}
         onRemove={removePreset}
       />
 
-      {dayEntries.map((entry) => {
-        const exercise = byId.get(entry.exerciseId);
-        if (!exercise) return null;
-        return (
-          <ExerciseCard
-            key={entry.exerciseId}
-            exercise={exercise}
-            entry={entry}
-            point={session?.exercises.find((p) => p.exerciseId === entry.exerciseId) ?? null}
-            previous={previousPoint(sessions, entry.exerciseId, date)}
-            best={personalBest(sessions, entry.exerciseId, addDays(date, -1), pickVolume)}
-            bestWeight={personalBest(
-              sessions,
-              entry.exerciseId,
-              addDays(date, -1),
-              // 換算後ではなく、バーに載せた数字。目標やグラフの「最大重量」と揃える
-              (p) => p.top?.weight ?? null,
-            )}
-            onValue={(index, field, value) =>
-              setSetValue(date, entry.exerciseId, index, field, value)
-            }
-            onAddSet={() => addSet(date, entry.exerciseId)}
-            onRemoveSet={(index) => removeSet(date, entry.exerciseId, index)}
-            onRemove={() => removeDayExercise(date, entry.exerciseId)}
-            onOpenDetail={() => setDetailId(entry.exerciseId)}
-            onCopyPrevious={() => {
-              const prev = previousPoint(sessions, entry.exerciseId, date);
-              if (!prev) return;
-              copySets(
-                date,
-                entry.exerciseId,
-                prev.point.sets.map((set) => ({ weight: set.weight, reps: set.reps })),
-              );
+      {/*
+        並べ替え中は、カードの代わりにその日の種目だけを一覧で出す。
+        カードは縦に長いので、そのまま置き場所を探させると画面の外まで探しに行かせることになる。
+        操作はプリセットの中身と同じ（掴む → 置き場所をタップ）。
+      */}
+      {moving != null && (
+        <section className={ui.card}>
+          <header className={ui.cardHeader}>
+            <h2 className={ui.cardTitle}>並べ替え</h2>
+            <span className={ui.hint}>{dayEntries.length}種目</span>
+          </header>
+
+          <OrderList
+            entries={dayEntries.map((entry) => ({
+              id: entry.exerciseId,
+              name: byId.get(entry.exerciseId)?.name ?? '',
+              group: byId.get(entry.exerciseId)?.group ?? null,
+            }))}
+            movingId={moving}
+            label="この日"
+            onGrab={setMoving}
+            onCancel={() => setMoving(null)}
+            onReorder={(ids) => {
+              reorderDayExercises(date, ids);
+              setMoving(null);
             }}
           />
-        );
-      })}
+
+          <p className={ui.note}>置き場所を選ぶと、カードの並びが変わります。記録は動きません。</p>
+        </section>
+      )}
+
+      {moving == null &&
+        dayEntries.map((entry) => {
+          const exercise = byId.get(entry.exerciseId);
+          if (!exercise) return null;
+          return (
+            <ExerciseCard
+              key={entry.exerciseId}
+              exercise={exercise}
+              entry={entry}
+              point={session?.exercises.find((p) => p.exerciseId === entry.exerciseId) ?? null}
+              previous={previousPoint(sessions, entry.exerciseId, date)}
+              best={personalBest(sessions, entry.exerciseId, addDays(date, -1), pickVolume)}
+              bestWeight={personalBest(
+                sessions,
+                entry.exerciseId,
+                addDays(date, -1),
+                // 換算後ではなく、バーに載せた数字。目標やグラフの「最大重量」と揃える
+                (p) => p.top?.weight ?? null,
+              )}
+              onValue={(index, field, value) =>
+                setSetValue(date, entry.exerciseId, index, field, value)
+              }
+              onAddSet={() => addSet(date, entry.exerciseId)}
+              onRemoveSet={(index) => removeSet(date, entry.exerciseId, index)}
+              onRemove={() => removeDayExercise(date, entry.exerciseId)}
+              // 1 種目しか無い日に、動かしようのない操作を出さない
+              onMove={dayEntries.length > 1 ? () => setMoving(entry.exerciseId) : undefined}
+              onOpenDetail={() => setDetailId(entry.exerciseId)}
+              onCopyPrevious={() => {
+                const prev = previousPoint(sessions, entry.exerciseId, date);
+                if (!prev) return;
+                copySets(
+                  date,
+                  entry.exerciseId,
+                  prev.point.sets.map((set) => ({ weight: set.weight, reps: set.reps })),
+                );
+              }}
+            />
+          );
+        })}
 
       {/*
         種目を足す入口。画面の中に置くとカードが積み上がるほど遠くなるので、右下に固定する。

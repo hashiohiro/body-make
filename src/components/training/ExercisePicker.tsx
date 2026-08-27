@@ -11,12 +11,12 @@ interface Props {
   usedIds: ReadonlySet<string>;
   /** その日に入れる／外すの切り替え。押すたびに増えることはない */
   onToggle: (id: string) => void;
-  /** カタログからの追加。種目マスタの置き場所は設定のままで、入口だけをここにも出す */
+  /** カタログからマイ種目への追加。置き場所は設定のままで、入口だけをここにも出す */
   onAddExercises: (exercises: readonly Exercise[]) => void;
 }
 
 /**
- * その日の種目を選ぶ。
+ * その日の種目を、マイ種目から選ぶ。
  *
  * モーダルで出す。ページに直接置くと、追加した種目のカードがピッカーより上に
  * 挿入されるぶんだけピッカーが下へ押し出され、続けて選ぶたびに
@@ -28,10 +28,10 @@ export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }:
 
   // 開いているときだけ置く。閉じた dialog を記録画面に常駐させない
   const catalogModal = catalog && (
-    <Modal open title="種目を追加" onClose={() => setCatalog(false)}>
+    <Modal open title="マイ種目に追加" onClose={() => setCatalog(false)}>
       <CatalogPicker exercises={exercises} onAdd={onAddExercises} />
       <p className={ui.note}>
-        並べ替え・削除・種目ごとの設定は、設定 &gt; トレーニング でまとめて行えます。
+        削除と種目ごとの設定は、設定 &gt; トレーニング &gt; マイ種目 でまとめて行えます。
       </p>
     </Modal>
   );
@@ -46,15 +46,15 @@ export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }:
         ＋
       </button>
 
-      <Modal open={open} title="種目を追加" onClose={() => setOpen(false)}>
+      <Modal open={open} title="マイ種目から選ぶ" onClose={() => setOpen(false)}>
         {exercises.length === 0 ? (
           /*
-           * 種目マスタが空のとき。以前は「設定 > トレーニング から追加してください」とだけ出していて、
+           * マイ種目が空のとき。以前は「設定 > トレーニング から追加してください」とだけ出していて、
            * 初めて開いた人がその場では何もできなかった。ここから追加できるようにする。
            */
           <div>
             <p className={ui.emptyState}>
-              まだ種目がありません。
+              マイ種目がまだ空です。
               <br />
               カタログから、自分がやる種目を選んでください。
             </p>
@@ -67,7 +67,7 @@ export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }:
                   setCatalog(true);
                 }}
               >
-                ＋ カタログから追加
+                ＋ マイ種目に追加
               </button>
             </div>
           </div>
@@ -112,7 +112,7 @@ export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }:
                   setCatalog(true);
                 }}
               >
-                ＋ カタログから種目を増やす
+                ＋ マイ種目を増やす
               </button>
             </div>
           </div>

@@ -261,20 +261,26 @@ export function sanitizeExercises(raw: unknown): Exercise[] {
   return out.sort((a, b) => a.order - b.order).map((ex, i) => ({ ...ex, order: i }));
 }
 
-function sanitizeWorkSet(raw: unknown): WorkSet | null {
+/**
+ * 値だけを直す。**行そのものは落とさない。**
+ * 値域外は null に潰すが、空欄の行は「まだ打っていない」であって「消してよい」ではない。
+ */
+function sanitizeWorkSet(raw: unknown): WorkSet {
   const o = (raw ?? {}) as Record<string, unknown>;
-  const set: WorkSet = {
+  return {
     weight: parseSetWeight(o.weight),
     reps: parseReps(o.reps),
   };
-  if (set.weight == null && set.reps == null) return null;
-  return set;
 }
 
 /**
  * 同一種目は 1 日 1 エントリ。重複していたらセットを連結して 1 つにまとめる
  * （落とすとユーザーの記録が消えるため、統合するほうを選ぶ）。
  * 存在しない種目を指すログは表示も編集もできないので落とす。
+ *
+ * 値が 1 つも入っていない種目も残す。読み込みのたびに掃くと、
+ * 種目を並べただけで閉じた日が、開き直すと空になっている（設計 §2.2）。
+ * 実績として数えないのは buildSessions 側の仕事（hasAnySet）。
  */
 export function sanitizeWorkouts(raw: unknown, knownIds: ReadonlySet<string>): Workouts {
   const out: Workouts = {};
@@ -290,8 +296,7 @@ export function sanitizeWorkouts(raw: unknown, knownIds: ReadonlySet<string>): W
       if (!exerciseId || !knownIds.has(exerciseId)) continue;
       if (!Array.isArray(o.sets)) continue;
 
-      const sets = o.sets.map(sanitizeWorkSet).filter((s): s is WorkSet => s !== null);
-      if (sets.length === 0) continue;
+      const sets = o.sets.map(sanitizeWorkSet);
 
       const existing = byId.get(exerciseId);
       if (existing) existing.sets.push(...sets);

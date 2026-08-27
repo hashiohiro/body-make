@@ -315,8 +315,11 @@ describe('サニタイズと移行', () => {
         ],
       },
     });
-    // 重量 600 / レップ 0 はどちらも値域外 → 両方 null のセットごと落ちる
-    expect(data.workouts['2026-03-01']![0]!.sets).toEqual([{ weight: 60, reps: 10 }]);
+    // 重量 600 / レップ 0 はどちらも値域外 → null に落ちるが、行そのものは残る
+    expect(data.workouts['2026-03-01']![0]!.sets).toEqual([
+      { weight: null, reps: null },
+      { weight: 60, reps: 10 },
+    ]);
   });
 
   it('存在しない種目を指すログは落とす', () => {
@@ -327,13 +330,19 @@ describe('サニタイズと移行', () => {
     expect(data.workouts['2026-03-01']).toBeUndefined();
   });
 
-  it('空セット → 空種目 → 空日 が連鎖して落ちる', () => {
+  it('値が空でも種目は残る（読み込みのたびに掃かない）', () => {
     const known = new Set(['a']);
     const out = sanitizeWorkouts(
       { '2026-03-01': [{ exerciseId: 'a', sets: [{ weight: null, reps: null }] }] },
       known,
     );
-    expect(out).toEqual({});
+    expect(out['2026-03-01']).toEqual([{ exerciseId: 'a', sets: [{ weight: null, reps: null }] }]);
+  });
+
+  it('セットが 0 本の種目も残る（外すのは種目カードの × だけ）', () => {
+    const known = new Set(['a']);
+    const out = sanitizeWorkouts({ '2026-03-01': [{ exerciseId: 'a', sets: [] }] }, known);
+    expect(out['2026-03-01']).toEqual([{ exerciseId: 'a', sets: [] }]);
   });
 
   it('同じ種目が 1 日に重複していたらセットを連結する', () => {

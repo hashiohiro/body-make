@@ -1,6 +1,5 @@
 import { GoalMeter } from '../components/GoalMeter';
-import { TrainingGoals } from '../components/training/TrainingGoals';
-import { WeekGoals } from '../components/training/WeekGoals';
+import { TrainingGoalBoard } from '../components/training/TrainingGoalBoard';
 import type { BodyData } from '../hooks/useBodyData';
 import type { Domain } from '../types';
 
@@ -10,6 +9,9 @@ interface Props {
   domain: Domain;
   /** 種目の目標の行から、その種目の推移へ */
   onOpenTrend: (exerciseId: string) => void;
+  /** マイ種目から名指しで開かれた種目 */
+  focusExerciseId?: string | null;
+  onFocusDone?: (() => void) | undefined;
 }
 
 /**
@@ -19,7 +21,13 @@ interface Props {
  * 「あと 3.2kg」を見る場所と決め直す場所が離れたままになる。
  * 設定に残すのは、滅多に変えない定義（種目そのもの・表示・データ）だけ。
  */
-export function GoalsView({ body, domain, onOpenTrend }: Props) {
+export function GoalsView({
+  body,
+  domain,
+  onOpenTrend,
+  focusExerciseId = null,
+  onFocusDone,
+}: Props) {
   const {
     data,
     stats,
@@ -34,17 +42,18 @@ export function GoalsView({ body, domain, onOpenTrend }: Props) {
 
   if (domain === 'training') {
     return (
-      <>
-        <WeekGoals goals={data.groupGoals} onSetGoal={setGroupGoal} />
-        <TrainingGoals
-          goals={trainingGoals}
-          stats={trainingStats}
-          exercises={data.exercises}
-          sessions={sessions}
-          onUpdate={upsertExercise}
-          onOpenTrend={onOpenTrend}
-        />
-      </>
+      <TrainingGoalBoard
+        goals={trainingGoals}
+        groupGoals={data.groupGoals}
+        stats={trainingStats}
+        exercises={data.exercises}
+        sessions={sessions}
+        onSetGroupGoal={setGroupGoal}
+        onUpdate={upsertExercise}
+        onOpenTrend={onOpenTrend}
+        focusExerciseId={focusExerciseId}
+        onFocusDone={onFocusDone}
+      />
     );
   }
 

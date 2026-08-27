@@ -83,13 +83,19 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
           max={range[1]}
           step={type === 'reps' ? 1 : 0.5}
           placeholder="—"
-          onCommit={(value) =>
+          /*
+           * 欄を空にしただけで目標を消さない。
+           * 打ち直すために一度消すのが普通の手順なので、そこで目標ごと落とすと
+           * （目標を持つ種目でなくなり）編集中の行がその場から消える。
+           * 外すのは下の「目標を外す」だけの仕事。空欄はフォーカスを外した時点で元の値に戻る。
+           */
+          onCommit={(value) => {
+            if (value == null) return;
             onUpdate({
               ...exercise,
-              goal:
-                value == null ? null : { type, value: type === 'reps' ? Math.round(value) : value },
-            })
-          }
+              goal: { type, value: type === 'reps' ? Math.round(value) : value },
+            });
+          }}
         />
         <span className={s.goalUnit}>{unit}</span>
       </div>

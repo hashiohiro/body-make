@@ -13,6 +13,7 @@ import { FACTOR_RANGE, RM_DIVISOR_RANGE } from '../../lib/storage';
 import { DEFAULT_RM_DIVISOR } from '../../lib/training';
 import type { Exercise, LoadMode, MuscleGroup, RepUnit } from '../../types';
 import { CatalogPicker } from './CatalogPicker';
+import { ExerciseSummaryCard } from './ExerciseSummaryCard';
 import { Modal } from '../Modal';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
@@ -24,6 +25,8 @@ interface Props {
   onAdd: (exercises: readonly Exercise[]) => void;
   onUpdate: (exercise: Exercise) => void;
   onRemove: (id: string) => void;
+  /** その種目の目標へ。決めるのは目標タブの仕事で、ここは入口だけ持つ */
+  onOpenGoal: (exerciseId: string) => void;
 }
 
 function numOrNull(raw: string): number | null {
@@ -51,12 +54,22 @@ const EMPTY_FORM = {
 const FILTER_THRESHOLD = 8;
 
 /**
- * 種目の追加・並べ替え・削除と、種目ごとの性質。
+ * マイ種目（カタログから選んで手元に置いた種目）の追加・削除と、種目ごとの性質。
+ *
+ * 記録で選べるのはここにある種目だけで、カタログはその選択肢の一覧にすぎない。
+ * 「種目を追加する」は、**マイ種目に足す**こと。
  *
  * 目標値はここに置かない。進捗を見ながら何度も変わるので目標タブが持つ。
  * 一覧には目標をタグとして出す。どの種目に目標があるかは、ここでも見えていたほうがいい。
  */
-export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove }: Props) {
+export function ExerciseManager({
+  exercises,
+  usage,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onOpenGoal,
+}: Props) {
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<MuscleGroup | 'all'>('all');
   const [editing, setEditing] = useState<string | null>(null);
@@ -120,7 +133,7 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove }:
   return (
     <section className={ui.card}>
       <header className={ui.cardHeader}>
-        <h2 className={ui.cardTitle}>種目</h2>
+        <h2 className={ui.cardTitle}>マイ種目</h2>
         <span className={ui.hint}>
           {sorted.length}件 / 目標 {sorted.filter((e) => e.goal != null).length}件
         </span>
@@ -133,12 +146,12 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove }:
           className={`${ui.btn} ${ui.btnPrimary}`}
           onClick={() => setAdding(true)}
         >
-          ＋ 種目を追加
+          ＋ マイ種目に追加
         </button>
       </div>
 
       {/* 一覧の続きに出すと、どこまでが追加の画面か分からなくなるのでモーダルにする */}
-      <Modal open={adding} title="種目を追加" onClose={() => setAdding(false)}>
+      <Modal open={adding} title="マイ種目に追加" onClose={() => setAdding(false)}>
         <div>
           <CatalogPicker exercises={exercises} onAdd={onAdd} />
 
@@ -272,7 +285,7 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove }:
       </Modal>
 
       {sorted.length === 0 ? (
-        <p className={ui.emptyState}>まだ種目がありません。</p>
+        <p className={ui.emptyState}>マイ種目はまだ空です。</p>
       ) : (
         <>
           {sorted.length > FILTER_THRESHOLD && (
@@ -308,37 +321,64 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove }:
                 <div className={s.manageGroup}>{GROUP_LABELS[group]}</div>
 
                 {items.map((ex) => (
-                  <div key={ex.id}>
-                    <div className={s.manageRow}>
-                      <span className={s.manageName}>{ex.name}</span>
-                      {/* 主部位は見出しが持っているので、ここは補助部位だけ */}
-                      {ex.subGroups.length > 0 && (
-                        <span className={s.exTag}>
-                          {ex.subGroups.map((x) => GROUP_LABELS[x.group]).join('·')}
-                        </span>
-                      )}
-                      {/* 目標は目標タブで決めるが、どの種目にあるかは一覧でも見えるようにする */}
-                      {goalLabel(ex) && <span className={s.goalTag}>{goalLabel(ex)}</span>}
-
-                      <button
-                        type="button"
-                        className={s.miniBtn}
-                        aria-pressed={editing === ex.id}
-                        aria-label={`${ex.name}の設定`}
-                        onClick={() => openDetail(ex)}
-                      >
-                        設定
-                      </button>
-                      <button
-                        type="button"
-                        className={s.miniBtn}
-                        aria-label={`${ex.name}を削除`}
-                        onClick={() => remove(ex)}
-                      >
-                        ×
-                      </button>
-                    </div>
-
+                  /*
+                    1 種目ぶんの見せ方は、目標画面の種目カードと同じ部品を使う。
+                    同じ種目を 2 つの画面で見るのに、違う形で出す理由がない。
+                    変わるのは出す事実だけ（あちらはいまの値と到達率、ここは記録の量と数え方）。
+                  */
+                  <ExerciseSummaryCard
+                    key={ex.id}
+                    name={ex.name}
+                    // 主部位は見出しが持っているので、ここは補助部位だけ
+                    tag={
+                      ex.subGroups.length > 0
+                        ? ex.subGroups.map((x) => GROUP_LABELS[x.group]).join('·')
+                        : null
+                    }
+                    goal={goalLabel(ex)}
+                    factLeft={
+                      (usage.get(ex.id) ?? 0) > 0
+                        ? `記録 ${usage.get(ex.id)}日`
+                        : '記録はまだありません'
+                    }
+                    factRight={`${LOAD_MODE_LABELS[ex.loadMode]} ・ ${REP_UNIT_LABELS[ex.repUnit]}で数える`}
+                    actions={
+                      <>
+                        {/*
+                          目標を決めるのは目標タブ（進捗を見ながら決め直すものなので）。
+                          ただし「どの種目に目標があるか」はここでも見えるべきで、
+                          見えたら次はそこへ行きたくなる。入口だけをここに置く。
+                        */}
+                        <button
+                          type="button"
+                          className={s.miniBtn}
+                          aria-label={
+                            goalLabel(ex) ? `${ex.name}の目標を変える` : `${ex.name}の目標を決める`
+                          }
+                          onClick={() => onOpenGoal(ex.id)}
+                        >
+                          目標
+                        </button>
+                        <button
+                          type="button"
+                          className={s.miniBtn}
+                          aria-pressed={editing === ex.id}
+                          aria-label={`${ex.name}の設定`}
+                          onClick={() => openDetail(ex)}
+                        >
+                          設定
+                        </button>
+                        <button
+                          type="button"
+                          className={s.miniBtn}
+                          aria-label={`${ex.name}を削除`}
+                          onClick={() => remove(ex)}
+                        >
+                          削除
+                        </button>
+                      </>
+                    }
+                  >
                     {editing === ex.id && (
                       <div className={s.newForm}>
                         {/* フォーム次第で主働筋が変わる種目（ディップスなど）があるので、部位も変えられる */}
@@ -517,7 +557,7 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove }:
                         )}
                       </div>
                     )}
-                  </div>
+                  </ExerciseSummaryCard>
                 ))}
               </div>
             );

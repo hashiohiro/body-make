@@ -11,7 +11,7 @@ import { ChartsView } from './views/ChartsView';
 import { GoalsView } from './views/GoalsView';
 import { HomeView } from './views/HomeView';
 import { RecordsView } from './views/RecordsView';
-import { SETTINGS_SECTIONS, SettingsView } from './views/SettingsView';
+import { SETTINGS_SECTIONS, SettingsView, settingsTitle } from './views/SettingsView';
 import ui from './styles/ui.module.scss';
 import s from './App.module.scss';
 
@@ -67,6 +67,14 @@ export function App() {
   const [date, setDate] = useState(todayISO);
   // ホーム・記録・目標・推移で共通。タブを移っても保つ
   const [domain, setDomain] = useState<Domain>('body');
+  /*
+   * マイ種目（設定）から名指しで開く種目の目標。
+   *
+   * 目標を決める場所は目標タブの 1 か所のままで、連れて行くだけ。
+   * URL には載せない。これは「いま押したから開く」ための一度きりの指名で、
+   * 位置（どの画面を見ているか）ではない。開いたら捨てる
+   */
+  const [goalFocus, setGoalFocus] = useState<string | null>(null);
 
   /*
    * 切り替えると画面の中身が丸ごと入れ替わる。
@@ -86,7 +94,10 @@ export function App() {
   const title =
     route.tab === 'home' && route.section === 'trend'
       ? trendTitle
-      : sectionTitle(route.tab, route.section);
+      : // 設定はセクションの中にもう 1 段ある（`#settings/training/presets`）
+        route.tab === 'settings'
+        ? settingsTitle(route.section, route.param)
+        : sectionTitle(route.tab, route.section);
 
   // このセッションで積んだ履歴の数と、戻り先の表示名
   const pushes = useRef(0);
@@ -205,6 +216,8 @@ export function App() {
             body={body}
             domain={domain}
             onOpenTrend={(exerciseId) => open('home', 'trend', exerciseId)}
+            focusExerciseId={goalFocus}
+            onFocusDone={() => setGoalFocus(null)}
           />
         )}
 
@@ -216,7 +229,14 @@ export function App() {
           <SettingsView
             body={body}
             section={route.section}
-            onOpen={(section) => open('settings', section)}
+            page={route.param}
+            onOpen={(section, page) => open('settings', section, page ?? null)}
+            onOpenGoal={(exerciseId) => {
+              // 種目の目標はトレーニング側の話。切り替えごと連れて行く
+              changeDomain('training');
+              setGoalFocus(exerciseId);
+              open('goals');
+            }}
             onToast={toast.show}
           />
         )}

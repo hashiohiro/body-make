@@ -22,30 +22,6 @@ export type SetField = 'weight' | 'reps';
 
 const EMPTY_SET: WorkSet = { weight: null, reps: null };
 
-/**
- * 空の器を残さない。ただし落とすのは **いま触った種目** だけ。
- *
- * 以前はその日ぜんぶを掃いていて、値の入っていないセットを一括で消していた。
- * 追加した直後の種目は「空のセットが 1 行ある」状態なので、
- * どこか 1 つのセットを消しただけで、まだ打っていない種目まで巻き添えで消えていた。
- *
- * セットが 1 行でも残っていれば、中身が空でもそのまま残す。
- * 空欄は「まだ打っていない」であって「消してよい」ではない。
- */
-function pruneEntry(workouts: Workouts, date: string, exerciseId: string): Workouts {
-  const day = workouts[date];
-  if (!day) return workouts;
-
-  const entry = day.find((e) => e.exerciseId === exerciseId);
-  if (!entry || entry.sets.length > 0) return workouts;
-
-  const kept = day.filter((e) => e.exerciseId !== exerciseId);
-  const next = { ...workouts };
-  if (kept.length === 0) delete next[date];
-  else next[date] = kept;
-  return next;
-}
-
 function mapDayExercise(
   workouts: Workouts,
   date: string,
@@ -75,13 +51,15 @@ export interface BodyData {
   updateSettings: (patch: Partial<Settings>) => void;
   importData: (payload: ImportPayload, mode: 'merge' | 'replace') => void;
 
-  /** 実績のみ削除（種目マスタと設定は残す） */
+  /** 実績のみ削除（マイ種目と設定は残す） */
   clearRecords: () => void;
   /** すべて削除（設定だけ残す） */
   clearAll: () => void;
 
   addDayExercise: (date: string, exerciseId: string) => void;
   removeDayExercise: (date: string, exerciseId: string) => void;
+  /** その日の種目の並びを入れ替える。並びはやった順で、記録そのものは動かさない */
+  reorderDayExercises: (date: string, exerciseIds: readonly string[]) => void;
   addSet: (date: string, exerciseId: string) => void;
   removeSet: (date: string, exerciseId: string, index: number) => void;
   setSetValue: (
@@ -96,12 +74,14 @@ export interface BodyData {
   addDayExercises: (date: string, exerciseIds: readonly string[]) => void;
 
   setGroupGoal: (group: MuscleGroup, value: number | null) => void;
-  /** いまの組み合わせに名前を付けて残す */
-  addPreset: (name: string, exerciseIds: readonly string[]) => void;
+  /** いまの組み合わせに名前を付けて残す。同じ名前があれば中身を置き換える */
+  savePreset: (name: string, exerciseIds: readonly string[]) => void;
+  /** 名前と中身を書き換える（設定側の編集） */
+  updatePreset: (preset: Preset) => void;
   removePreset: (id: string) => void;
   upsertExercise: (exercise: Exercise) => void;
   addExercises: (exercises: readonly Exercise[]) => void;
-  /** 種目とその記録をまとめて消す。参照だけ残すと次回読み込みでログが黙って落ちるため */
+  /** マイ種目から消す。その種目の記録も一緒に消える（参照だけ残すとログが黙って落ちるため） */
   removeExercise: (id: string) => void;
 }
 
@@ -242,6 +222,24 @@ export function useBodyData(): BodyData {
     });
   }, []);
 
+  /**
+   * その日の種目の並びを入れ替える。**動くのは並びだけ**で、セットには触らない。
+   * 渡された並びに無い種目は後ろに残す（取りこぼしで記録を落とさないため）。
+   */
+  const reorderDayExercises = useCallback((date: string, exerciseIds: readonly string[]) => {
+    setData((prev) => {
+      const day = prev.workouts[date];
+      if (!day) return prev;
+      const wanted = new Set(exerciseIds);
+      const byId = new Map(day.map((e) => [e.exerciseId, e]));
+      const moved = exerciseIds
+        .map((id) => byId.get(id))
+        .filter((e): e is SessionExercise => e != null);
+      const rest = day.filter((e) => !wanted.has(e.exerciseId));
+      return { ...prev, workouts: { ...prev.workouts, [date]: [...moved, ...rest] } };
+    });
+  }, []);
+
   const addSet = useCallback((date: string, exerciseId: string) => {
     setData((prev) => ({
       ...prev,
@@ -253,14 +251,22 @@ export function useBodyData(): BodyData {
     }));
   }, []);
 
+  /**
+   * セット行を 1 本消す。**種目そのものには手を出さない。**
+   *
+   * 以前は最後の 1 行を消した時点で種目ごと落としていた。
+   * だが「セットを消す」と「種目をこの日から外す」は別の操作で、
+   * 行の × を押しただけで種目が消えるのは、頼んでいない削除になる。
+   * 外すのはカード右上の × だけの仕事（設計 §2.2）。
+   */
   const removeSet = useCallback((date: string, exerciseId: string, index: number) => {
-    setData((prev) => {
-      const workouts = mapDayExercise(prev.workouts, date, exerciseId, (e) => ({
+    setData((prev) => ({
+      ...prev,
+      workouts: mapDayExercise(prev.workouts, date, exerciseId, (e) => ({
         ...e,
         sets: e.sets.filter((_, i) => i !== index),
-      }));
-      return { ...prev, workouts: pruneEntry(workouts, date, exerciseId) };
-    });
+      })),
+    }));
   }, []);
 
   const setSetValue = useCallback(
@@ -308,19 +314,47 @@ export function useBodyData(): BodyData {
     });
   }, []);
 
-  /* ---- 種目マスタ ---- */
+  /* ---- マイ種目・プリセット ---- */
 
   /**
    * 組み合わせに名前を付けて残す。持つのは種目だけで、重量もレップも持たない（types.ts の Preset）。
-   * 同じ中身でも別の名前で残せる（呼び方は人それぞれなので、重複は止めない）。
+   *
+   * **同じ名前があれば、その中身を置き換える。** 同名を 2 つ並べると、
+   * どちらを呼び出すのか名前から決められない（一覧で見分ける手がかりが部位と件数しかない）。
+   * 上書きしてよいかを聞くのは画面側の仕事で、ここは聞かれた結果を書くだけ。
    */
-  const addPreset = useCallback((name: string, exerciseIds: readonly string[]) => {
+  const savePreset = useCallback((name: string, exerciseIds: readonly string[]) => {
     const trimmed = name.trim().slice(0, PRESET_NAME_MAX);
     const ids = [...new Set(exerciseIds)];
     if (!trimmed || ids.length === 0) return;
     setData((prev) => {
-      const preset: Preset = { id: crypto.randomUUID(), name: trimmed, exerciseIds: ids };
-      return { ...prev, presets: [...prev.presets, preset] };
+      const found = prev.presets.find((p) => p.name === trimmed);
+      return {
+        ...prev,
+        presets: found
+          ? prev.presets.map((p) => (p.id === found.id ? { ...p, exerciseIds: ids } : p))
+          : [...prev.presets, { id: crypto.randomUUID(), name: trimmed, exerciseIds: ids }],
+      };
+    });
+  }, []);
+
+  /**
+   * 名前と中身の編集（設定側のプリセット画面から使う）。
+   * 名前が他のプリセットとぶつかる場合は変えない（同名を作らないのが savePreset の前提）。
+   * 種目が 0 件になる編集も受け付けない。空の組み合わせは読み込み時に落ちる（storage.ts）。
+   */
+  const updatePreset = useCallback((preset: Preset) => {
+    const name = preset.name.trim().slice(0, PRESET_NAME_MAX);
+    const ids = [...new Set(preset.exerciseIds)];
+    if (!name || ids.length === 0) return;
+    setData((prev) => {
+      if (prev.presets.some((p) => p.id !== preset.id && p.name === name)) return prev;
+      return {
+        ...prev,
+        presets: prev.presets.map((p) =>
+          p.id === preset.id ? { ...p, name, exerciseIds: ids } : p,
+        ),
+      };
     });
   }, []);
 
@@ -389,13 +423,15 @@ export function useBodyData(): BodyData {
     clearAll,
     addDayExercise,
     removeDayExercise,
+    reorderDayExercises,
     addSet,
     removeSet,
     setSetValue,
     copySets,
     addDayExercises,
     setGroupGoal,
-    addPreset,
+    savePreset,
+    updatePreset,
     removePreset,
     upsertExercise,
     addExercises,

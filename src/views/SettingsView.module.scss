@@ -4,7 +4,7 @@
 
 .row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -46,6 +46,12 @@
   small {
     margin-left: 6px;
   }
+}
+
+/* 中に何件あるか。開く前に見えていれば、空の画面を開きに行かずに済む */
+.count {
+  font-size: 12px;
+  color: var(--ink-muted);
 }
 
 .chevron {

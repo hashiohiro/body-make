@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PRESET_NAME_MAX } from '../../lib/storage';
 import type { Preset } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
@@ -38,6 +39,8 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
  *
  * 持つのは種目だけで、重量もレップもセット数も持たない。
  * そこまで持たせると、記録するアプリではなく計画を配るアプリになる（設計 §1.1）。
+ *
+ * 名前は一意。同じ名前で保存すると、確認したうえで中身を置き換える。
  */
 export function PresetCard({ presets, currentIds, currentName, onAdd, onSave, onRemove }: Props) {
   const [name, setName] = useState('');
@@ -62,7 +65,7 @@ export function PresetCard({ presets, currentIds, currentName, onAdd, onSave, on
               type="text"
               className={s.presetInput}
               value={name}
-              maxLength={40}
+              maxLength={PRESET_NAME_MAX}
               aria-label="プリセットの名前"
               onChange={(e) => setName(e.target.value)}
             />
@@ -72,6 +75,21 @@ export function PresetCard({ presets, currentIds, currentName, onAdd, onSave, on
               aria-label="この名前で保存"
               disabled={name.trim() === ''}
               onClick={() => {
+                /*
+                 * 同じ名前があれば上書きする。黙って 2 つ並べると、
+                 * 一覧で名前から見分けられないものが増える（手がかりが部位と件数しかない）。
+                 * 消えるのは前の中身なので、上書きすることは先に伝える。
+                 */
+                const trimmed = name.trim().slice(0, PRESET_NAME_MAX);
+                const same = presets.find((preset) => preset.name === trimmed);
+                if (
+                  same &&
+                  !confirm(
+                    `プリセット「${trimmed}」はすでにあります。\n` +
+                      `中身をいまの組み合わせ（${currentIds.length}種目）で上書きします。`,
+                  )
+                )
+                  return;
                 onSave(name, currentIds);
                 setSaving(false);
               }}

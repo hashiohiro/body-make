@@ -915,6 +915,22 @@ export const GROUP_LABELS: Record<MuscleGroup, string> = {
 
 export const GROUP_ORDER: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
 
+/**
+ * 種目 ID の並びから、やる部位の並びを作る（「胸・肩・腕」）。
+ * プリセットは名前だけでは中身を思い出せないので、記録画面でも設定でも同じ形で添える。
+ */
+export function groupsOf(exercises: readonly Exercise[], ids: readonly string[]): string {
+  const byId = new Map(exercises.map((e) => [e.id, e]));
+  const groups = new Set<MuscleGroup>();
+  for (const id of ids) {
+    const group = byId.get(id)?.group;
+    if (group) groups.add(group);
+  }
+  return GROUP_ORDER.filter((g) => groups.has(g))
+    .map((g) => GROUP_LABELS[g])
+    .join('・');
+}
+
 /** 部位を同時に 6 本描くとき用。トークン側で配色によらず固定してある */
 export const GROUP_COLORS: Record<MuscleGroup, string> = {
   chest: 'var(--g-chest)',

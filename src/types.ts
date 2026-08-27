@@ -43,7 +43,7 @@ export interface AppData {
   settings: Settings;
   /** 観測レイヤー（測る） */
   entries: Entries;
-  /** 種目マスタ */
+  /** マイ種目（カタログから選んで手元に置いた種目） */
   exercises: Exercise[];
   /** 行動レイヤー（やる） */
   workouts: Workouts;

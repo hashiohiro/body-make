@@ -24,6 +24,8 @@ interface Props {
   onAddSet: () => void;
   onRemoveSet: (index: number) => void;
   onRemove: () => void;
+  /** 並べ替えを始める。その日に 2 種目以上あるときだけ渡される */
+  onMove?: (() => void) | undefined;
   onCopyPrevious: () => void;
   /** グラフ画面と同じ詳細ダイアログを開く */
   onOpenDetail: () => void;
@@ -40,6 +42,7 @@ export function ExerciseCard({
   onAddSet,
   onRemoveSet,
   onRemove,
+  onMove,
   onCopyPrevious,
   onOpenDetail,
 }: Props) {
@@ -77,14 +80,27 @@ export function ExerciseCard({
       <div className={s.exHead}>
         <span className={s.exName}>{exercise.name}</span>
         <span className={s.exTag}>{GROUP_LABELS[exercise.group]}</span>
-        <button
-          type="button"
-          className={s.exRemove}
-          aria-label={`${exercise.name}をこの日から外す`}
-          onClick={onRemove}
-        >
-          ×
-        </button>
+        <span className={s.exHeadBtns}>
+          {/* 並びはやった順。掴むと、その日の種目だけが小さな一覧に畳まれる */}
+          {onMove && (
+            <button
+              type="button"
+              className={s.exRemove}
+              aria-label={`${exercise.name}の順番を変える`}
+              onClick={onMove}
+            >
+              ⇅
+            </button>
+          )}
+          <button
+            type="button"
+            className={s.exRemove}
+            aria-label={`${exercise.name}をこの日から外す`}
+            onClick={onRemove}
+          >
+            ×
+          </button>
+        </span>
       </div>
 
       <div className={s.prev}>
