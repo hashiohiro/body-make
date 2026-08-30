@@ -2,7 +2,8 @@ import type { Entries } from '../types';
 
 /**
  * 体重推移_final.xlsx「日次記録」シート（2026-07-26 起点）から取り込んだ初期データ。
- * 初回起動時に一度だけ投入される（storage.ts の SEEDED_KEY で管理）。
+ * デモ向けビルド（`npm run build:demo`）の初回起動時にだけ、一度だけ投入される
+ * （env.ts の IS_DEMO と storage.ts の SEEDED_KEY で管理）。
  */
 export const SEED_SOURCE = '体重推移_final.xlsx';
 

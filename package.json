@@ -10,6 +10,7 @@
     "dev": "vite",
     "prebuild": "node scripts/copy-notices.mjs",
     "build": "tsc -b && vite build",
+    "build:demo": "npm run build -- --mode demo",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
@@ -20,7 +21,7 @@
     "licenses:check": "vite build --sourcemap && node scripts/licenses.mjs --check && npm run build",
     "cf:login": "wrangler login",
     "cf:check": "wrangler deploy --dry-run",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build:demo && wrangler deploy"
   },
   "dependencies": {
     "react": "^19.1.0",

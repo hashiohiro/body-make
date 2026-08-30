@@ -7,6 +7,8 @@ interface Props {
   name: string;
   /** 名前の右に添えるラベル（補助部位など） */
   tag?: string | null;
+  /** 目標の立て方（維持 / 重量↑ / 挙上量↑ / 回数↑）。一覧で一目で分かるように */
+  kind?: string | null;
   /** 目標の値。**必ず「目標」と書いてから出す**（数字だけだと何の数字か読めない） */
   goal?: string | null;
   /** 0〜1 の到達率。null ならメーターを出さない */
@@ -33,6 +35,7 @@ export function ExerciseSummaryCard({
   id,
   name,
   tag,
+  kind,
   goal,
   progress = null,
   factLeft,
@@ -45,6 +48,7 @@ export function ExerciseSummaryCard({
       <div className={s.statRow}>
         <span className={s.exName}>{name}</span>
         {tag && <span className={s.exTag}>{tag}</span>}
+        {kind && <span className={s.kindTag}>{kind}</span>}
         {goal && <span className={s.goalTag}>目標 {goal}</span>}
       </div>
 

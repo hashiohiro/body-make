@@ -1,4 +1,4 @@
-import type { Exercise, LoadMode, MuscleGroup, RepUnit, SubGroup } from '../types';
+import type { Exercise, GoalType, LoadMode, MuscleGroup, RepUnit, SubGroup } from '../types';
 
 /**
  * 種目カタログ。
@@ -32,7 +32,18 @@ export const SUB_GROUP_WEIGHT_RANGE: [number, number] = [0.1, 1];
  */
 export const SUB_GROUP_WEIGHT_STEPS = [0.25, 0.5, 0.75, 1];
 
-export type CatalogEntry = Omit<Exercise, 'goal' | 'order' | 'repUnit' | 'subGroups'> & {
+/**
+ * 構成チェックの値（`loads` / `forearmDirect` / `minutesPerSet`）は
+ * カタログの 75 行に散らさず、下の CHECK 表でまとめて持つ。
+ *
+ * 散らすと「どの種目にどれだけ配ったか」が一望できなくなり、
+ * 根拠のない値が紛れ込んでも気づけない。**表に載っていない種目は 0 / null** という
+ * 対応が見えていることが、値の少なさをそのまま担保にする。
+ */
+export type CatalogEntry = Omit<
+  Exercise,
+  'goal' | 'order' | 'repUnit' | 'subGroups' | 'axial' | 'minutesPerSet'
+> & {
   repUnit?: RepUnit;
   /**
    * 補助的に使う部位。明らかなものだけ入れてある。種目の詳細設定で変えられる。
@@ -78,6 +89,23 @@ const BOTH: Implement[] = ['barbell', 'dumbbell'];
 /** 加重でも自重でも同じ動作でやる種目（ランジ・ブルガリアンスクワットなど） */
 const BOTH_OR_BW: Implement[] = ['barbell', 'dumbbell', 'bodyweight'];
 
+/**
+ * 目標の立て方のラベル。一覧では ↑ を付けた短い形でバッジにする。
+ * 「維持」だけ矢印を持たない（伸ばさないと決めたもの）。
+ */
+export const GOAL_TYPE_LABELS: Record<GoalType, string> = {
+  maintain: '維持',
+  weight: '重量',
+  volume: '挙上量',
+  reps: '回数',
+};
+
+/** 秒で数える種目は「回数」ではなく「秒数」。バッジは矢印つき */
+export function goalTypeLabel(type: GoalType, repUnit: RepUnit, arrow = false): string {
+  const base = type === 'reps' && repUnit === 'seconds' ? '秒数' : GOAL_TYPE_LABELS[type];
+  return arrow && type !== 'maintain' ? `${base}↑` : base;
+}
+
 export const IMPLEMENT_LABELS: Record<Implement, string> = {
   barbell: 'バーベル',
   dumbbell: 'ダンベル',
@@ -113,6 +141,66 @@ const RM_DEFAULT = 30;
  * 主働筋なのに主部位に置けないものは、係数を 1 にして等倍で数える
  * （デッドリフトの脚。主部位を背中にしたぶん、脚が半分になってしまうため）。
  */
+/* ------------------------------------------------------------------ *
+ * 構成チェックの値（lib/check.ts が読む）
+ *
+ * ここに載っていない種目は 負荷 0 / 前腕直接でない / 時間は既定値。
+ * **順序が明確な種目にだけ値を置く。** 75 種すべてに数値を並べると、
+ * 根拠のない値まで根拠があるように見え、過信を招く。
+ * 埋まっていない範囲は設定画面が件数で出す（穴を見えるようにする）。
+ * ------------------------------------------------------------------ */
+
+/**
+ * 軸荷重種目。**背骨に荷重を通し、体幹で支える種目。**
+ *
+ * 以前は 0〜10 の負荷値で持っていたが、1 本の数字に時定数の違う層を混ぜていた。
+ * 真偽値なら順序を決める必要がなく、「RDL は 8 か 0 か」という答えの出ない問いも消える。
+ *
+ * 背中がパッドやシートで支えられる種目（レッグプレス・ハックスクワット・マシン全般）は入らない。
+ */
+const AXIAL: ReadonlySet<string> = new Set([
+  'ex_deadlift',
+  'ex_squat',
+  'ex_front_squat',
+  'ex_rdl',
+  'ex_good_morning',
+  'ex_military_press',
+  'ex_bb_row',
+  'ex_t_bar_row',
+  'ex_back_extension',
+  'ex_ohp',
+  'ex_hip_thrust',
+  'ex_shrug',
+  'ex_ab_roller',
+]);
+
+/**
+ * 1 セットあたりの時間（分）の上書き。**休憩が明らかに長い高重量コンパウンドだけ。**
+ * 根拠は 1 文で書ける ——「高重量コンパウンドは休憩が長い」。
+ *
+ * 載っていない種目は `CheckSettings.minutesPerSet`（既定 3 分）に落ちる。
+ * ラック確保やプレートの付け替えといった固定コストも、この値に畳んである
+ * （基本時間を別に持たない／design-checks.md §3.1）。
+ */
+const MINUTES_PER_SET: Readonly<Record<string, number>> = {
+  ex_deadlift: 4.5,
+  ex_squat: 4.5,
+  ex_bench: 4.5,
+  ex_ohp: 4.5,
+  ex_rdl: 4.5,
+};
+
+/**
+ * レビュー用の値を持たない状態。自作種目の初期値。
+ *
+ * 自作種目を作るときに聞くのは 名前・部位・負荷の数え方・回数の単位 の 4 つのまま
+ * （design-training.md §11-23 がわざわざ 4 つに減らした経緯があるので、そこは動かさない）。
+ * 軸荷重かどうかと時間は、必要になったら種目の設定から入れる。
+ */
+export function emptyCheckValues(): Pick<Exercise, 'axial' | 'minutesPerSet'> {
+  return { axial: false, minutesPerSet: null };
+}
+
 export const CATALOG: readonly CatalogEntry[] = [
   // 胸
   {
@@ -232,6 +320,30 @@ export const CATALOG: readonly CatalogEntry[] = [
     rmDivisor: RM_DEFAULT,
   },
 
+  {
+    id: 'ex_pullover',
+    equipment: 'dumbbell',
+    /*
+     * 両手で 1 つ持つので perSide にしない。
+     * 胸か背中かは人によって使い方が違うので、部位は種目の設定から変えられる。
+     */
+    name: 'ダンベルプルオーバー',
+    group: 'chest',
+    subGroups: ['back'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_cable_crossover',
+    // ケーブル。可動域の終わりまで張力が残るのがフライとの違い
+    name: 'ケーブルクロスオーバー',
+    group: 'chest',
+    subGroups: [['shoulders', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
   // 背中
   {
     id: 'ex_deadlift',
@@ -359,6 +471,25 @@ export const CATALOG: readonly CatalogEntry[] = [
     rmDivisor: RM_DEFAULT,
   },
 
+  {
+    id: 'ex_chest_supported_row',
+    // 胸をパッドに預けるので、前傾の保持が要らない（＝軸荷重にならない）
+    name: 'チェストサポーテッドロウ',
+    group: 'back',
+    subGroups: [['shoulders', 0.25], 'arms'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_straight_arm_pulldown',
+    // 肘を曲げないので腕は数えない。広背筋の単関節種目
+    name: 'ストレートアームプルダウン',
+    group: 'back',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
   // 脚
   {
     id: 'ex_squat',
@@ -420,6 +551,15 @@ export const CATALOG: readonly CatalogEntry[] = [
     loadMode: 'standard',
     // 自重版で使う。爪先立ちで体のほぼ全部が上がる
     bodyweightFactor: 0.9,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_seated_calf_raise',
+    // 膝を曲げるのでヒラメ筋が主体。立って行うカーフレイズとは効く筋が変わる
+    name: 'シーテッドカーフレイズ',
+    group: 'legs',
+    loadMode: 'standard',
+    bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
   {
@@ -544,6 +684,32 @@ export const CATALOG: readonly CatalogEntry[] = [
     rmDivisor: RM_DEFAULT,
   },
 
+  {
+    id: 'ex_good_morning',
+    // 股関節伸展。RDL と同じヒンジだが、バーが背中にある分だけ体幹の保持が大きい
+    name: 'グッドモーニング',
+    group: 'legs',
+    subGroups: ['back'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_hip_abduction',
+    name: 'アブダクション',
+    group: 'legs',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_hip_adduction',
+    name: 'アダクション',
+    group: 'legs',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
   // 肩
   {
     id: 'ex_ohp',
@@ -659,6 +825,32 @@ export const CATALOG: readonly CatalogEntry[] = [
     rmDivisor: RM_DEFAULT,
   },
 
+  {
+    id: 'ex_military_press',
+    /*
+     * 立って、足を揃えてバーベルを頭上へ。
+     * ショルダープレス（バーベル）と軌道は同じだが、座位で支えが取れない分だけ
+     * 扱える重量が変わる。同じ 1 種目に混ぜると推移が読めなくなるので分けてある
+     * （バーベルとダンベルを分けているのと同じ理由）。
+     */
+    name: 'ミリタリープレス',
+    group: 'shoulders',
+    subGroups: ['arms', ['core', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_arnold_press',
+    equipment: 'dumbbell',
+    // 回旋を伴うので前部から中部まで通る
+    name: 'アーノルドプレス',
+    group: 'shoulders',
+    subGroups: ['arms'],
+    loadMode: 'perSide',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
   // 腕
   {
     id: 'ex_curl',
@@ -799,6 +991,25 @@ export const CATALOG: readonly CatalogEntry[] = [
     rmDivisor: RM_DEFAULT,
   },
 
+  {
+    id: 'ex_concentration_curl',
+    equipment: 'dumbbell',
+    // 片手ずつなので perSide にしない（記録した重量がそのまま負荷）
+    name: 'コンセントレーションカール',
+    group: 'arms',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_incline_curl',
+    equipment: 'dumbbell',
+    name: 'インクラインダンベルカール',
+    group: 'arms',
+    loadMode: 'perSide',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
   // 体幹
   {
     id: 'ex_hanging_leg_raise',
@@ -897,6 +1108,35 @@ export const CATALOG: readonly CatalogEntry[] = [
     id: 'ex_dead_bug',
     equipment: 'bodyweight',
     name: 'デッドバグ',
+    group: 'core',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_situp',
+    equipment: 'bodyweight',
+    // 上体を起こしきる。可動域が狭いクランチとは別の種目として扱う
+    name: 'シットアップ',
+    group: 'core',
+    subGroups: [['legs', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_bicycle_crunch',
+    equipment: 'bodyweight',
+    name: 'バイシクルクランチ',
+    group: 'core',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_pallof_press',
+    // 回旋に抗して耐える種目。動かさないことが目的なので、レップ数より保持の質で見る
+    name: 'パロフプレス',
     group: 'core',
     loadMode: 'standard',
     bodyweightFactor: null,
@@ -1001,6 +1241,28 @@ const IMPLEMENT_LOAD: Partial<Record<Implement, LoadMode>> = {
   bodyweight: 'bodyweight',
 };
 
+/**
+ * 構成チェックの値を表から引く。**引くのはカタログの基底 ID**（器具の接尾辞を付ける前）。
+ *
+ * 器具で分かれる種目でも値は変わらない。ダンベルショルダープレスもバーベル版と同じく
+ * 立って行うので、腰の使い方も引き方も変わらない。
+ */
+function checkValues(entry: CatalogEntry): Pick<Exercise, 'axial' | 'minutesPerSet'> {
+  return {
+    axial: AXIAL.has(entry.id),
+    minutesPerSet: MINUTES_PER_SET[entry.id] ?? null,
+  };
+}
+
+export function catalogCheckValues(
+  id: string,
+): Pick<Exercise, 'axial' | 'minutesPerSet'> | undefined {
+  const suffix = id.endsWith('_bw') || id.endsWith('_db');
+  const base = suffix ? id.slice(0, id.lastIndexOf('_')) : id;
+  const entry = CATALOG.find((c) => c.id === base);
+  return entry ? checkValues(entry) : undefined;
+}
+
 export function fromCatalog(
   entry: CatalogEntry,
   order: number,
@@ -1009,6 +1271,7 @@ export function fromCatalog(
   const dual = entry.implements != null;
   return {
     ...entry,
+    ...checkValues(entry),
     id: catalogId(entry, implement),
     name: dual ? `${entry.name}（${IMPLEMENT_LABELS[implement]}）` : entry.name,
     // ダンベルは左右に 1 つずつ持つので 2 倍。自重版は体重を係数ぶん乗せる

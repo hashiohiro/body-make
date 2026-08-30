@@ -6,6 +6,14 @@ interface Props {
   open: boolean;
   title: string;
   onClose: () => void;
+  /**
+   * 面を差し替えている最中の戻り先。
+   *
+   * 渡すと、右上のボタンが「閉じる」ではなく「‹ 戻る」になる。
+   * 深い面から「閉じる」でダイアログごと消えると、元居た面まで一緒に失われる。
+   * Esc と背面のキャンセルも同じ戻り方にそろえる。
+   */
+  onBack?: (() => void) | undefined;
   children: ReactNode;
 }
 
@@ -47,7 +55,7 @@ function unlockScroll() {
  * ネイティブ `<dialog>` の薄いラッパー。
  * フォーカストラップ・Esc・背面の不活性化はブラウザに任せる（依存を足さない）。
  */
-export function Modal({ open, title, onClose, children }: Props) {
+export function Modal({ open, title, onClose, onBack, children }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -81,11 +89,11 @@ export function Modal({ open, title, onClose, children }: Props) {
   }, [open]);
 
   return (
-    <dialog ref={ref} className={s.dialog} onCancel={onClose} onClose={onClose}>
+    <dialog ref={ref} className={s.dialog} onCancel={onBack ?? onClose} onClose={onBack ?? onClose}>
       <div className={s.head}>
         <span className={s.title}>{title}</span>
-        <button type="button" className={s.close} onClick={onClose}>
-          閉じる
+        <button type="button" className={s.close} onClick={onBack ?? onClose}>
+          {onBack ? '‹ 戻る' : '閉じる'}
         </button>
       </div>
       <div className={s.body}>{open && children}</div>

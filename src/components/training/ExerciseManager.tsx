@@ -6,13 +6,15 @@ import {
   LOAD_MODE_LABELS,
   LOAD_MODE_ORDER,
   REP_UNIT_LABELS,
-  SUB_GROUP_WEIGHT,
-  SUB_GROUP_WEIGHT_STEPS,
+  emptyCheckValues,
+  goalTypeLabel,
 } from '../../lib/exerciseCatalog';
 import { FACTOR_RANGE, RM_DIVISOR_RANGE } from '../../lib/storage';
 import { DEFAULT_RM_DIVISOR } from '../../lib/training';
-import type { Exercise, LoadMode, MuscleGroup, RepUnit } from '../../types';
+import type { Exercise, LoadMode, MuscleGroup, RepUnit, SessionPoint } from '../../types';
 import { CatalogPicker } from './CatalogPicker';
+import { ExerciseSettingsForm } from './ExerciseSettingsForm';
+import { GoalEditor } from './GoalEditor';
 import { ExerciseSummaryCard } from './ExerciseSummaryCard';
 import { Modal } from '../Modal';
 import ui from '../../styles/ui.module.scss';
@@ -26,7 +28,8 @@ interface Props {
   onUpdate: (exercise: Exercise) => void;
   onRemove: (id: string) => void;
   /** その種目の目標へ。決めるのは目標タブの仕事で、ここは入口だけ持つ */
-  onOpenGoal: (exerciseId: string) => void;
+  /** 目標を決めるときに「いま」と「過去最大」を出すために使う */
+  sessions: readonly SessionPoint[];
 }
 
 function numOrNull(raw: string): number | null {
@@ -34,10 +37,19 @@ function numOrNull(raw: string): number | null {
   return raw.trim() === '' || !Number.isFinite(n) ? null : n;
 }
 
-function goalLabel(exercise: Exercise): string | null {
-  if (!exercise.goal) return null;
-  const unit = exercise.goal.type === 'weight' ? 'kg' : REP_UNIT_LABELS[exercise.repUnit];
-  return `${exercise.goal.value}${unit}`;
+/**
+ * 目標の立て方と値。**目標タブの種目カードと同じ出し方にそろえる。**
+ * 立て方はバッジ、値は「目標 100kg」。同じ種目を 2 画面で見るのに、形を変える理由がない。
+ */
+function goalKind(exercise: Exercise): string | null {
+  return exercise.goal ? goalTypeLabel(exercise.goal.type, exercise.repUnit, true) : null;
+}
+
+function goalValue(exercise: Exercise): string | null {
+  const goal = exercise.goal;
+  if (!goal || goal.value == null) return null;
+  const unit = goal.type === 'reps' ? REP_UNIT_LABELS[exercise.repUnit] : 'kg';
+  return `${goal.value}${unit}`;
 }
 
 const EMPTY_FORM = {
@@ -62,33 +74,25 @@ const FILTER_THRESHOLD = 8;
  * 目標値はここに置かない。進捗を見ながら何度も変わるので目標タブが持つ。
  * 一覧には目標をタグとして出す。どの種目に目標があるかは、ここでも見えていたほうがいい。
  */
-export function ExerciseManager({
-  exercises,
-  usage,
-  onAdd,
-  onUpdate,
-  onRemove,
-  onOpenGoal,
-}: Props) {
+export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, sessions }: Props) {
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<MuscleGroup | 'all'>('all');
   const [editing, setEditing] = useState<string | null>(null);
+  /** 目標を開いている種目。設定（詳細）とは同時に開かない */
+  const [goalOf, setGoalOf] = useState<string | null>(null);
   // 詳細設定のさらに内側。負荷の数え方・単位・換算の分母
-  const [calc, setCalc] = useState(false);
   // 自作フォームで聞くのは名前と部位だけ。残りは既定値で作れる
   const [advanced, setAdvanced] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
 
   const openDetail = (ex: Exercise) => {
+    setGoalOf(null);
     setEditing((cur) => (cur === ex.id ? null : ex.id));
-    setCalc(false);
   };
 
-  // 取り込んだデータが刻みから外れた値でも、選択中の値は必ず出す
-  const subWeightOptions = (current: number) =>
-    SUB_GROUP_WEIGHT_STEPS.includes(current)
-      ? SUB_GROUP_WEIGHT_STEPS
-      : [...SUB_GROUP_WEIGHT_STEPS, current].sort((a, b) => a - b);
+  const byId = new Map(exercises.map((e) => [e.id, e]));
+  const goalExercise = goalOf ? (byId.get(goalOf) ?? null) : null;
+  const settingsExercise = editing ? (byId.get(editing) ?? null) : null;
 
   const sorted = [...exercises].sort((a, b) => a.order - b.order);
   const visible =
@@ -112,6 +116,8 @@ export function ExerciseManager({
         rmDivisor: form.rmDivisor,
         goal: null,
         order: exercises.length,
+        // 構成チェックの値は持たせない。必要になったら種目の設定から入れる
+        ...emptyCheckValues(),
       },
     ]);
     setForm(EMPTY_FORM);
@@ -335,7 +341,8 @@ export function ExerciseManager({
                         ? ex.subGroups.map((x) => GROUP_LABELS[x.group]).join('·')
                         : null
                     }
-                    goal={goalLabel(ex)}
+                    kind={goalKind(ex)}
+                    goal={goalValue(ex)}
                     factLeft={
                       (usage.get(ex.id) ?? 0) > 0
                         ? `記録 ${usage.get(ex.id)}日`
@@ -345,17 +352,23 @@ export function ExerciseManager({
                     actions={
                       <>
                         {/*
-                          目標を決めるのは目標タブ（進捗を見ながら決め直すものなので）。
-                          ただし「どの種目に目標があるか」はここでも見えるべきで、
-                          見えたら次はそこへ行きたくなる。入口だけをここに置く。
+                          目標はこの場で決める。目標タブへ連れて行くと、
+                          マイ種目を見ていたつもりが別の画面に移っていて、戻り方も分からない。
+                          決める道具（GoalEditor）は目標タブと同じものを使う。
                         */}
                         <button
                           type="button"
                           className={s.miniBtn}
+                          aria-pressed={goalOf === ex.id}
                           aria-label={
-                            goalLabel(ex) ? `${ex.name}の目標を変える` : `${ex.name}の目標を決める`
+                            ex.goal ? `${ex.name}の目標を変える` : `${ex.name}の目標を決める`
                           }
-                          onClick={() => onOpenGoal(ex.id)}
+                          onClick={() =>
+                            setGoalOf((cur) => {
+                              setEditing(null);
+                              return cur === ex.id ? null : ex.id;
+                            })
+                          }
                         >
                           目標
                         </button>
@@ -378,195 +391,30 @@ export function ExerciseManager({
                         </button>
                       </>
                     }
-                  >
-                    {editing === ex.id && (
-                      <div className={s.newForm}>
-                        {/* フォーム次第で主働筋が変わる種目（ディップスなど）があるので、部位も変えられる */}
-                        <label className={s.newField}>
-                          部位
-                          <select
-                            value={ex.group}
-                            onChange={(e) => {
-                              const group = e.target.value as MuscleGroup;
-                              // 新しい主部位が補助部位に残っていると、その部位を二重に数える。
-                              // 保存時のサニタイズは読み込みでしか走らないので、ここで落とす
-                              onUpdate({
-                                ...ex,
-                                group,
-                                subGroups: ex.subGroups.filter((x) => x.group !== group),
-                              });
-                            }}
-                          >
-                            {GROUP_ORDER.map((g) => (
-                              <option key={g} value={g}>
-                                {GROUP_LABELS[g]}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <div className={s.newField}>
-                          補助的に使う部位
-                          <div className={s.pickerList}>
-                            {GROUP_ORDER.filter((g) => g !== ex.group).map((g) => {
-                              const on = ex.subGroups.some((x) => x.group === g);
-                              return (
-                                <button
-                                  key={g}
-                                  type="button"
-                                  className={s.pickerBtn}
-                                  aria-pressed={on}
-                                  onClick={() =>
-                                    onUpdate({
-                                      ...ex,
-                                      subGroups: on
-                                        ? ex.subGroups.filter((x) => x.group !== g)
-                                        : [...ex.subGroups, { group: g, weight: SUB_GROUP_WEIGHT }],
-                                    })
-                                  }
-                                >
-                                  {GROUP_LABELS[g]}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {/*
-                            関与の大きさは種目で違う。デッドリフトの脚は主働筋なので 1、
-                            体幹は姿勢の保持なので 0.5 が近い。既定のままでも困らないので、
-                            選んだ部位のぶんだけ出す
-                          */}
-                          {ex.subGroups.map((sub) => (
-                            <div key={sub.group} className={s.subWeightRow}>
-                              <span className={s.subWeightName}>{GROUP_LABELS[sub.group]}</span>
-                              <div className={s.pickerList}>
-                                {subWeightOptions(sub.weight).map((w) => (
-                                  <button
-                                    key={w}
-                                    type="button"
-                                    className={`${s.pickerBtn} ${s.stepBtn}`}
-                                    aria-pressed={sub.weight === w}
-                                    aria-label={`${GROUP_LABELS[sub.group]}を${w}で数える`}
-                                    onClick={() =>
-                                      onUpdate({
-                                        ...ex,
-                                        subGroups: ex.subGroups.map((x) =>
-                                          x.group === sub.group ? { ...x, weight: w } : x,
-                                        ),
-                                      })
-                                    }
-                                  >
-                                    ×{w}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                          <small>
-                            主部位を1としたときの割合。ベンチが胸1・肩0.5・腕0.5なら、3セットで
-                            胸3・肩1.5・腕1.5
-                          </small>
-                        </div>
-
-                        {/*
-                          ここから下は計算の仕方。カタログから追加すれば既に埋まっていて、
-                          触る必要がほとんど無い。開いた瞬間に並べると
-                          「決めなければいけない項目」に見えるので、もう一段畳む
-                        */}
-                        <button
-                          type="button"
-                          className={`${ui.btn} ${ui.btnGhost} ${ui.btnSm}`}
-                          aria-expanded={calc}
-                          onClick={() => setCalc((v) => !v)}
-                        >
-                          {calc ? '計算方法を閉じる' : '計算方法を変える'}
-                        </button>
-
-                        {calc && (
-                          <>
-                            <label className={s.newField}>
-                              負荷の数え方
-                              <select
-                                value={ex.loadMode}
-                                onChange={(e) =>
-                                  onUpdate({ ...ex, loadMode: e.target.value as LoadMode })
-                                }
-                              >
-                                {LOAD_MODE_ORDER.map((m) => (
-                                  <option key={m} value={m}>
-                                    {LOAD_MODE_LABELS[m]}
-                                  </option>
-                                ))}
-                              </select>
-                              <small>{LOAD_MODE_HINTS[ex.loadMode]}</small>
-                            </label>
-
-                            <label className={s.newField}>
-                              回数の単位
-                              <select
-                                value={ex.repUnit}
-                                onChange={(e) =>
-                                  onUpdate({ ...ex, repUnit: e.target.value as RepUnit })
-                                }
-                              >
-                                {(Object.keys(REP_UNIT_LABELS) as RepUnit[]).map((u) => (
-                                  <option key={u} value={u}>
-                                    {u === 'reps' ? '回（レップ）' : '秒（プランクなど）'}
-                                  </option>
-                                ))}
-                              </select>
-                              <small>秒で数える種目は挙上量に計上しません</small>
-                            </label>
-
-                            {ex.loadMode === 'bodyweight' && (
-                              <label className={s.newField}>
-                                体重が乗る割合（懸垂 1.0 / 腕立て 0.65 など）
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  step={0.05}
-                                  min={FACTOR_RANGE[0]}
-                                  max={FACTOR_RANGE[1]}
-                                  value={ex.bodyweightFactor ?? ''}
-                                  onChange={(e) =>
-                                    onUpdate({ ...ex, bodyweightFactor: numOrNull(e.target.value) })
-                                  }
-                                />
-                              </label>
-                            )}
-                          </>
-                        )}
-
-                        {ex.repUnit === 'reps' && (
-                          <label className={s.newField}>
-                            1RM換算の分母（ベンチ 40 / スクワット・デッド 33.3 / 既定 30）
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              step={0.1}
-                              min={RM_DIVISOR_RANGE[0]}
-                              max={RM_DIVISOR_RANGE[1]}
-                              value={ex.rmDivisor}
-                              onChange={(e) =>
-                                onUpdate({
-                                  ...ex,
-                                  rmDivisor: numOrNull(e.target.value) ?? ex.rmDivisor,
-                                })
-                              }
-                            />
-                          </label>
-                        )}
-                      </div>
-                    )}
-                  </ExerciseSummaryCard>
+                  />
                 ))}
               </div>
             );
           })}
 
-          <p className={ui.note}>
-            目標は目標タブで決めます。ここで決めるのは、種目そのものの性質だけです。
-          </p>
+          <p className={ui.note}>目標も、種目そのものの性質も、行の入口から開けます。</p>
         </>
+      )}
+
+      {/*
+        目標と設定は**ダイアログで出す。** 行の中で展開すると、開くたびに下の種目が
+        押し下げられ、次に押したい場所が動く（部位の目標の面と同じ扱いにそろえる）。
+      */}
+      {goalExercise && (
+        <Modal open title={`${goalExercise.name}の目標`} onClose={() => setGoalOf(null)}>
+          <GoalEditor exercise={goalExercise} sessions={sessions} onUpdate={onUpdate} />
+        </Modal>
+      )}
+
+      {settingsExercise && (
+        <Modal open title={`${settingsExercise.name}の設定`} onClose={() => setEditing(null)}>
+          <ExerciseSettingsForm exercise={settingsExercise} onUpdate={onUpdate} />
+        </Modal>
       )}
     </section>
   );

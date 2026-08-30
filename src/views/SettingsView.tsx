@@ -1,7 +1,11 @@
-import { Fragment, useMemo, useRef } from 'react';
+import { Fragment, useMemo, useRef, useState } from 'react';
+import { Modal } from '../components/Modal';
+import { CheckSettingsForm } from '../components/training/CheckSettingsForm';
 import { ExerciseManager } from '../components/training/ExerciseManager';
 import { PresetManager } from '../components/training/PresetManager';
 import { exportCsv, exportJson, readImportFile } from '../lib/io';
+import type { ImportResult } from '../lib/io';
+import { IS_DEMO } from '../lib/env';
 import { SEED_SOURCE } from '../lib/seed';
 import { THEME_OPTIONS } from '../lib/themes';
 import type { BodyData } from '../hooks/useBodyData';
@@ -40,6 +44,11 @@ export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
 export const TRAINING_PAGES = [
   { id: 'exercises', label: 'マイ種目', hint: '一覧・追加・種目ごとの設定' },
   { id: 'presets', label: 'プリセット', hint: '組み合わせの確認・編集' },
+  /*
+   * 判定そのもの（何が警告されているか）は記録画面とプリセット画面にある。
+   * ここに置くのは滅多に変えない閾値と、押した許容を戻す場所だけ。
+   */
+  { id: 'checks', label: 'トレーニング種目のレビュー', hint: '有効化・しきい値・許容済み' },
 ] as const;
 
 export type TrainingPageId = (typeof TRAINING_PAGES)[number]['id'];
@@ -62,11 +71,10 @@ interface Props {
   page?: string | null;
   onOpen: (section: SettingsSectionId | null, page?: TrainingPageId | null) => void;
   /** マイ種目の行から、その種目の目標へ（目標タブが持つ） */
-  onOpenGoal: (exerciseId: string) => void;
   onToast: (message: string) => void;
 }
 
-export function SettingsView({ body, section, page = null, onOpen, onOpenGoal, onToast }: Props) {
+export function SettingsView({ body, section, page = null, onOpen, onToast }: Props) {
   const {
     data,
     daily,
@@ -82,6 +90,8 @@ export function SettingsView({ body, section, page = null, onOpen, onOpenGoal, o
     savePreset,
     updatePreset,
     removePreset,
+    updateChecks,
+    unsuppressWarning,
   } = body;
 
   // 種目を消すとその記録も消えるので、何日ぶんが消えるかを確認ダイアログに出す
@@ -96,6 +106,14 @@ export function SettingsView({ body, section, page = null, onOpen, onOpenGoal, o
   const fileRef = useRef<HTMLInputElement>(null);
   const { settings } = data;
 
+  /*
+   * 読み込み方は 3 択（マージ / 置き換え / やめる）。
+   *
+   * confirm() は 2 択しか持てないので、以前は [キャンセル] にマージを割り当てていた。
+   * 取り消すつもりで押した人のデータが混ざるので、選ばせる面をこちらで持つ。
+   */
+  const [pending, setPending] = useState<{ result: ImportResult; found: string } | null>(null);
+
   const handleImport = async (file: File) => {
     try {
       const result = await readImportFile(file);
@@ -103,21 +121,67 @@ export function SettingsView({ body, section, page = null, onOpen, onOpenGoal, o
         result.count > 0 ? `体組成 ${result.count}日ぶん` : null,
         result.exerciseCount > 0 ? `種目 ${result.exerciseCount}件` : null,
         result.sessionCount > 0 ? `トレーニング ${result.sessionCount}日ぶん` : null,
+        result.presetCount > 0 ? `プリセット ${result.presetCount}件` : null,
       ].filter(Boolean);
 
       if (found.length === 0) {
         onToast('読み込める記録がありませんでした');
         return;
       }
-      const replace = confirm(
-        `${found.join(' / ')}を読み込みます。\n\n[OK] 既存の記録を置き換える\n[キャンセル] 既存に上書きマージする`,
-      );
-      importData(result, replace ? 'replace' : 'merge');
-      onToast(`${found.join(' / ')}を読み込みました`);
+      setPending({ result, found: found.join(' / ') });
     } catch {
       onToast('ファイルを読み込めませんでした');
     }
   };
+
+  const runImport = (mode: 'merge' | 'replace') => {
+    if (!pending) return;
+    importData(pending.result, mode);
+    onToast(`${pending.found}を${mode === 'replace' ? '置き換えました' : '読み込みました'}`);
+    setPending(null);
+  };
+
+  const importModal = pending && (
+    <Modal open title="バックアップから読み込む" onClose={() => setPending(null)}>
+      <div>
+        <p className={ui.note} style={{ marginTop: 0 }}>
+          このファイルには {pending.found} が入っています。
+        </p>
+
+        <div className={ui.btnRow}>
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.btnPrimary}`}
+            onClick={() => runImport('merge')}
+          >
+            いまの記録に足す
+          </button>
+        </div>
+        <p className={ui.note}>同じ日付は読み込んだファイルの値で上書きし、それ以外は残します。</p>
+
+        <div className={ui.btnRow}>
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
+            onClick={() => runImport('replace')}
+          >
+            いまの記録を置き換える
+          </button>
+        </div>
+        <p className={ui.note}>いまの記録は消えます。元に戻せません。</p>
+
+        <div className={ui.btnRow}>
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.btnGhost}`}
+            onClick={() => setPending(null)}
+          >
+            やめる
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
 
   /* ---------------- カテゴリ一覧 ---------------- */
 
@@ -147,7 +211,21 @@ export function SettingsView({ body, section, page = null, onOpen, onOpenGoal, o
     const counts: Record<TrainingPageId, number> = {
       exercises: data.exercises.length,
       presets: data.presets.length,
+      // 件数として意味があるのは「押した許容」の数。閾値は数えても仕方がない
+      checks: data.suppressed.length,
     };
+
+    if (page === 'checks') {
+      return (
+        <CheckSettingsForm
+          checks={data.checks}
+          suppressed={data.suppressed}
+          exercises={data.exercises}
+          onUpdate={updateChecks}
+          onUnsuppress={unsuppressWarning}
+        />
+      );
+    }
 
     if (page === 'presets') {
       return (
@@ -170,7 +248,7 @@ export function SettingsView({ body, section, page = null, onOpen, onOpenGoal, o
           onAdd={addExercises}
           onUpdate={upsertExercise}
           onRemove={removeExercise}
-          onOpenGoal={onOpenGoal}
+          sessions={sessions}
         />
       );
     }
@@ -189,7 +267,13 @@ export function SettingsView({ body, section, page = null, onOpen, onOpenGoal, o
                 {p.label}
                 <small className={s.hint}>{p.hint}</small>
               </span>
-              <span className={s.count}>{counts[p.id]}件</span>
+              <span className={s.count}>
+                {p.id === 'checks'
+                  ? counts[p.id] === 0
+                    ? ''
+                    : `許容 ${counts[p.id]}件`
+                  : `${counts[p.id]}件`}
+              </span>
               <span className={s.chevron} aria-hidden="true">
                 ›
               </span>
@@ -270,6 +354,8 @@ export function SettingsView({ body, section, page = null, onOpen, onOpenGoal, o
           </button>
         </div>
 
+        {importModal}
+
         <input
           ref={fileRef}
           type="file"
@@ -335,10 +421,14 @@ export function SettingsView({ body, section, page = null, onOpen, onOpenGoal, o
           <br />
           <br />
           通信なしで動作します。ホーム画面に追加すると、オフラインでもアプリとして起動します。
-          <br />
-          <br />
-          初期データは {SEED_SOURCE} の「日次記録」シートから取り込んだ作成者の実測値です。
-          設定の「データ」から消せます。
+          {IS_DEMO && (
+            <>
+              <br />
+              <br />
+              初期データは {SEED_SOURCE} の「日次記録」シートから取り込んだ作成者の実測値です。
+              設定の「データ」から消せます。
+            </>
+          )}
         </p>
       </section>
     </>

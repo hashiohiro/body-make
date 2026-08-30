@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CATALOG } from './exerciseCatalog';
 import {
   buildBodyWeightLookup,
@@ -12,7 +12,7 @@ import {
   resolveSets,
   summarizeSets,
 } from './training';
-import { loadData, sanitizeData, sanitizeWorkouts } from './storage';
+import { sanitizeData, sanitizeWorkouts } from './storage';
 import type { DailyPoint, Exercise, SessionExercise, WorkSet } from '../types';
 
 /* ---------------- helpers ---------------- */
@@ -29,6 +29,8 @@ function ex(patch: Partial<Exercise> = {}): Exercise {
     rmDivisor: 30,
     goal: null,
     order: 0,
+    axial: false,
+    minutesPerSet: null,
     ...patch,
   };
 }
@@ -369,11 +371,14 @@ describe('サニタイズと移行', () => {
       },
     };
     const data = sanitizeData(v1);
-    expect(data.version).toBe(2);
+    expect(data.version).toBe(4);
     expect(data.entries['2026-03-01']!.am.weight).toBe(70);
     expect(data.settings.heightCm).toBe(170);
     expect(data.exercises).toEqual([]);
     expect(data.workouts).toEqual({});
+    // v3 で足したキーも既定値で埋まる（欠けたまま state に入ると判定が黙って止まる）
+    expect(data.checks.enabled).toBe(false);
+    expect(data.suppressed).toEqual([]);
   });
 
   it('v2 バックアップは筋トレも含めて往復する', () => {
@@ -394,7 +399,22 @@ describe('loadData の seed 分岐', () => {
     (globalThis as { localStorage?: unknown }).localStorage = new MemStorage();
   });
 
-  it('体重が 0 件で未 seed でも、筋トレの記録を落とさない', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('デモ向けビルドでなければ投入しない', async () => {
+    const { loadData: load } = await import('./storage');
+    expect(Object.keys(load().entries)).toHaveLength(0);
+  });
+
+  it('デモ向けビルドでは、体重が 0 件で未 seed でも筋トレの記録を落とさない', async () => {
+    // IS_DEMO はモジュールの読み込み時に決まるので、差し替えてから読み直す
+    vi.stubEnv('VITE_DEMO', '1');
+    vi.resetModules();
+    const { loadData: load } = await import('./storage');
+
     localStorage.setItem(
       'bodymake.data.v1',
       JSON.stringify({
@@ -406,7 +426,7 @@ describe('loadData の seed 分岐', () => {
       }),
     );
 
-    const data = loadData();
+    const data = load();
     expect(Object.keys(data.entries).length).toBeGreaterThan(0); // seed は入る
     expect(data.exercises).toHaveLength(1); // 筋トレは残る
     expect(data.workouts['2026-03-01']).toBeDefined();

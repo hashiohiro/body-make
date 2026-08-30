@@ -1,5 +1,6 @@
 import type {
   AppData,
+  CheckSettings,
   DayEntry,
   Entries,
   Exercise,
@@ -16,15 +17,26 @@ import type {
   WorkSet,
   Workouts,
 } from '../types';
-import { SUB_GROUP_WEIGHT, SUB_GROUP_WEIGHT_RANGE } from './exerciseCatalog';
+import { SUB_GROUP_WEIGHT, SUB_GROUP_WEIGHT_RANGE, catalogCheckValues } from './exerciseCatalog';
 import { THEME_IDS } from './themes';
+import { IS_DEMO } from './env';
 import { seedEntries } from './seed';
 
 /** キー名はスキーマ版ではなく保存先のアドレス。v2 でも変えない（変えると既存データが見えなくなる） */
 const DATA_KEY = 'bodymake.data.v1';
 const SEEDED_KEY = 'bodymake.seeded.v1';
 
-export const DATA_VERSION = 2;
+/**
+ * スキーマ版。**移行の判定はこれで行う。**
+ *
+ * キーの有無で「移行済みか」を見ると、途中のビルドが既定値を書き戻したデータを
+ * 「本人が選んだ値」と誤って尊重する。実際 v3 では 2 度それが起きた
+ * （`loads: 0` と `axial: false`）。版で見れば、その世代のデータをまとめて読み直せる。
+ */
+export const DATA_VERSION = 4;
+
+/** レビューの値が信用できるようになった版。これ未満はカタログから引き直す */
+const CHECK_FIELDS_VERSION = 4;
 
 export const DEFAULT_SETTINGS: Settings = {
   heightCm: null,
@@ -33,6 +45,16 @@ export const DEFAULT_SETTINGS: Settings = {
   targetDate: null,
   theme: 'system',
 };
+
+/**
+ * レビューの既定値。
+ *
+ * **疲労の量を持たない。** 軸荷重も前腕も真偽値で、判定は記録した日付から出る。
+ * 調整する係数は時間まわりだけになった。
+ */
+export function defaultChecks(): CheckSettings {
+  return { enabled: false, sessionMinutes: 90, minutesPerSet: 3 };
+}
 
 const EMPTY_GROUP_GOALS: GroupGoals = {
   chest: null,
@@ -45,13 +67,15 @@ const EMPTY_GROUP_GOALS: GroupGoals = {
 
 export function emptyData(): AppData {
   return {
-    version: 2,
+    version: 4,
     settings: { ...DEFAULT_SETTINGS },
     entries: {},
     exercises: [],
     workouts: {},
     groupGoals: { ...EMPTY_GROUP_GOALS },
     presets: [],
+    checks: defaultChecks(),
+    suppressed: [],
   };
 }
 
@@ -90,8 +114,16 @@ export const REPS_RANGE: [number, number] = [1, 100];
 export const RM_DIVISOR_RANGE: [number, number] = [20, 60];
 export const FACTOR_RANGE: [number, number] = [0, 2];
 export const TARGET_WEIGHT_RANGE: [number, number] = [0, 500];
+/** 1 日の総挙上量。重い種目を多セットやると数千 kg になる */
+export const TARGET_VOLUME_RANGE: [number, number] = [0, 100000];
 export const TARGET_REPS_RANGE: [number, number] = [1, 200];
 export const GROUP_GOAL_RANGE: [number, number] = [1, 50];
+
+/* ---- 構成チェック ---- */
+/** 1 セッションの上限（分）。null は「時間を見ない」 */
+export const SESSION_MINUTES_RANGE: [number, number] = [10, 600];
+/** 1 セットあたりの時間（分）。0 は「時間に数えない」 */
+export const MINUTES_PER_SET_RANGE: [number, number] = [0, 30];
 
 export function parseWeight(value: unknown): number | null {
   return num(value, WEIGHT_RANGE[0], WEIGHT_RANGE[1]);
@@ -152,6 +184,12 @@ function sanitizeLoadMode(o: Record<string, unknown>): LoadMode {
 
 function sanitizeGoal(o: Record<string, unknown>): ExerciseTarget | null {
   const raw = (o.goal ?? null) as Record<string, unknown> | null;
+  // 現状維持だけは数値を持たない
+  if (raw && raw.type === 'maintain') return { type: 'maintain', value: null };
+  if (raw && raw.type === 'volume') {
+    const value = int(raw.value, TARGET_VOLUME_RANGE[0], TARGET_VOLUME_RANGE[1]);
+    return value == null ? null : { type: 'volume', value };
+  }
   if (raw && raw.type === 'reps') {
     const value = int(raw.value, TARGET_REPS_RANGE[0], TARGET_REPS_RANGE[1]);
     return value == null ? null : { type: 'reps', value };
@@ -191,7 +229,7 @@ function sanitizeSubGroups(raw: unknown, primary: MuscleGroup): SubGroup[] {
   return out;
 }
 
-function sanitizeExercise(raw: unknown, order: number): Exercise | null {
+function sanitizeExercise(raw: unknown, order: number, fromVersion: number): Exercise | null {
   const o = (raw ?? {}) as Record<string, unknown>;
   const id = typeof o.id === 'string' ? o.id.trim() : '';
   const name = typeof o.name === 'string' ? o.name.trim().slice(0, 40) : '';
@@ -211,7 +249,74 @@ function sanitizeExercise(raw: unknown, order: number): Exercise | null {
     rmDivisor: num(o.rmDivisor, RM_DIVISOR_RANGE[0], RM_DIVISOR_RANGE[1]) ?? 30,
     goal: sanitizeGoal(o),
     order: int(o.order, 0, 9999) ?? order,
+    ...checkFieldsOf(o, id, fromVersion),
   };
+}
+
+/**
+ * レビューの 4 フィールド。
+ *
+ * **どれも持っていない種目は v2 以前のデータ**なので、カタログから既定値を引き直す。
+ * false のまま読むと、カタログからデッドリフトを入れてあるのに軸荷重でない、という
+ * 食い違いが起きて、既存ユーザーだけ判定が一切効かない状態になる。
+ *
+ * 逆に 1 つでも持っていれば v3 以降の保存。**そのときは false も選択として尊重する**
+ * （「この種目は軸荷重に数えない」と決めた結果を、移行が上書きしてはいけない）。
+ */
+function checkFieldsOf(
+  o: Record<string, unknown>,
+  id: string,
+  fromVersion: number,
+): Pick<Exercise, 'axial' | 'minutesPerSet'> {
+  /*
+   * **版で判定する。キーの有無では判定しない。**
+   *
+   * キーの有無は「途中のビルドが既定値を書き戻した」と「本人が false を選んだ」を
+   * 区別できない。v3 では実際に 2 度それが起きて、どちらも二度と戻らなくなった。
+   * 版が古いデータは、値があってもカタログから引き直す。
+   */
+  const stale = fromVersion < CHECK_FIELDS_VERSION;
+  if (stale || !('axial' in o)) {
+    const fromCatalog = catalogCheckValues(id);
+    if (fromCatalog) return fromCatalog;
+  }
+  return {
+    axial: o.axial === true,
+    // 空欄は「既定値に落とす」という意味を持つので、値域外も null に潰す
+    minutesPerSet: num(o.minutesPerSet, MINUTES_PER_SET_RANGE[0], MINUTES_PER_SET_RANGE[1]),
+  };
+}
+
+/**
+ * しきい値。**値域外や欠損は既定値に落とす。**
+ * ここだけは「打ちかけを残す」作法（§2.2）を採らない。
+ * 判定に使う値が空のままだと、指摘が黙って出なくなる（壊れたことに気づけない）。
+ */
+export function sanitizeChecks(raw: unknown): CheckSettings {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const base = defaultChecks();
+  return {
+    enabled: o.enabled === true,
+    // null は「時間を見ない」という選択なので、未指定と区別して残す
+    sessionMinutes:
+      o.sessionMinutes === null
+        ? null
+        : (int(o.sessionMinutes, SESSION_MINUTES_RANGE[0], SESSION_MINUTES_RANGE[1]) ??
+          base.sessionMinutes),
+    minutesPerSet:
+      num(o.minutesPerSet, MINUTES_PER_SET_RANGE[0], MINUTES_PER_SET_RANGE[1]) ??
+      base.minutesPerSet,
+  };
+}
+
+/** 許容済みのキー。中身は check.ts が組み立てた文字列なので、形だけ見る */
+export function sanitizeSuppressed(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return [
+    ...new Set(
+      raw.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 200),
+    ),
+  ];
 }
 
 /** 名前の長さの上限。種目名と同じにそろえる */
@@ -247,12 +352,12 @@ export function sanitizePresets(raw: unknown, knownIds: ReadonlySet<string>): Pr
   return out;
 }
 
-export function sanitizeExercises(raw: unknown): Exercise[] {
+export function sanitizeExercises(raw: unknown, fromVersion = DATA_VERSION): Exercise[] {
   if (!Array.isArray(raw)) return [];
   const out: Exercise[] = [];
   const seen = new Set<string>();
   raw.forEach((item, i) => {
-    const ex = sanitizeExercise(item, i);
+    const ex = sanitizeExercise(item, i, fromVersion);
     // 同じ ID が二重にいるとログの参照先が曖昧になるため、先勝ちで落とす
     if (!ex || seen.has(ex.id)) return;
     seen.add(ex.id);
@@ -322,21 +427,26 @@ function sanitizeSettings(raw: unknown): Settings {
 }
 
 /**
- * v1 は entries と settings しか持たない。足りないキーを空で補うだけで移行が済む。
- * 逆にロールバックすると exercises / workouts は落ちるが、それは許容している（docs 参照）。
+ * v1 は entries と settings しか、v2 は checks / suppressed と種目の構成チェック値しか持たない。
+ * どちらも**足りないキーを既定値で補うだけ**で移行が済む。
+ * 逆にロールバックすると新しいキーは落ちるが、それは許容している（docs 参照）。
  */
 export function sanitizeData(raw: unknown): AppData {
   const o = (raw ?? {}) as Record<string, unknown>;
-  const exercises = sanitizeExercises(o.exercises);
+  // 版が無いデータは v1（entries と settings しか無かったころ）とみなす
+  const fromVersion = typeof o.version === 'number' ? o.version : 1;
+  const exercises = sanitizeExercises(o.exercises, fromVersion);
   const knownIds = new Set(exercises.map((e) => e.id));
   return {
-    version: 2,
+    version: DATA_VERSION,
     settings: sanitizeSettings(o.settings),
     entries: sanitizeEntries(o.entries),
     exercises,
     workouts: sanitizeWorkouts(o.workouts, knownIds),
     groupGoals: sanitizeGroupGoals(o.groupGoals),
     presets: sanitizePresets(o.presets, knownIds),
+    checks: sanitizeChecks(o.checks),
+    suppressed: sanitizeSuppressed(o.suppressed),
   };
 }
 
@@ -352,6 +462,9 @@ export function loadData(): AppData {
   // 以降どの分岐でも base を土台にする。再構築すると筋トレのキーが落ちる
   const base = stored ?? emptyData();
   if (Object.keys(base.entries).length > 0) return base;
+
+  // 投入するのはデモ向けビルドだけ。自分の記録として使う側に他人の数字を入れない
+  if (!IS_DEMO) return base;
 
   // 初回起動時のみエクセルの記録を投入する。ユーザーが全消ししたあとに復活させない
   let seeded = false;

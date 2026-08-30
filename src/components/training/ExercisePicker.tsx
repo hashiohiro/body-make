@@ -24,17 +24,17 @@ interface Props {
  */
 export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }: Props) {
   const [open, setOpen] = useState(false);
-  const [catalog, setCatalog] = useState(false);
+  /*
+   * カタログはダイアログを重ねず、**同じダイアログの面を差し替える**。
+   * 同じ作業（今日の種目を決める）の続きなので、閉じたら元の面に戻るのが自然で、
+   * 暗幕を二重にする理由も無い。重ねるのは「別の主題を参照しに行く」ときだけにする。
+   */
+  const [panel, setPanel] = useState<'exercises' | 'catalog'>('exercises');
 
-  // 開いているときだけ置く。閉じた dialog を記録画面に常駐させない
-  const catalogModal = catalog && (
-    <Modal open title="マイ種目に追加" onClose={() => setCatalog(false)}>
-      <CatalogPicker exercises={exercises} onAdd={onAddExercises} />
-      <p className={ui.note}>
-        削除と種目ごとの設定は、設定 &gt; トレーニング &gt; マイ種目 でまとめて行えます。
-      </p>
-    </Modal>
-  );
+  const close = () => {
+    setOpen(false);
+    setPanel('exercises');
+  };
 
   return (
     <>
@@ -46,8 +46,20 @@ export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }:
         ＋
       </button>
 
-      <Modal open={open} title="マイ種目から選ぶ" onClose={() => setOpen(false)}>
-        {exercises.length === 0 ? (
+      <Modal
+        open={open}
+        title={panel === 'catalog' ? 'マイ種目に追加' : 'マイ種目から選ぶ'}
+        onClose={close}
+        onBack={panel === 'catalog' ? () => setPanel('exercises') : undefined}
+      >
+        {panel === 'catalog' ? (
+          <div>
+            <CatalogPicker exercises={exercises} onAdd={onAddExercises} />
+            <p className={ui.note}>
+              削除と種目ごとの設定は、設定 &gt; トレーニング &gt; マイ種目 でまとめて行えます。
+            </p>
+          </div>
+        ) : exercises.length === 0 ? (
           /*
            * マイ種目が空のとき。以前は「設定 > トレーニング から追加してください」とだけ出していて、
            * 初めて開いた人がその場では何もできなかった。ここから追加できるようにする。
@@ -62,10 +74,7 @@ export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }:
               <button
                 type="button"
                 className={`${ui.btn} ${ui.btnPrimary}`}
-                onClick={() => {
-                  setOpen(false);
-                  setCatalog(true);
-                }}
+                onClick={() => setPanel('catalog')}
               >
                 ＋ マイ種目に追加
               </button>
@@ -107,10 +116,7 @@ export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }:
               <button
                 type="button"
                 className={`${ui.btn} ${ui.btnSm}`}
-                onClick={() => {
-                  setOpen(false);
-                  setCatalog(true);
-                }}
+                onClick={() => setPanel('catalog')}
               >
                 ＋ マイ種目を増やす
               </button>
@@ -118,8 +124,6 @@ export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }:
           </div>
         )}
       </Modal>
-
-      {catalogModal}
     </>
   );
 }

@@ -11,58 +11,101 @@ import s from './training.module.scss';
 /** 作りかけのプリセットを、掴んでいる相手として指すための名前（Preset.id と混ざらない） */
 const DRAFT = 'draft';
 
-interface PickListProps {
-  /** まだ入っていないマイ種目 */
+interface PickDialogProps {
+  /** マイ種目ぜんぶ。入っているものは ✓ で出す */
   items: readonly Exercise[];
-  onPick: (id: string) => void;
-  /** カタログを開く。ここに無い種目を入れたくなったときの逃げ道 */
-  onOpenCatalog: () => void;
+  /** いまこの組み合わせに入っている種目 */
+  selected: ReadonlySet<string>;
+  label: string;
+  onToggle: (id: string) => void;
+  /** カタログからマイ種目を増やす。ここに無い種目を入れたくなったときの逃げ道 */
+  onAddExercises: (exercises: readonly Exercise[]) => void;
   onClose: () => void;
 }
 
-/** 中身に足す種目を選ぶ。新規作成と既存の編集で同じものを使う */
-function PickList({ items, onPick, onOpenCatalog, onClose }: PickListProps) {
+/**
+ * 中身に足す種目を選ぶ。新規作成と既存の編集で同じものを使う。
+ *
+ * **ダイアログで出す。** 画面に直接置くと、1 つ選ぶたびに上の一覧が伸びて、
+ * その下にあるボタンが押すたびに下へ動く。続けて選ぶあいだ指を狙い直すことになる。
+ *
+ * 入っている種目も ✓ を付けたまま残す。選んだものを消すと、
+ * そのぶんだけ後ろの並びが詰まって、やはり位置が動く。
+ */
+function PickDialog({
+  items,
+  selected,
+  label,
+  onToggle,
+  onAddExercises,
+  onClose,
+}: PickDialogProps) {
+  /*
+   * カタログはダイアログを重ねず、**同じダイアログの面を差し替える**。
+   * 同じ作業（この組み合わせの中身を決める）の続きなので、閉じたら元の面に戻る。
+   */
+  const [catalog, setCatalog] = useState(false);
+
+  if (catalog) {
+    return (
+      <Modal open title="マイ種目に追加" onClose={onClose} onBack={() => setCatalog(false)}>
+        <CatalogPicker exercises={items} onAdd={onAddExercises} />
+      </Modal>
+    );
+  }
+
   return (
-    <div className={s.presetPicker}>
-      {items.length === 0 ? (
-        <p className={ui.note}>ほかに足せる種目がありません。</p>
-      ) : (
-        GROUP_ORDER.map((group) => {
-          const list = items.filter((e) => e.group === group);
-          if (list.length === 0) return null;
-          return (
-            <div key={group} className={s.pickerGroup}>
-              <div className={s.pickerLabel}>{GROUP_LABELS[group]}</div>
-              <div className={s.pickerList}>
-                {list.map((e) => (
-                  <button
-                    key={e.id}
-                    type="button"
-                    className={s.pickerBtn}
-                    onClick={() => onPick(e.id)}
-                  >
-                    ＋ {e.name}
-                  </button>
-                ))}
+    <Modal open title={`${label}に種目を足す`} onClose={onClose}>
+      <div>
+        {items.length === 0 ? (
+          <p className={ui.note}>マイ種目がまだありません。</p>
+        ) : (
+          GROUP_ORDER.map((group) => {
+            const list = items.filter((e) => e.group === group);
+            if (list.length === 0) return null;
+            return (
+              <div key={group} className={s.pickerGroup}>
+                <div className={s.pickerLabel}>{GROUP_LABELS[group]}</div>
+                <div className={s.pickerList}>
+                  {list.map((e) => {
+                    const used = selected.has(e.id);
+                    return (
+                      <button
+                        key={e.id}
+                        type="button"
+                        className={s.pickerBtn}
+                        aria-pressed={used}
+                        // 最後の 1 つを外すのは削除と同じ意味になるので、ここでは受け付けない
+                        disabled={used && selected.size === 1}
+                        onClick={() => onToggle(e.id)}
+                      >
+                        {used ? '✓ ' : '＋ '}
+                        {e.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })
-      )}
-      <div className={ui.btnRow}>
-        {/*
-          入れたい種目がマイ種目にまだ無いとき、ここが行き止まりになる。
-          作りかけのプリセットは画面を離れると消えるので、なおさら戻ってこられない。
-          記録画面のピッカーと同じで、入口だけ出して管理の場所は動かさない。
-        */}
-        <button type="button" className={`${ui.btn} ${ui.btnSm}`} onClick={onOpenCatalog}>
-          ＋ マイ種目を増やす
-        </button>
-        <button type="button" className={`${ui.btn} ${ui.btnGhost} ${ui.btnSm}`} onClick={onClose}>
-          閉じる
-        </button>
+            );
+          })
+        )}
+
+        <div className={ui.btnRow}>
+          {/*
+            入れたい種目がマイ種目にまだ無いとき、ここが行き止まりになる。
+            作りかけのプリセットは画面を離れると消えるので、なおさら戻ってこられない。
+            記録画面のピッカーと同じで、入口だけ出して管理の場所は動かさない。
+          */}
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.btnSm}`}
+            onClick={() => setCatalog(true)}
+          >
+            ＋ マイ種目を増やす
+          </button>
+        </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -114,7 +157,6 @@ export function PresetManager({
   /** 作りかけのプリセット。決まるまで保存しない */
   const [creating, setCreating] = useState<{ name: string; exerciseIds: string[] } | null>(null);
   const [pickingDraft, setPickingDraft] = useState(false);
-  const [catalog, setCatalog] = useState(false);
 
   const byId = new Map(exercises.map((e) => [e.id, e]));
   const nameOf = (id: string) => byId.get(id)?.name ?? '（削除された種目）';
@@ -264,16 +306,25 @@ export function PresetManager({
                 }),
             )}
 
-            {moving?.owner === DRAFT ? null : pickingDraft ? (
-              <PickList
-                items={exercises.filter((e) => !creating.exerciseIds.includes(e.id))}
-                onPick={(id) =>
-                  setCreating({ ...creating, exerciseIds: [...creating.exerciseIds, id] })
+            {pickingDraft && (
+              <PickDialog
+                items={exercises}
+                selected={new Set(creating.exerciseIds)}
+                label="新しいプリセット"
+                onToggle={(id) =>
+                  setCreating({
+                    ...creating,
+                    exerciseIds: creating.exerciseIds.includes(id)
+                      ? creating.exerciseIds.filter((x) => x !== id)
+                      : [...creating.exerciseIds, id],
+                  })
                 }
-                onOpenCatalog={() => setCatalog(true)}
+                onAddExercises={onAddExercises}
                 onClose={() => setPickingDraft(false)}
               />
-            ) : (
+            )}
+
+            {moving?.owner === DRAFT ? null : (
               <div className={ui.btnRow}>
                 <button
                   type="button"
@@ -372,16 +423,25 @@ export function PresetManager({
                   (id) => drop(preset, id),
                 )}
 
-                {moving?.owner === preset.id ? null : picking === preset.id ? (
-                  <PickList
-                    items={exercises.filter((e) => !preset.exerciseIds.includes(e.id))}
-                    onPick={(id) =>
-                      onUpdate({ ...preset, exerciseIds: [...preset.exerciseIds, id] })
+                {picking === preset.id && (
+                  <PickDialog
+                    items={exercises}
+                    selected={new Set(preset.exerciseIds)}
+                    label={preset.name}
+                    onToggle={(id) =>
+                      onUpdate({
+                        ...preset,
+                        exerciseIds: preset.exerciseIds.includes(id)
+                          ? preset.exerciseIds.filter((x) => x !== id)
+                          : [...preset.exerciseIds, id],
+                      })
                     }
-                    onOpenCatalog={() => setCatalog(true)}
+                    onAddExercises={onAddExercises}
                     onClose={() => setPicking(null)}
                   />
-                ) : (
+                )}
+
+                {moving?.owner === preset.id ? null : (
                   <div className={ui.btnRow}>
                     <button
                       type="button"
@@ -397,19 +457,13 @@ export function PresetManager({
             </div>
           ))}
 
-      {/* 開いているときだけ置く。閉じた dialog を設定画面に常駐させない */}
-      {catalog && (
-        <Modal open title="マイ種目に追加" onClose={() => setCatalog(false)}>
-          <CatalogPicker exercises={exercises} onAdd={onAddExercises} />
-          <p className={ui.note}>
-            ここで足すのはマイ種目です。プリセットに入れるのは、閉じたあとの一覧から選びます。
-          </p>
-        </Modal>
-      )}
-
       <p className={ui.note}>
         持つのは種目だけで、重量もレップもセット数も持ちません。
         呼び出すのは記録画面のプリセットカードから行います。
+        <br />
+        ここで見えるのは1日の負荷の合計だけです。残っている疲労と所要時間は、
+        いつやるかとセット数が決まって初めて出せるので、記録画面で確認できます （設定 &gt;
+        トレーニング &gt; トレーニング種目のレビュー で有効にしたときだけ出ます）。
       </p>
     </section>
   );

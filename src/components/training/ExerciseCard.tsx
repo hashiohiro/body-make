@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { formatMD } from '../../lib/date';
 import { deltaTone, fmt, fmtDelta } from '../../lib/format';
-import { GROUP_LABELS, catalogEquipment } from '../../lib/exerciseCatalog';
+import { GROUP_LABELS, catalogEquipment, goalTypeLabel } from '../../lib/exerciseCatalog';
 import { summarizeSets } from '../../lib/training';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { Exercise, ExercisePoint, SessionExercise } from '../../types';
@@ -29,6 +29,8 @@ interface Props {
   onCopyPrevious: () => void;
   /** グラフ画面と同じ詳細ダイアログを開く */
   onOpenDetail: () => void;
+  /** その種目の目標を、記録しながら決め直す */
+  onOpenGoal: () => void;
 }
 
 export function ExerciseCard({
@@ -45,6 +47,7 @@ export function ExerciseCard({
   onMove,
   onCopyPrevious,
   onOpenDetail,
+  onOpenGoal,
 }: Props) {
   const volume = point?.volume ?? 0;
   const prevVolume = previous?.point.volume ?? null;
@@ -80,6 +83,12 @@ export function ExerciseCard({
       <div className={s.exHead}>
         <span className={s.exName}>{exercise.name}</span>
         <span className={s.exTag}>{GROUP_LABELS[exercise.group]}</span>
+        {/* この種目をどうしたいか（維持 / 重量↑ / 挙上量↑ / 回数↑）。打ちながら分かるように */}
+        {exercise.goal && (
+          <span className={s.kindTag}>
+            {goalTypeLabel(exercise.goal.type, exercise.repUnit, true)}
+          </span>
+        )}
         <span className={s.exHeadBtns}>
           {/* 並びはやった順。掴むと、その日の種目だけが小さな一覧に畳まれる */}
           {onMove && (
@@ -211,6 +220,20 @@ export function ExerciseCard({
           onClick={onOpenDetail}
         >
           推移を見る
+        </button>
+        {/*
+          打っている最中に「この種目はどこを目指しているか」を決め直したくなる。
+          マイ種目や目標タブと同じ入口（目標）を、同じ並びでここにも置く
+        */}
+        <button
+          type="button"
+          className={s.exDetail}
+          aria-label={
+            exercise.goal ? `${exercise.name}の目標を変える` : `${exercise.name}の目標を決める`
+          }
+          onClick={onOpenGoal}
+        >
+          目標
         </button>
       </div>
     </section>

@@ -1,8 +1,11 @@
 import type {
   AppData,
+  CheckSettings,
   DailyPoint,
   Entries,
   Exercise,
+  GroupGoals,
+  Preset,
   SessionPoint,
   WeekPoint,
   Workouts,
@@ -185,13 +188,22 @@ export interface ImportPayload {
   settings: AppData['settings'] | null;
   exercises: Exercise[] | null;
   workouts: Workouts | null;
+  /** 種目の組み合わせ。バックアップに入っていれば戻す */
+  presets: Preset[] | null;
+  /** 週の部位別セット数の目標 */
+  groupGoals: GroupGoals | null;
+  /** 構成チェックの閾値 */
+  checks: CheckSettings | null;
+  /** 許容済みにした警告 */
+  suppressed: string[] | null;
 }
 
 export interface ImportResult extends ImportPayload {
-  /** 取り込んだ日数・種目数・セッション数（確認ダイアログの文言に使う） */
+  /** 取り込んだ日数・種目数・セッション数・プリセット数（確認ダイアログの文言に使う） */
   count: number;
   exerciseCount: number;
   sessionCount: number;
+  presetCount: number;
 }
 
 /**
@@ -204,21 +216,33 @@ export async function readImportFile(file: File): Promise<ImportResult> {
 
   // アプリ全体のバックアップと、entries だけの JSON の両方を受け付ける
   const looksLikeBackup =
-    'entries' in raw || 'settings' in raw || 'exercises' in raw || 'workouts' in raw;
+    'entries' in raw ||
+    'settings' in raw ||
+    'exercises' in raw ||
+    'workouts' in raw ||
+    'presets' in raw ||
+    'groupGoals' in raw ||
+    'checks' in raw;
   const data = looksLikeBackup ? sanitizeData(raw) : null;
   const entries = data ? data.entries : sanitizeEntries(raw);
   // キーがあるものだけ取り込む。無いファイルでは現状を残す
   const exercises = data && 'exercises' in raw ? data.exercises : null;
   const workouts = data && 'workouts' in raw ? data.workouts : null;
+  const presets = data && 'presets' in raw ? data.presets : null;
 
   return {
     entries,
     settings: data && 'settings' in raw ? data.settings : null,
     exercises,
     workouts,
+    presets,
+    groupGoals: data && 'groupGoals' in raw ? data.groupGoals : null,
+    checks: data && 'checks' in raw ? data.checks : null,
+    suppressed: data && 'suppressed' in raw ? data.suppressed : null,
     count: Object.keys(entries).length,
     exerciseCount: exercises?.length ?? 0,
     sessionCount: workouts ? Object.keys(workouts).length : 0,
+    presetCount: presets?.length ?? 0,
   };
 }
 

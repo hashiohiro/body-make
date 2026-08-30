@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildDaily, buildWeeks, computeProjection, computeStats, emptyDay } from '../lib/derive';
 import { PRESET_NAME_MAX, emptyData, loadData, sanitizeData, saveData } from '../lib/storage';
 import { buildSessions, computeTrainingStats, exerciseGoals } from '../lib/training';
+import { buildCheckHistory } from '../lib/check';
 import type { ImportPayload } from '../lib/io';
 import type {
   AppData,
+  CheckSettings,
   Entries,
   Exercise,
   Measurement,
@@ -45,6 +47,8 @@ export interface BodyData {
   sessions: ReturnType<typeof buildSessions>;
   trainingStats: ReturnType<typeof computeTrainingStats>;
   trainingGoals: ReturnType<typeof exerciseGoals>;
+  /** 過去の日の資源消費。構成チェックが読む（lib/check.ts） */
+  checkHistory: ReturnType<typeof buildCheckHistory>;
 
   setValue: (date: string, slot: SlotId, field: MeasurementField, value: number | null) => void;
   removeDay: (date: string) => void;
@@ -79,6 +83,12 @@ export interface BodyData {
   /** 名前と中身を書き換える（設定側の編集） */
   updatePreset: (preset: Preset) => void;
   removePreset: (id: string) => void;
+  updateChecks: (patch: Partial<CheckSettings>) => void;
+  /** 警告を許容済みにする。同じキーの警告は次から出ない */
+  suppressWarning: (key: string) => void;
+  /** 許容を取り消す。一方通行にすると押し間違いが永久に残る */
+  unsuppressWarning: (key: string) => void;
+
   upsertExercise: (exercise: Exercise) => void;
   addExercises: (exercises: readonly Exercise[]) => void;
   /** マイ種目から消す。その種目の記録も一緒に消える（参照だけ残すとログが黙って落ちるため） */
@@ -108,6 +118,11 @@ export function useBodyData(): BodyData {
     [data.workouts, data.exercises, daily],
   );
   const trainingStats = useMemo(() => computeTrainingStats(sessions), [sessions]);
+  // 過去の消費は「やった事実」から作る。並べただけの日を数えないため sessions を読む
+  const checkHistory = useMemo(
+    () => buildCheckHistory(sessions, data.exercises),
+    [sessions, data.exercises],
+  );
   const trainingGoals = useMemo(
     () => exerciseGoals(sessions, data.exercises),
     [sessions, data.exercises],
@@ -178,12 +193,55 @@ export function useBodyData(): BodyData {
             ? payload.workouts
             : { ...prev.workouts, ...payload.workouts };
 
+      /*
+       * 組み合わせは種目と同じ扱い。id が無いものだけ足す。
+       * ここに書き忘れると、取り込んだ瞬間にプリセットと部位別の目標が消える
+       * （sanitizeData は渡したキーしか見ないため）。
+       */
+      const presets =
+        payload.presets == null
+          ? prev.presets
+          : mode === 'replace'
+            ? payload.presets
+            : [
+                ...prev.presets,
+                ...payload.presets.filter((p) => !prev.presets.some((x) => x.id === p.id)),
+              ];
+
+      // 部位別の目標は 6 つの値の組。ファイルにある部位だけを上書きする（entries と同じ考え方）
+      const groupGoals =
+        payload.groupGoals == null
+          ? prev.groupGoals
+          : mode === 'replace'
+            ? payload.groupGoals
+            : (Object.fromEntries(
+                Object.entries(prev.groupGoals).map(([g, v]) => [
+                  g,
+                  payload.groupGoals?.[g as MuscleGroup] ?? v,
+                ]),
+              ) as typeof prev.groupGoals);
+
       return sanitizeData({
-        version: 2,
+        version: 3,
         settings: payload.settings ?? prev.settings,
         entries,
         exercises,
         workouts,
+        presets,
+        groupGoals,
+        /*
+         * 閾値と許容済みも必ず渡す。ここに書き忘れると、取り込んだ瞬間に
+         * sanitizeData が渡されなかったキーを既定値へ戻し、その場で設定が消える。
+         * 閾値は 1 組の設定なのでファイルにあれば丸ごと置き換え、
+         * 許容済みはマージ側では足すだけにする（消したものを取り込みで復活させない）。
+         */
+        checks: payload.checks ?? prev.checks,
+        suppressed:
+          payload.suppressed == null
+            ? prev.suppressed
+            : mode === 'replace'
+              ? payload.suppressed
+              : [...new Set([...prev.suppressed, ...payload.suppressed])],
       });
     });
   }, []);
@@ -366,6 +424,20 @@ export function useBodyData(): BodyData {
     setData((prev) => ({ ...prev, groupGoals: { ...prev.groupGoals, [group]: value } }));
   }, []);
 
+  const updateChecks = useCallback((patch: Partial<CheckSettings>) => {
+    setData((prev) => ({ ...prev, checks: { ...prev.checks, ...patch } }));
+  }, []);
+
+  const suppressWarning = useCallback((key: string) => {
+    setData((prev) =>
+      prev.suppressed.includes(key) ? prev : { ...prev, suppressed: [...prev.suppressed, key] },
+    );
+  }, []);
+
+  const unsuppressWarning = useCallback((key: string) => {
+    setData((prev) => ({ ...prev, suppressed: prev.suppressed.filter((k) => k !== key) }));
+  }, []);
+
   const upsertExercise = useCallback((exercise: Exercise) => {
     setData((prev) => {
       const exists = prev.exercises.some((e) => e.id === exercise.id);
@@ -415,6 +487,7 @@ export function useBodyData(): BodyData {
     sessions,
     trainingStats,
     trainingGoals,
+    checkHistory,
     setValue,
     removeDay,
     updateSettings,
@@ -430,6 +503,9 @@ export function useBodyData(): BodyData {
     copySets,
     addDayExercises,
     setGroupGoal,
+    updateChecks,
+    suppressWarning,
+    unsuppressWarning,
     savePreset,
     updatePreset,
     removePreset,

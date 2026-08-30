@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExerciseManager } from '../components/training/ExerciseManager';
 import { PresetManager } from '../components/training/PresetManager';
 import { App } from '../App';
+import { BadgeGrid } from '../components/BadgeGrid';
 import { DateNav } from '../components/DateNav';
 import { ChartsView } from './ChartsView';
 import { GoalsView } from './GoalsView';
@@ -43,6 +44,7 @@ function seedData(
   ids: string[],
   workouts: Record<string, unknown>,
   entries: Record<string, unknown> = {},
+  checks: Record<string, unknown> | null = null,
 ) {
   const exercises = ids.map((id, i) =>
     fromCatalog(
@@ -52,7 +54,14 @@ function seedData(
   );
   localStorage.setItem(
     'bodymake.data.v1',
-    JSON.stringify({ version: 2, settings: {}, entries, exercises, workouts }),
+    JSON.stringify({
+      version: 2,
+      settings: {},
+      entries,
+      exercises,
+      workouts,
+      ...(checks ? { checks } : {}),
+    }),
   );
 }
 
@@ -353,6 +362,24 @@ describe('トレ画面', () => {
     expect(screen.queryByText(/この日 \d+種目/)).toBeNull();
   });
 
+  it('記録しながら、その種目の目標を決め直せる', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+
+    // 推移と同じ並びに置く。打っている最中に「どこを目指すか」を決め直したくなる
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の目標を決める/ }));
+    fireEvent.click(screen.getByRole('button', { name: '維持' }));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+
+    // 決めた立て方は、そのままカードのバッジに出る
+    expect(screen.getByText('維持')).toBeTruthy();
+    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    expect(stored.exercises[0].goal).toEqual({ type: 'maintain', value: null });
+  });
+
   it('自重種目では重量を聞かない。加重した日だけ開く', () => {
     seedExercises('ex_pushup');
     render(<Harness />);
@@ -464,11 +491,11 @@ describe('種目管理（設定タブ）', () => {
     return (
       <ExerciseManager
         exercises={body.data.exercises}
+        sessions={body.sessions}
         usage={usage}
         onAdd={body.addExercises}
         onUpdate={body.upsertExercise}
         onRemove={body.removeExercise}
-        onOpenGoal={() => {}}
       />
     );
   }
@@ -516,8 +543,28 @@ describe('種目管理（設定タブ）', () => {
     );
     render(<ManagerHarness />);
 
-    // 目標画面は「大きい数字＝いま」なので、数字だけ置くと何の数字か読めなくなる
+    // 目標画面は「大きい数字＝いま」なので、数字だけ置くと何の数字か読めなくなる。
+    // 立て方（重量↑ / 挙上量↑ / 維持）は別のバッジ。目標タブの種目カードと同じ出し方
+    expect(screen.getByText('重量↑')).toBeTruthy();
     expect(screen.getByText('目標 100kg')).toBeTruthy();
+  });
+
+  it('現状維持は数値を持たず、立て方だけをバッジに出す', async () => {
+    const { fromCatalog: from } = await import('../lib/exerciseCatalog');
+    const bench = from(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
+    bench.goal = { type: 'maintain', value: null };
+    localStorage.setItem(
+      'bodymake.data.v1',
+      JSON.stringify({ version: 2, settings: {}, entries: {}, exercises: [bench], workouts: {} }),
+    );
+    render(<ManagerHarness />);
+
+    // 維持は数値を持たないので、値のバッジは出ない
+    expect(screen.getByText('維持')).toBeTruthy();
+    expect(screen.queryByText(/^目標 /)).toBeNull();
   });
 
   it('カタログを器具と部位の2軸で絞り込める', () => {
@@ -632,7 +679,6 @@ describe('設定（カテゴリ別の画面遷移）', () => {
         section={route.section}
         page={route.page}
         onOpen={(sec, p) => setRoute({ section: sec, page: p ?? null })}
-        onOpenGoal={() => {}}
         onToast={() => {}}
       />
     );
@@ -657,14 +703,15 @@ describe('設定（カテゴリ別の画面遷移）', () => {
     expect(screen.getByText('データ')).toBeTruthy();
   });
 
-  it('トレーニングは マイ種目 と プリセット に分かれる', () => {
+  it('トレーニングは マイ種目 / プリセット / レビュー に分かれる', () => {
     seedExercises('ex_bench');
     render(<SettingsHarness section="training" />);
 
     // 何件あるかは開く前に見える。空の画面を開きに行かせない
-    expect(TRAINING_PAGES.map((p) => p.id)).toEqual(['exercises', 'presets']);
+    expect(TRAINING_PAGES.map((p) => p.id)).toEqual(['exercises', 'presets', 'checks']);
     expect(screen.getByText('マイ種目')).toBeTruthy();
     expect(screen.getByText('プリセット')).toBeTruthy();
+    expect(screen.getByText('トレーニング種目のレビュー')).toBeTruthy();
     expect(screen.getByText('1件')).toBeTruthy();
     expect(screen.getByText('0件')).toBeTruthy();
     // 一覧の時点では中身は出ていない
@@ -1441,6 +1488,192 @@ describe('テーマ', () => {
   });
 });
 
+describe('バックアップの読み込み', () => {
+  function SettingsHarness() {
+    const body = useBodyData();
+    return <SettingsView body={body} section="general" onOpen={() => {}} onToast={() => {}} />;
+  }
+
+  async function choose(json: unknown) {
+    const file = new File([JSON.stringify(json)], 'backup.json', { type: 'application/json' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+    // 読み込みは非同期。選ばせる面の中身が出るまで待つ（見出しは開く前から DOM にある）
+    await screen.findByRole('button', { name: 'いまの記録に足す' });
+  }
+
+  const backup = {
+    version: 2,
+    settings: {},
+    entries: { '2026-03-01': { am: { weight: 70, bodyFat: 20 } } },
+    exercises: [],
+    workouts: {},
+  };
+
+  it('置き換えかマージかを、キャンセルとは別に選ばせる', async () => {
+    render(<SettingsHarness />);
+    await choose(backup);
+
+    // confirm の [キャンセル] にマージを割り当てない。3 つとも別のボタンにする
+    expect(screen.getByRole('button', { name: 'いまの記録に足す' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'いまの記録を置き換える' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'やめる' })).toBeTruthy();
+  });
+
+  it('取り込んでも、いまのプリセットと部位別の目標を消さない', async () => {
+    // 取り込み側でキーを書き忘れると、sanitizeData が渡されなかったキーを空にしてしまう
+    seedData(['ex_bench'], {});
+    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    stored.presets = [{ id: 'p1', name: '押す日', exerciseIds: ['ex_bench'] }];
+    stored.groupGoals = { chest: 12 };
+    localStorage.setItem('bodymake.data.v1', JSON.stringify(stored));
+
+    render(<SettingsHarness />);
+    await choose(backup);
+    fireEvent.click(screen.getByRole('button', { name: 'いまの記録に足す' }));
+
+    const after = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    expect(after.presets).toHaveLength(1);
+    expect(after.groupGoals.chest).toBe(12);
+    expect(after.entries['2026-03-01']).toBeDefined();
+  });
+
+  it('バックアップのプリセットと部位別の目標を戻せる', async () => {
+    render(<SettingsHarness />);
+    await choose({
+      ...backup,
+      exercises: [{ id: 'ex_bench', name: 'ベンチプレス', group: 'chest' }],
+      presets: [{ id: 'p1', name: '押す日', exerciseIds: ['ex_bench'] }],
+      groupGoals: { chest: 15 },
+    });
+
+    // 何が入っているかを、取り込む前に読ませる
+    expect(screen.getByText(/プリセット 1件/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'いまの記録に足す' }));
+    const after = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    expect(after.presets[0].name).toBe('押す日');
+    expect(after.groupGoals.chest).toBe(15);
+  });
+
+  it('やめるを押したら、何も取り込まない', async () => {
+    render(<SettingsHarness />);
+    await choose(backup);
+
+    fireEvent.click(screen.getByRole('button', { name: 'やめる' }));
+    expect(screen.queryByText('バックアップから読み込む')).toBeNull();
+
+    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1') ?? '{"entries":{}}');
+    expect(Object.keys(stored.entries ?? {})).toHaveLength(0);
+  });
+
+  it('足すを押したら取り込む', async () => {
+    render(<SettingsHarness />);
+    await choose(backup);
+
+    fireEvent.click(screen.getByRole('button', { name: 'いまの記録に足す' }));
+    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    expect(stored.entries['2026-03-01']).toBeDefined();
+  });
+});
+
+describe('実績バッジ', () => {
+  it('体組成とトレーニングで分かれ、混ざらない', async () => {
+    const { computeBadges } = await import('../lib/badges');
+    const { computeTrainingStats, buildSessions } = await import('../lib/training');
+    const { computeStats, buildDaily, buildWeeks } = await import('../lib/derive');
+    const { DEFAULT_SETTINGS } = await import('../lib/storage');
+
+    const daily = buildDaily({});
+    const stats = computeStats(daily, buildWeeks(daily), DEFAULT_SETTINGS);
+    const badges = computeBadges(stats, computeTrainingStats(buildSessions({}, [], [])));
+
+    // ホームは切り替えに従って出し分けるので、どちらの側かを必ず持つ
+    expect(badges.every((b) => b.domain === 'body' || b.domain === 'training')).toBe(true);
+    // どちらの側も同じ数だけ用意する（片側だけ埋まらないと、切り替えが痩せて見える）
+    expect(badges.filter((b) => b.domain === 'training')).toHaveLength(30);
+    expect(badges.filter((b) => b.domain === 'body')).toHaveLength(30);
+
+    // 段階は「はじめの1回」から始める。始めたばかりでも次に届くものがある
+    const first = badges.find((b) => b.id === 'train-1');
+    expect(first).toBeTruthy();
+  });
+
+  it('押すと獲得の条件が読める（title はスマホで出ない）', async () => {
+    const { computeBadges } = await import('../lib/badges');
+    const { computeTrainingStats, buildSessions } = await import('../lib/training');
+    const { computeStats, buildDaily, buildWeeks } = await import('../lib/derive');
+    const { DEFAULT_SETTINGS } = await import('../lib/storage');
+
+    const daily = buildDaily({});
+    const stats = computeStats(daily, buildWeeks(daily), DEFAULT_SETTINGS);
+    const badges = computeBadges(stats, computeTrainingStats(buildSessions({}, [], [])));
+
+    render(<BadgeGrid badges={badges.filter((b) => b.domain === 'body')} />);
+    expect(screen.getByText(/バッジを押すと/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '質の高い減量の条件' }));
+    expect(screen.getByText(/除脂肪体重の減少が0.5kg以内/)).toBeTruthy();
+
+    // 段階のあるバッジは、いまの値と条件も出す
+    fireEvent.click(screen.getByRole('button', { name: '3日連続の条件' }));
+    expect(screen.getByText('いま 0 / 3')).toBeTruthy();
+  });
+
+  it('「次の目標」は出さない（並び順が同じことを言っている）', async () => {
+    const { computeBadges } = await import('../lib/badges');
+    const { computeTrainingStats, buildSessions } = await import('../lib/training');
+    const { computeStats, buildDaily, buildWeeks } = await import('../lib/derive');
+    const { DEFAULT_SETTINGS } = await import('../lib/storage');
+
+    const daily = buildDaily({});
+    const stats = computeStats(daily, buildWeeks(daily), DEFAULT_SETTINGS);
+    const badges = computeBadges(stats, computeTrainingStats(buildSessions({}, [], [])));
+
+    render(<BadgeGrid badges={badges.filter((b) => b.domain === 'training')} />);
+    expect(screen.queryByText('次の目標')).toBeNull();
+  });
+});
+
+describe('ダイアログの戻り方', () => {
+  it('面を差し替えているあいだは、右上が「‹ 戻る」になる', () => {
+    seedExercises('ex_bench');
+
+    function Harness() {
+      const body = useBodyData();
+      const [date] = useState(todayISO);
+      return <TrainingView body={body} date={date} />;
+    }
+
+    render(<Harness />);
+    openPicker();
+
+    // 種目を選ぶ面では「閉じる」（ここで閉じれば記録画面に戻るだけ）
+    expect(screen.getByRole('button', { name: '閉じる' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /マイ種目を増やす/ }));
+    expect(screen.getByText(/^カタログから追加/)).toBeTruthy();
+
+    // カタログの面では「‹ 戻る」。閉じるとダイアログごと消えて、選ぶ作業まで失われる
+    expect(screen.queryByRole('button', { name: '閉じる' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+    expect(screen.getByRole('button', { name: '閉じる' })).toBeTruthy();
+  });
+});
+
+describe('初期データ（シード）', () => {
+  it('デモ向けビルドでなければ投入しない', async () => {
+    const { loadData } = await import('../lib/storage');
+
+    // 投入済みフラグごと消して、初回起動と同じ状態にする
+    localStorage.clear();
+    expect(Object.keys(loadData().entries)).toHaveLength(0);
+
+    // 自分の記録として使う側に他人の数字を入れない。フラグも立てない
+    expect(localStorage.getItem('bodymake.seeded.v1')).toBeNull();
+  });
+});
+
 describe('カタログの整合性', () => {
   it('種目 ID から器具を引ける（自作種目は分からない）', async () => {
     const { catalogEquipment } = await import('../lib/exerciseCatalog');
@@ -1593,11 +1826,11 @@ describe('種目の削除', () => {
     render(
       <ExerciseManager
         exercises={[bench]}
+        sessions={[]}
         usage={new Map([[bench.id, 12]])}
         onAdd={() => {}}
         onUpdate={() => {}}
         onRemove={onRemove}
-        onOpenGoal={() => {}}
       />,
     );
 
@@ -1672,7 +1905,7 @@ describe('ホームの部位別の配分', () => {
 describe('目標画面', () => {
   function GoalsHarness({ domain = 'body' as Domain }) {
     const body = useBodyData();
-    return <GoalsView body={body} domain={domain} onOpenTrend={() => {}} />;
+    return <GoalsView body={body} domain={domain} />;
   }
 
   it('目標体重は目標画面の中で決められる（設定タブへ飛ばさない）', () => {
@@ -1695,33 +1928,46 @@ describe('目標画面', () => {
     expect(screen.getByLabelText(/目標日/)).toBeTruthy();
   });
 
-  it('目安のチップで6部位ぶんまとめて目標を入れられる', () => {
+  it('目安のチップは、開いている部位にだけ効く', () => {
     render(<GoalsHarness domain="training" />);
-    // 「胸は何セットが妥当か」を最初から決めさせない
-    fireEvent.click(screen.getByRole('button', { name: '標準 12' }));
-    // 6 部位すべての行に入る（決めていない部位が欠けとして見える形）
-    expect(screen.getAllByText('0 / 12 セット')).toHaveLength(6);
 
-    // そのあと部位ごとに変えるのは、その部位を開いた先
-    fireEvent.click(screen.getByRole('button', { name: '体幹の目標' }));
-    expect((screen.getByLabelText('体幹') as HTMLInputElement).value).toBe('12');
-    fireEvent.change(screen.getByLabelText('体幹'), { target: { value: '6' } });
-    fireEvent.blur(screen.getByLabelText('体幹'));
-    expect((screen.getByLabelText('体幹') as HTMLInputElement).value).toBe('6');
+    // 一覧には出さない。決めるのは部位を開いた先
+    expect(screen.queryByRole('button', { name: '標準 12' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '胸の目標' }));
+    // 決めるのは 1 段先の面。表示部と押す場所を分ける
+    fireEvent.click(screen.getByRole('button', { name: '部位目標を設定' }));
+    fireEvent.click(screen.getByRole('button', { name: '標準 12' }));
+    expect((screen.getByLabelText('胸') as HTMLInputElement).value).toBe('12');
+
+    // 打つ前の目安。そのあと手で変えられる
+    fireEvent.change(screen.getByLabelText('胸'), { target: { value: '6' } });
+    fireEvent.blur(screen.getByLabelText('胸'));
+    // 深い面では右上が「‹ 戻る」。閉じるとダイアログごと消えて元の面まで失われる
+    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
+    // ほかの部位は動かさない（1 か所を開いているのに 6 か所が変わると驚く）
     expect(screen.getByText('0 / 6 セット')).toBeTruthy();
+    // 目標を決めていない部位は、数値の横に「目標なし」と書く（一覧にバーは置かない）
+    expect(screen.getAllByText('0 セット（目標なし）')).toHaveLength(5);
+
+    fireEvent.click(screen.getByRole('button', { name: '胸の目標' }));
+    fireEvent.click(screen.getByRole('button', { name: '部位目標を設定' }));
     fireEvent.click(screen.getByRole('button', { name: '決めない' }));
-    expect(screen.getAllByText('0 セット')).toHaveLength(6);
+    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expect(screen.getAllByText('0 セット（目標なし）')).toHaveLength(6);
   });
 
-  it('種目の目標は目標画面で決め、その場から推移へ行ける', () => {
-    seedExercises('ex_bench');
-    const onOpenTrend = vi.fn();
+  it('種目の目標は目標画面で決め、その場から推移も見られる', () => {
+    seedData(['ex_bench'], {
+      '2026-03-01': [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+    });
 
     function Harness() {
       const body = useBodyData();
-      return <GoalsView body={body} domain="training" onOpenTrend={onOpenTrend} />;
+      return <GoalsView body={body} domain="training" />;
     }
 
     render(<Harness />);
@@ -1730,23 +1976,44 @@ describe('目標画面', () => {
     fireEvent.click(screen.getByRole('button', { name: '胸の目標' }));
     expect(screen.getByText(/この部位の種目には、まだ目標がありません/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ 胸の種目に目標を決める' }));
+    fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
     fireEvent.click(screen.getByRole('button', { name: /^ベンチプレス/ }));
     fireEvent.change(screen.getByLabelText(/ベンチプレス.*の目標$/), { target: { value: '100' } });
 
     // その部位の目標として、同じダイアログの中に並ぶ。数字にはラベルを付ける
     expect(screen.getByText('目標 100.0 kg')).toBeTruthy();
-    expect(screen.getByText(/^いま /)).toBeTruthy();
+    // カードの事実と、決めるときの材料の両方に「いま」が出る
+    expect(screen.getAllByText(/^いま /).length).toBeGreaterThan(0);
     // 到達率が出せないときも、何の値が出ていないのかは書く（記録が 3 セッション未満）
     expect(screen.getByText('到達率 —')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
-    expect(onOpenTrend).toHaveBeenCalledWith('ex_bench');
-    // 推移へ移るときは、開いていた部位を閉じてから
-    expect(screen.queryByText('週のセット数')).toBeNull();
+    /*
+     * 入口はマイ種目と同じ並び。開くときはカードの中で展開せず、
+     * 同じダイアログの面を差し替える（展開すると下の種目が押し下げられる）
+     */
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の設定/ }));
+    expect(screen.getByText('補助的に使う部位')).toBeTruthy();
+    const dlg = () => within(document.querySelector('dialog')!);
+    expect(dlg().queryByText('今週のセット数')).toBeNull();
+
+    // 深い面では、右上が「閉じる」ではなく「‹ 戻る」になる（閉じるとダイアログごと消えてしまう）
+    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+    expect(dlg().getByText('今週のセット数')).toBeTruthy();
+
+    // 推移は重ねて出す。画面ごと移ると、閉じたときに開いていた部位へ戻れない
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移を見る/ }));
+    expect(screen.getByText('元データ')).toBeTruthy();
+
+    // 閉じると、開いていた部位の面がそのまま残っている
+    const trend = [...document.querySelectorAll('dialog')].find((d) =>
+      d.textContent?.includes('元データ'),
+    )!;
+    fireEvent.click(within(trend).getByRole('button', { name: '閉じる' }));
+    expect(screen.queryByText('元データ')).toBeNull();
+    expect(dlg().getByText('今週のセット数')).toBeTruthy();
   });
 
-  it('部位の行に、量（週のセット数）と強さ（種目の到達）が並ぶ', async () => {
+  it('部位の行に、今週のセット数と種目の目標が名前つきで並ぶ', async () => {
     const { todayISO } = await import('../lib/date');
     seedData(['ex_bench'], {
       [todayISO()]: [
@@ -1762,22 +2029,61 @@ describe('目標画面', () => {
 
     function Harness() {
       const body = useBodyData();
-      return <GoalsView body={body} domain="training" onOpenTrend={() => {}} />;
+      return <GoalsView body={body} domain="training" />;
     }
     render(<Harness />);
 
     // 同じ行に、その部位の量と種目の状態がそろう（2 枚のカードを往復しない）
-    // ベンチは補助部位（肩・腕）にも積むので、空き日数はその 3 部位が今日になる
-    expect(screen.getByText('2 セット')).toBeTruthy();
-    expect(screen.getAllByText('0日空き')).toHaveLength(3);
+    // ベンチは補助部位（肩・腕）にも積むので、前回の日はその 3 部位が今日になる
+    expect(screen.getByRole('button', { name: '胸の目標' }).textContent).toContain('2 セット');
+    // 「0日空き」は余裕があるようにも読めるので、いつやったかをそのまま書く
+    expect(screen.getAllByText('前回 今日')).toHaveLength(3);
 
+    // **時間軸の違うものは名前で見分けられるようにする。**
+    // 今週のセット数は日曜に 0 へ戻り、種目の目標は週をまたいで積み上がる
+    const chestRow = screen.getByRole('button', { name: '胸の目標' });
+    expect(chestRow.textContent).toContain('今週のセット数');
+    expect(chestRow.textContent).toContain('種目の目標');
+    // 目標を決めていない種目しかない部位は「未設定」（0/0 到達 とは書かない）
+    expect(chestRow.textContent).toContain('未設定');
+    // **一覧にゲージは置かない。**幅 0 のバーは、決めていないのか壊れているのか読めない
+    expect(chestRow.querySelector('[class*="meterFill"]')).toBeNull();
+
+    // ゲージは決める場所（部位のダイアログ）にだけ置く
     fireEvent.click(screen.getByRole('button', { name: '胸の目標' }));
-    fireEvent.click(screen.getByRole('button', { name: '＋ 胸の種目に目標を決める' }));
+    // 決めるのは 1 段先の面。表示部と押す場所を分ける
+    fireEvent.click(screen.getByRole('button', { name: '部位目標を設定' }));
+    fireEvent.click(screen.getByRole('button', { name: '標準 12' }));
+    expect((document.querySelector('dialog [class*="meterFill"]') as HTMLElement).style.width).toBe(
+      `${(2 / 12) * 100}%`,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
     fireEvent.click(screen.getByRole('button', { name: /^ベンチプレス/ }));
     fireEvent.change(screen.getByLabelText(/ベンチプレス.*の目標$/), { target: { value: '100' } });
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
-    expect(screen.getByText('種目 0/1 到達')).toBeTruthy();
+    expect(screen.getByText('0 / 1 到達')).toBeTruthy();
+  });
+
+  it('週が替わって今週が 0 のときは、先週を添えて壊れていないことを示す', () => {
+    const today = todayISO();
+    const thisStart = isoAdd(today, -new Date(`${today}T12:00:00`).getDay());
+    // 先週やって、今週はまだ 0
+    seedData(['ex_bench'], {
+      [isoAdd(thisStart, -3)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+    });
+
+    function Harness() {
+      const body = useBodyData();
+      return <GoalsView body={body} domain="training" />;
+    }
+    render(<Harness />);
+
+    const chest = screen.getByRole('button', { name: '胸の目標' });
+    expect(chest.textContent).toContain('0 セット');
+    expect(chest.textContent).toContain('先週 1');
   });
 });
 
@@ -1954,6 +2260,93 @@ describe('プリセット（種目の組み合わせ）', () => {
   });
 });
 
+describe('レビュー（記録画面）', () => {
+  /**
+   * その日に置いた種目と、前の日の実績をまとめて用意する。
+   * レビューは**既定で無効**なので、明示的に有効にしてから確かめる
+   */
+  function seedChecks(ids: string[], workouts: Record<string, unknown>) {
+    seedData(ids, workouts, {}, { enabled: true });
+  }
+
+  const setsOf = (n: number) => Array.from({ length: n }, () => ({ weight: 60, reps: 5 }));
+
+  it('有効にしていなければ、何も出さない（既定は無効）', () => {
+    const today = todayISO();
+    // seedChecks と違い checks を渡さない ＝ 既定のまま
+    seedData(['ex_deadlift', 'ex_squat', 'ex_rdl'], {
+      [today]: [
+        { exerciseId: 'ex_deadlift', sets: setsOf(1) },
+        { exerciseId: 'ex_squat', sets: setsOf(1) },
+        { exerciseId: 'ex_rdl', sets: setsOf(1) },
+      ],
+    });
+    render(<Harness />);
+    expect(screen.queryByText('レビュー')).toBeNull();
+    expect(screen.queryByText(/見積もり時間/)).toBeNull();
+    // 回復はレビューとは別の機能なので、有効化に関係なく出る
+    expect(screen.getByLabelText('回復の状態を見る')).toBeTruthy();
+  });
+
+  it('種目が無い日はカードごと出ない', () => {
+    seedExercises('ex_deadlift');
+    render(<Harness />);
+    expect(screen.queryByText('レビュー')).toBeNull();
+  });
+
+  it('種目を置くと、今日の負荷・前日までの疲れ・見積もり時間が出る', () => {
+    const today = todayISO();
+    seedChecks(['ex_deadlift'], { [today]: [{ exerciseId: 'ex_deadlift', sets: setsOf(3) }] });
+    render(<Harness />);
+
+    // 見積もり時間は常に出す。3 セット × 4.5 分（デッドリフトはカタログで上書きされている）
+    expect(screen.getByText(/見積もり時間 13\.5分/)).toBeTruthy();
+
+    // 警告が無ければカードごと出さない。枠だけが毎日あると読み飛ばされる
+    expect(screen.queryByText('レビュー')).toBeNull();
+    // 負担のゲージも内訳も置かない
+    expect(screen.queryByText('1日の腰椎への負担')).toBeNull();
+  });
+
+  it('指摘が出るとカードが現れ、消せば また隠れる', () => {
+    const today = todayISO();
+    seedChecks(['ex_deadlift', 'ex_squat'], {
+      [isoAdd(today, -1)]: [{ exerciseId: 'ex_deadlift', sets: setsOf(3) }],
+      [today]: [{ exerciseId: 'ex_squat', sets: setsOf(3) }],
+    });
+    render(<Harness />);
+
+    expect(screen.getByText('レビュー')).toBeTruthy();
+    expect(screen.getByText('1件')).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText('軸荷重種目が連日になっていますを許容済みにする'));
+    expect(screen.queryByText('レビュー')).toBeNull();
+    // 時間は指摘と無関係に残る
+    expect(screen.getByText(/見積もり時間/)).toBeTruthy();
+  });
+
+  it('値を打つ前でも、並べた時点で検算できる', () => {
+    const today = todayISO();
+    // セット行はあるが値は空。実績としては数えないが、設計としては置かれている
+    seedChecks(['ex_deadlift', 'ex_squat'], {
+      [isoAdd(today, -1)]: [{ exerciseId: 'ex_deadlift', sets: setsOf(3) }],
+      [today]: [{ exerciseId: 'ex_squat', sets: [{ weight: null, reps: null }] }],
+    });
+    render(<Harness />);
+    expect(screen.getByText('軸荷重種目が連日になっています')).toBeTruthy();
+  });
+
+  it('過去の日は「やった事実」だけを数える（並べただけの日は数えない）', () => {
+    const today = todayISO();
+    seedChecks(['ex_deadlift'], {
+      [isoAdd(today, -1)]: [{ exerciseId: 'ex_deadlift', sets: [{ weight: null, reps: null }] }],
+      [today]: [{ exerciseId: 'ex_deadlift', sets: setsOf(3) }],
+    });
+    render(<Harness />);
+    expect(screen.queryByText('軸荷重種目が連日になっています')).toBeNull();
+  });
+});
+
 describe('プリセット（設定から見る・編集する）', () => {
   function PresetHarness() {
     const body = useBodyData();
@@ -2039,6 +2432,32 @@ describe('プリセット（設定から見る・編集する）', () => {
     expect(stored.presets.map((p: { name: string }) => p.name)).toEqual(['押す日', '脚の日']);
   });
 
+  it('種目を選ぶ面はダイアログで出し、選んでも位置が動かない', () => {
+    seedPresets();
+    render(<PresetHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
+    const dialog = () => within(document.querySelector('dialog')!);
+
+    // 入っている種目も ✓ で残す。消すと後ろが詰まって、押す場所が動く
+    fireEvent.click(dialog().getByText(/^＋ ベンチプレス/));
+    expect(dialog().getByText(/^✓ ベンチプレス/)).toBeTruthy();
+
+    // 最後の 1 つを外すのは削除と同じ意味なので、ここでは受け付けない
+    expect(
+      dialog()
+        .getByText(/^✓ ベンチプレス/)
+        .closest('button')!.disabled,
+    ).toBe(true);
+
+    fireEvent.click(dialog().getByText(/^＋ スクワット/));
+    expect(
+      dialog()
+        .getByText(/^✓ ベンチプレス/)
+        .closest('button')!.disabled,
+    ).toBe(false);
+  });
+
   it('作りながら、カタログからマイ種目を増やせる', () => {
     seedPresets();
     render(<PresetHarness />);
@@ -2052,9 +2471,10 @@ describe('プリセット（設定から見る・編集する）', () => {
     // （作りかけは画面を離れると消えるので、マイ種目の画面へ往復させられない）
     expect(screen.queryByText('＋ ディップス')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '＋ マイ種目を増やす' }));
-    const catalog = within(document.querySelector('dialog')!);
-    fireEvent.click(catalog.getByText('＋ ディップス'));
-    fireEvent.click(catalog.getByRole('button', { name: '閉じる' }));
+
+    // ダイアログは重ねず、同じ面を差し替える。戻ると元の選ぶ面に戻る
+    fireEvent.click(screen.getByText('＋ ディップス'));
+    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
 
     // 増えた種目はそのまま一覧に出る。プリセットに入れるのは選んでから
     fireEvent.click(screen.getByText('＋ ディップス'));
@@ -2267,7 +2687,7 @@ describe('画面の位置（タブと下位画面）', () => {
     expect(screen.getByLabelText('記録する日付')).toBeTruthy();
   });
 
-  it('マイ種目の行から、その種目の目標へ飛べる', () => {
+  it('マイ種目の目標は、マイ種目のまま決められる', () => {
     seedExercises('ex_bench');
     render(<App />);
 
@@ -2275,24 +2695,19 @@ describe('画面の位置（タブと下位画面）', () => {
     fireEvent.click(screen.getByText('トレーニング'));
     fireEvent.click(screen.getByText('マイ種目'));
 
-    // まだ目標が無い種目は、決めるところまで連れて行く
+    // 目標タブへ連れて行かない。見ていた画面のまま、ダイアログで決める
     fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の目標を決める/ }));
-    expect(window.location.hash).toBe('#goals');
+    expect(window.location.hash).toBe('#settings/training/exercises');
+    expect(screen.getByText(/ベンチプレス.*の目標$/)).toBeTruthy(); // ダイアログの見出し
     expect(screen.getByLabelText(/ベンチプレス.*の目標$/)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText(/ベンチプレス.*の目標$/), { target: { value: '100' } });
+    expect(screen.getByText('重量↑')).toBeTruthy();
+    expect(screen.getByText('目標 100kg')).toBeTruthy();
+
+    // 閉じると一覧に戻る（行の中で展開しない）
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-
-    // 決めたあとは、同じ入口がその目標を開く場所になる
-    fireEvent.click(screen.getByRole('tab', { name: '設定' }));
-    fireEvent.click(screen.getByText('トレーニング'));
-    fireEvent.click(screen.getByText('マイ種目'));
-    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の目標を変える/ }));
-
-    expect(window.location.hash).toBe('#goals');
-    // その種目の行が開いた状態で出る（部位を畳んだまま探させない）
-    expect(screen.getByLabelText(/ベンチプレス.*の目標$/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: '目標を外す' })).toBeTruthy();
+    expect(screen.queryByLabelText(/ベンチプレス.*の目標$/)).toBeNull();
   });
 
   it('目標タブも体組成／トレーニングの切り替えに従う', () => {
@@ -2337,13 +2752,13 @@ describe('モーダル', () => {
 describe('種目の目標を決める', () => {
   function GoalsHarness() {
     const body = useBodyData();
-    return <GoalsView body={body} domain="training" onOpenTrend={() => {}} />;
+    return <GoalsView body={body} domain="training" />;
   }
 
-  /** 部位を開いてから、その部位の種目に目標を決める（決める場所は部位の中） */
+  /** 部位を開いてから、その部位の種目に目標を足す（決める場所は部位の中） */
   function openEditor(group = '胸', exercise = /^ベンチプレス/) {
     fireEvent.click(screen.getByRole('button', { name: `${group}の目標` }));
-    fireEvent.click(screen.getByRole('button', { name: `＋ ${group}の種目に目標を決める` }));
+    fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
     fireEvent.click(screen.getByRole('button', { name: exercise }));
   }
 
@@ -2375,13 +2790,40 @@ describe('種目の目標を決める', () => {
     expect((screen.getByLabelText(/ベンチプレス.*の目標$/) as HTMLInputElement).value).toBe('');
   });
 
+  it('立て方を選べる（維持 / 重量 / 挙上量 / 回数）', () => {
+    seedExercises('ex_bench');
+    render(<GoalsHarness />);
+    openEditor();
+
+    const types = within(screen.getByRole('group', { name: /ベンチプレス.*の目標の種類/ }));
+    ['維持', '重量', '挙上量', '回数'].forEach((label) =>
+      expect(types.getByRole('button', { name: label })).toBeTruthy(),
+    );
+
+    // 維持は数値を持たない。選んだ時点で目標として成立する
+    fireEvent.click(types.getByRole('button', { name: '維持' }));
+    expect(screen.queryByLabelText(/ベンチプレス.*の目標$/)).toBeNull();
+
+    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    expect(stored.exercises[0].goal).toEqual({ type: 'maintain', value: null });
+
+    // 挙上量に切り替えると、また数値を決める形に戻る
+    fireEvent.click(types.getByRole('button', { name: '挙上量' }));
+    expect(screen.getByLabelText(/ベンチプレス.*の目標$/)).toBeTruthy();
+    expect(screen.getByText(/総挙上量（有効重量 × レップ数の合計）/)).toBeTruthy();
+  });
+
   it('秒で数える種目には、重量の目標を出さない', () => {
     seedExercises('ex_plank');
     render(<GoalsHarness />);
     openEditor('体幹', /^プランク/);
 
     // 重量を記録できない種目に、届きようのない目標を出さない
-    expect(screen.queryByRole('group', { name: /プランクの目標の種類/ })).toBeNull();
+    const types = within(screen.getByRole('group', { name: /プランクの目標の種類/ }));
+    expect(types.queryByRole('button', { name: '重量' })).toBeNull();
+    expect(types.queryByRole('button', { name: '挙上量' })).toBeNull();
+    expect(types.getByRole('button', { name: '秒数' })).toBeTruthy();
+    expect(types.getByRole('button', { name: '維持' })).toBeTruthy();
     expect(screen.getByText('秒')).toBeTruthy();
     expect(screen.getByText(/最大レップ数で判定/)).toBeTruthy();
   });

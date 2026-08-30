@@ -7,6 +7,14 @@
   left: 0;
   z-index: 30;
   display: flex;
+  /*
+   * **地は画面いっぱい、ボタンは真ん中に寄せる。**
+   *
+   * バー自体を 720px に狭めると、広い画面で左右に地の切れ目ができて板が乗って見える
+   * （ヘッダを左右いっぱいに伸ばしているのと同じ理由）。
+   * 伸ばすのは地だけにして、押す場所は指の届く幅で止める。
+   */
+  justify-content: center;
   padding-bottom: env(safe-area-inset-bottom);
   border-top: 1px solid var(--border);
   /*
@@ -17,7 +25,13 @@
 }
 
 .tab {
-  flex: 1;
+  /*
+   * 狭い画面では均等に広がり、広い画面では 120px で止まる。
+   * 4 つを 720px いっぱいに散らすと、隣のタブまで指を運ぶ距離が伸びるだけで、
+   * どれが押せるまとまりなのかも読めなくなる
+   */
+  flex: 1 1 0;
+  max-width: 120px;
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -74,7 +74,6 @@ export function App() {
    * URL には載せない。これは「いま押したから開く」ための一度きりの指名で、
    * 位置（どの画面を見ているか）ではない。開いたら捨てる
    */
-  const [goalFocus, setGoalFocus] = useState<string | null>(null);
 
   /*
    * 切り替えると画面の中身が丸ごと入れ替わる。
@@ -211,15 +210,7 @@ export function App() {
           />
         )}
 
-        {route.tab === 'goals' && (
-          <GoalsView
-            body={body}
-            domain={domain}
-            onOpenTrend={(exerciseId) => open('home', 'trend', exerciseId)}
-            focusExerciseId={goalFocus}
-            onFocusDone={() => setGoalFocus(null)}
-          />
-        )}
+        {route.tab === 'goals' && <GoalsView body={body} domain={domain} />}
 
         {route.tab === 'records' && (
           <RecordsView body={body} date={date} onDateChange={setDate} domain={domain} />
@@ -231,12 +222,6 @@ export function App() {
             section={route.section}
             page={route.param}
             onOpen={(section, page) => open('settings', section, page ?? null)}
-            onOpenGoal={(exerciseId) => {
-              // 種目の目標はトレーニング側の話。切り替えごと連れて行く
-              changeDomain('training');
-              setGoalFocus(exerciseId);
-              open('goals');
-            }}
             onToast={toast.show}
           />
         )}

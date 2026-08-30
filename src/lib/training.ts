@@ -4,6 +4,7 @@ import type {
   ExercisePoint,
   GoalType,
   MuscleGroup,
+  RepUnit,
   SessionExercise,
   SessionPoint,
   SetPoint,
@@ -491,6 +492,14 @@ export interface TrainingStats {
   daysSinceGroup: Record<MuscleGroup, number | null>;
   /** 今週の部位別セット数。0 の部位は daysSinceGroup で「何日空いているか」を見る */
   thisWeekSetsByGroup: Record<MuscleGroup, number>;
+  /**
+   * 先週の部位別セット数。
+   *
+   * 今週が 0 のときに添えるためだけに持つ。**週は日曜に 0 へ戻る**ので、
+   * 日曜の朝は全部位が 0 になり、それだけを見せると壊れているように読める。
+   * 隣に先週の値があれば、空なのが週替わりのせいだと分かる。
+   */
+  lastWeekSetsByGroup: Record<MuscleGroup, number>;
   /** 直近 RECENT_DAYS 日に自己最高を更新した種目数 */
   recentBests: number;
   /** STALE_WEEKS 週以上、トップセットの重量が動いていない種目数 */
@@ -501,6 +510,14 @@ export interface TrainingStats {
   fullBodyWeeks: number;
   thisWeekDays: number;
   lastWeekDays: number;
+  /** 週 3 回以上できた週の数 */
+  weeks3Plus: number;
+  /** 1 週でいちばん多かった実施日数 */
+  bestWeekDays: number;
+  /** これまでにやったことのある種目の種類数 */
+  exerciseKinds: number;
+  /** 初回から今日までの日数（1 日目を 1 と数える） */
+  spanDays: number;
 }
 
 const ALL_GROUPS = Object.keys(EMPTY_GROUPS) as MuscleGroup[];
@@ -540,12 +557,17 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
     weeklyAverage: null,
     daysSinceGroup: noGroups,
     thisWeekSetsByGroup: { ...EMPTY_GROUPS },
+    lastWeekSetsByGroup: { ...EMPTY_GROUPS },
     recentBests: 0,
     stalled: 0,
     bestWeeklyStreak: 0,
     fullBodyWeeks: 0,
     thisWeekDays: 0,
     lastWeekDays: 0,
+    weeks3Plus: 0,
+    bestWeekDays: 0,
+    exerciseKinds: 0,
+    spanDays: 0,
   };
   if (sessions.length === 0) return empty;
 
@@ -554,10 +576,14 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
   let best = 0;
   let run = 0;
   let fullBodyWeeks = 0;
+  let weeks3Plus = 0;
+  let bestWeekDays = 0;
   for (const week of weeks) {
     run = week.days >= 2 ? run + 1 : 0;
     if (run > best) best = run;
     if (ALL_GROUPS.every((g) => week.setsByGroup[g] >= TRAINED_SETS)) fullBodyWeeks++;
+    if (week.days >= 3) weeks3Plus++;
+    if (week.days > bestWeekDays) bestWeekDays = week.days;
   }
 
   // 部位ごとの最終実施日。偏りは「合計」ではなく「触ったかどうか」でしか見えない
@@ -615,8 +641,14 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
     sessions: sessions.length,
     firstDate,
     weeklyAverage: sessions.length / elapsedWeeks,
+    weeks3Plus,
+    bestWeekDays,
+    // 種目の種類は「何を試したか」の事実。挙げた量ではないので種目をまたいでも数えられる
+    exerciseKinds: exerciseIds.size,
+    spanDays: diffDays(today, firstDate) + 1,
     daysSinceGroup,
     thisWeekSetsByGroup: weekOf(thisStart)?.setsByGroup ?? { ...EMPTY_GROUPS },
+    lastWeekSetsByGroup: weekOf(lastStart)?.setsByGroup ?? { ...EMPTY_GROUPS },
     recentBests,
     stalled,
     bestWeeklyStreak: best,
@@ -637,7 +669,8 @@ export interface ExerciseGoal {
   type: GoalType;
   unit: string;
   digits: number;
-  target: number;
+  /** 現状維持は数値を決めないので null */
+  target: number | null;
   current: number | null;
   /** 最初の 3 セッションの平均 */
   baseline: number | null;
@@ -648,7 +681,10 @@ export interface ExerciseGoal {
 }
 
 /**
- * 目標の現在地。
+ * 目標の現在地に使う値。
+ *
+ * 挙上量目標はその日の総挙上量。現状維持は「その種目の主指標」で見る
+ * （挙上量が出せる種目は挙上量、秒で数える種目は秒数）。
  *
  * 重量目標は **記録した重量のうち最大のもの**で測る。
  * 打った数字と同じ土俵にしないと、ダンベルカールに「30kg」と入れたとき
@@ -659,8 +695,26 @@ export interface ExerciseGoal {
  *
  * 回数目標はそのセッションの最大レップ数（自重種目・時間種目で使う）。
  */
-const currentOf = (type: GoalType, p: ExercisePoint) =>
-  type === 'weight' ? (p.top?.weight ?? null) : p.maxReps;
+const currentOf = (type: GoalType, repUnit: RepUnit, p: ExercisePoint): number | null => {
+  switch (type) {
+    case 'weight':
+      return p.top?.weight ?? null;
+    case 'volume':
+      return p.volume > 0 ? p.volume : null;
+    case 'reps':
+      return p.maxReps;
+    case 'maintain':
+      return repUnit === 'seconds' ? p.maxReps : p.volume > 0 ? p.volume : null;
+  }
+};
+
+/** 目標の単位。維持は主指標に合わせる */
+function goalUnitOf(type: GoalType, repUnit: RepUnit): string {
+  if (type === 'weight') return 'kg';
+  if (type === 'volume') return 'kg';
+  if (type === 'maintain') return repUnit === 'seconds' ? '秒' : 'kg';
+  return repUnit === 'seconds' ? '秒' : '回';
+}
 
 export function exerciseGoals(
   sessions: readonly SessionPoint[],
@@ -674,7 +728,7 @@ export function exerciseGoals(
 
     const history = exerciseHistory(sessions, exercise.id);
     const values = history
-      .map((h) => currentOf(goal.type, h.point))
+      .map((h) => currentOf(goal.type, exercise.repUnit, h.point))
       .filter((v): v is number => v != null);
 
     const current = values.length ? values[values.length - 1]! : null;
@@ -683,7 +737,8 @@ export function exerciseGoals(
         ? values.slice(0, BASELINE_SESSIONS).reduce((a, b) => a + b, 0) / BASELINE_SESSIONS
         : null;
 
-    const reached = current != null && current >= goal.value;
+    // 現状維持は到達するものではない。数値を決めていないので、進捗も出さない
+    const reached = goal.value != null && current != null && current >= goal.value;
 
     /*
      * 到達率は「開始値 → 目標」で測る。ただし **到達していれば無条件で満杯**。
@@ -693,18 +748,21 @@ export function exerciseGoals(
      * 目標を低く決め直した場合と、決めた時点ですでに超えていた場合の両方で起きる。
      * 到達は current と目標だけで決まる事実なので、そちらにバーを合わせる。
      */
-    const progress = reached
-      ? 1
-      : current != null && baseline != null && goal.value > baseline
-        ? Math.min(1, Math.max(0, (current - baseline) / (goal.value - baseline)))
-        : null;
+    const progress =
+      goal.value == null
+        ? null
+        : reached
+          ? 1
+          : current != null && baseline != null && goal.value > baseline
+            ? Math.min(1, Math.max(0, (current - baseline) / (goal.value - baseline)))
+            : null;
 
     goals.push({
       exerciseId: exercise.id,
       name: exercise.name,
       group: exercise.group,
       type: goal.type,
-      unit: goal.type === 'weight' ? 'kg' : exercise.repUnit === 'seconds' ? '秒' : '回',
+      unit: goalUnitOf(goal.type, exercise.repUnit),
       digits: goal.type === 'weight' ? 1 : 0,
       target: goal.value,
       current,

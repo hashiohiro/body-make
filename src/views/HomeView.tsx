@@ -52,6 +52,16 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
   // 体組成の記録カレンダーに、トレーニングした日を重ねる
   const trainingDates = new Set(sessions.map((x) => x.date));
 
+  /*
+   * 実績もいまの側だけを出す。
+   * 体重を測っただけの日に「トレ100回まであと少し」が並ぶと、
+   * どちらの話をしている画面なのか読めなくなる。
+   */
+  const badges = useMemo(
+    () => computeBadges(stats, trainingStats).filter((b) => b.domain === domain),
+    [stats, trainingStats, domain],
+  );
+
   const trendLink = (label: string) => (
     <button type="button" className={`${ui.card} ${ui.linkRow}`} onClick={onOpenTrend}>
       <span>{label}</span>
@@ -117,12 +127,19 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
         </>
       )}
 
-      {/* 連続記録とバッジはどちらの側の話でもあるので、切り替えに関わらず出す */}
-      {daily.length > 0 && (
+      {/* 記録の継続は体組成の記録カレンダー。トレーニング側は今週の 7 日を上のカードが持つ */}
+      {domain === 'body' && daily.length > 0 && (
         <>
           <p className={ui.sectionLabel}>実績</p>
           <StreakStrip daily={daily} stats={stats} trainingDates={trainingDates} />
-          <BadgeGrid badges={computeBadges(stats, trainingStats)} />
+          <BadgeGrid badges={badges} />
+        </>
+      )}
+
+      {domain === 'training' && trainingStats.sessions > 0 && (
+        <>
+          <p className={ui.sectionLabel}>実績</p>
+          <BadgeGrid badges={badges} />
         </>
       )}
     </>

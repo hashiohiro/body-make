@@ -7,11 +7,6 @@ interface Props {
   body: BodyData;
   /** 体組成／トレーニングの切り替えはヘッダが持つ */
   domain: Domain;
-  /** 種目の目標の行から、その種目の推移へ */
-  onOpenTrend: (exerciseId: string) => void;
-  /** マイ種目から名指しで開かれた種目 */
-  focusExerciseId?: string | null;
-  onFocusDone?: (() => void) | undefined;
 }
 
 /**
@@ -21,13 +16,7 @@ interface Props {
  * 「あと 3.2kg」を見る場所と決め直す場所が離れたままになる。
  * 設定に残すのは、滅多に変えない定義（種目そのもの・表示・データ）だけ。
  */
-export function GoalsView({
-  body,
-  domain,
-  onOpenTrend,
-  focusExerciseId = null,
-  onFocusDone,
-}: Props) {
+export function GoalsView({ body, domain }: Props) {
   const {
     data,
     stats,
@@ -50,9 +39,6 @@ export function GoalsView({
         sessions={sessions}
         onSetGroupGoal={setGroupGoal}
         onUpdate={upsertExercise}
-        onOpenTrend={onOpenTrend}
-        focusExerciseId={focusExerciseId}
-        onFocusDone={onFocusDone}
       />
     );
   }

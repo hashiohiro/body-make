@@ -39,7 +39,7 @@ export interface Settings {
 }
 
 export interface AppData {
-  version: 2;
+  version: 4;
   settings: Settings;
   /** 観測レイヤー（測る） */
   entries: Entries;
@@ -51,6 +51,15 @@ export interface AppData {
   groupGoals: GroupGoals;
   /** よくやる種目の組み合わせ。名前を付けて呼び出す */
   presets: Preset[];
+  /** 構成チェックの閾値 */
+  checks: CheckSettings;
+  /**
+   * 許容済みにした警告のキー（`ルール|スコープ`）。
+   *
+   * 意図して受け入れた警告（ショルダープレスの腰部負荷を承知で置く等）が毎回出続けると、
+   * 警告そのものが読み飛ばされるようになる。抑制できないチェックは使われない。
+   */
+  suppressed: string[];
 }
 
 /**
@@ -177,11 +186,19 @@ export interface SubGroup {
   weight: number;
 }
 
-export type GoalType = 'weight' | 'reps';
+/**
+ * 種目ごとの目標の立て方。
+ *
+ * 数値を決めるものと、**決めないもの（現状維持）**がある。
+ * 種目によっては「これ以上は伸ばさない、いまの水準を保てればいい」が答えになる。
+ * 全部の種目に数値を求めると、そう思っている種目にも未達の顔をさせることになる。
+ */
+export type GoalType = 'maintain' | 'weight' | 'volume' | 'reps';
 
 export interface ExerciseTarget {
   type: GoalType;
-  value: number;
+  /** 現状維持は数値を持たない */
+  value: number | null;
 }
 
 /**
@@ -232,6 +249,57 @@ export interface Exercise {
   /** 任意の目標。重量で決めるか回数で決めるかを種目ごとに選ぶ */
   goal: ExerciseTarget | null;
   order: number;
+
+  /* ---- ここから下は構成チェック（lib/check.ts）だけが読む ---- */
+
+  /**
+   * 軸荷重種目か。背骨に荷重を通す種目（デッドリフト・スクワット・RDL・
+   * ベントオーバーロウ・ショルダープレスなど）。
+   *
+   * **大小ではなく真偽で持つ。** 以前は 0〜10 の負荷値で持っていたが、
+   * 1 本の数字に時定数の違う 4 つの層（起立筋 24〜72h / 神経系 48〜96h /
+   * 椎間板・靭帯 数日〜週 / 骨 週〜月）を代表させていて、どの層としても正しくなかった。
+   * アプリが言えるのは **軸荷重をいつ置いたか** までで、腰の状態ではない。
+   */
+  axial: boolean;
+  /**
+   * 1 セットあたりの所要時間（分）。**null なら `CheckSettings.minutesPerSet` に落ちる。**
+   *
+   * 休憩が明らかに長い高重量コンパウンドだけ上書きする。
+   * 基本時間（ラック確保・プレートの付け替え）は別に持たない。
+   * その固定コストは「この種目の 1 セットは長い」に畳めるので、パラメータが 1 つで済む。
+   */
+  minutesPerSet: number | null;
+}
+
+/**
+ * トレーニング種目のレビューの設定。
+ *
+ * 体組成の目標（`Settings`）とも部位別セット数の目標（`GroupGoals`）とも別のレイヤー。
+ * あちらは「どこへ向かうか」で、こちらは「明らかにおかしい構成を弾く線」。
+ *
+ * **疲労の量を持たない。** 軸荷重も前腕も真偽値で、判定は記録した日付から出る。
+ * 推定した量を閾値と比べるのをやめたので、調整する係数は時間まわりだけになった。
+ */
+export interface CheckSettings {
+  /**
+   * レビューを表示するか。**既定は false。**
+   *
+   * 負荷値も所要時間も、入れ終わるまでは判定が当たらない。
+   * 使う気になったときに本人が入れるもので、勝手に出はじめると
+   * 「よく分からない指摘が出るもの」として最初に閉じられる。
+   */
+  enabled: boolean;
+  /** 1 セッションの上限（分）。null なら時間を見ない */
+  sessionMinutes: number | null;
+  /**
+   * 1 セットあたりの時間（分）の既定値。種目が null のときここに落ちる。
+   *
+   * **時間のパラメータはこれ 1 つ。** 種目ごとに分数を配ると、根拠のない値が
+   * 根拠ありげに並ぶうえ、ずれたときに 75 個のどこを直すか決められなくなる。
+   * 既定を 1 つにしておけば、系統的なズレはこの数字 1 つで直る。
+   */
+  minutesPerSet: number;
 }
 
 export interface WorkSet {

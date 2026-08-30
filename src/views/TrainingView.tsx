@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react';
+import { CheckCard } from '../components/training/CheckCard';
+import { RecoveryCard } from '../components/training/RecoveryCard';
 import { ExerciseCard } from '../components/training/ExerciseCard';
 import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialog';
 import { ExercisePicker } from '../components/training/ExercisePicker';
+import { GoalEditor } from '../components/training/GoalEditor';
+import { Modal } from '../components/Modal';
 import { OrderList } from '../components/training/OrderList';
 import { PresetCard } from '../components/training/PresetCard';
 import { groupsOf } from '../lib/exerciseCatalog';
@@ -20,6 +24,8 @@ export function TrainingView({ body, date }: Props) {
   const {
     data,
     sessions,
+    checkHistory,
+    suppressWarning,
     addDayExercise,
     removeDayExercise,
     reorderDayExercises,
@@ -31,6 +37,7 @@ export function TrainingView({ body, date }: Props) {
     addExercises,
     savePreset,
     removePreset,
+    upsertExercise,
   } = body;
 
   const dayEntries = data.workouts[date] ?? [];
@@ -44,10 +51,13 @@ export function TrainingView({ body, date }: Props) {
   const session = useMemo(() => sessions.find((x) => x.date === date) ?? null, [sessions, date]);
 
   const [detailId, setDetailId] = useState<string | null>(null);
+  /** 目標を開いている種目。記録しながらでも決め直せるように */
+  const [goalId, setGoalId] = useState<string | null>(null);
   /** 並べ替えで掴んでいる種目。カードは大きいので、掴んでいる間だけ一覧に畳む */
   const [moving, setMoving] = useState<string | null>(null);
 
   const usedIds = new Set(dayEntries.map((e) => e.exerciseId));
+  const goalExercise = goalId ? (byId.get(goalId) ?? null) : null;
 
   // 名前を付けて残した組み合わせ。中身の部位は、そのつどマイ種目から引き直す
   const presets = useMemo(
@@ -95,6 +105,28 @@ export function TrainingView({ body, date }: Props) {
         onSave={savePreset}
         onRemove={removePreset}
       />
+
+      {/*
+        レビューが先、回復が後。
+        レビューは**いま組んだものへの指摘**なので、種目カードのすぐ上にあるのが素直。
+        回復は入口 1 行だけなので、下に置いても埋もれない。
+
+        回復は種目が 1 つも無い日でも出す
+        （何も置いていないときこそ「どこが回復しているか」を知りたい）。
+      */}
+      {moving == null && (
+        <CheckCard
+          date={date}
+          entries={dayEntries}
+          exercises={data.exercises}
+          history={checkHistory}
+          checks={data.checks}
+          suppressed={data.suppressed}
+          onSuppress={suppressWarning}
+        />
+      )}
+
+      {moving == null && <RecoveryCard date={date} history={checkHistory} />}
 
       {/*
         並べ替え中は、カードの代わりにその日の種目だけを一覧で出す。
@@ -156,6 +188,7 @@ export function TrainingView({ body, date }: Props) {
               // 1 種目しか無い日に、動かしようのない操作を出さない
               onMove={dayEntries.length > 1 ? () => setMoving(entry.exerciseId) : undefined}
               onOpenDetail={() => setDetailId(entry.exerciseId)}
+              onOpenGoal={() => setGoalId(entry.exerciseId)}
               onCopyPrevious={() => {
                 const prev = previousPoint(sessions, entry.exerciseId, date);
                 if (!prev) return;
@@ -179,6 +212,12 @@ export function TrainingView({ body, date }: Props) {
         onToggle={toggle}
         onAddExercises={addExercises}
       />
+
+      {goalExercise && (
+        <Modal open title={`${goalExercise.name}の目標`} onClose={() => setGoalId(null)}>
+          <GoalEditor exercise={goalExercise} sessions={sessions} onUpdate={upsertExercise} />
+        </Modal>
+      )}
 
       <ExerciseDetailDialog
         open={detailId != null}

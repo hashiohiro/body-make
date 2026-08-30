@@ -639,21 +639,63 @@
   font-weight: 600;
 }
 
-.boardSets {
+/*
+ * 部位を開いた面の概要行。**区切り線は引かない。**
+ * 部位目標のかたまりは「今週のセット数 → メーター → 注記 → 設定ボタン」まで続くので、
+ * 途中で線を入れると、そこで話が終わったように見える。
+ */
+.groupSummary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /*
+   * メーターとの間隔は **種目カードと同じ 8px**。
+   * `.statRow` と同じく下マージンを 2px にして、`.meter` の上マージン 8px と相殺させる。
+   * padding で空けると相殺が効かず、部位側だけ間隔が広くなる。
+   */
+  margin: 10px 0 2px;
+  font-size: 13px;
+
+  > span:last-child {
+    margin-left: auto;
+  }
+}
+
+/*
+ * 部位目標のかたまりの終わり。ここで初めて線を引き、種目の目標と分ける。
+ * 線のあとに余白を取る。線に見出しが貼り付くと、切れ目として読めない
+ */
+.groupSummaryEnd {
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 行の中の 1 段。名前と値だけを持ち、バーは持たない */
+.boardLine {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   font-size: 12px;
+}
+
+/* 何を数えているかの名前。**時間軸はこの名前の中に入れる** */
+.boardLabel {
+  flex: none;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.boardValue {
+  margin-left: auto;
+  text-align: right;
   color: var(--ink-2);
   @include tabular;
 }
 
-.boardFoot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  .meter {
-    flex: 1;
-    margin: 0;
-  }
+/* 今週が 0 のときだけ添える先週の値。主役ではないので落とす */
+.boardRef {
+  color: var(--ink-muted);
 }
 
 /* 開くことの合図。設定のカテゴリ一覧と同じ記号を使う */
@@ -664,15 +706,10 @@
   color: var(--ink-muted);
 }
 
-/*
- * 右端の状態。**幅を固定する。**
- * 文字数に合わせて伸縮させると、行ごとにメーターの長さが変わって
- * 部位どうしの進み具合を目で比べられなくなる
- */
+/* 見出しの右。最終実施からの日数（メーターと同じ行に置かないので幅は固定しない） */
 .boardStatus {
-  flex: 0 0 8em;
+  flex: none;
   font-size: 11px;
-  text-align: right;
   white-space: nowrap;
   color: var(--ink-muted);
   @include tabular;
@@ -871,11 +908,6 @@
 
 /* ---- 目標画面 ---- */
 
-/* 目安のチップ。下の 6 部位ぶんの入力と組にして読ませる */
-.presetRow {
-  margin-bottom: 10px;
-}
-
 /* 種目カードの下に並べる入口（推移・変更／目標・設定・削除） */
 .itemActions {
   display: flex;
@@ -1053,6 +1085,144 @@
   font-size: 11px;
 }
 
-.presetPicker {
-  margin-top: 8px;
+/* --- 構成チェック ------------------------------------------------- *
+ *
+ * 警告はアプリが初めて持つ否定的な表示。既存の good / bad の語彙とは別に、
+ * --warning の左罫だけで示す。面を塗ると、開くたびに叱られている画面になる。
+ */
+.warnList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.warnItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--warning);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-xs);
+}
+
+.warnBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.warnMessage {
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.5;
+}
+
+/* 改善のしかた。理由とは別の段に置く（事実と、変えるとどうなるかは別のもの） */
+.warnFix {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--accent);
+}
+
+/* 理由は本文と同じ扱い。小さくはするが、畳まないし薄くしすぎない */
+.warnDetail {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+/*
+ * 見積もり時間。**カードにしない。** 1 行のために枠を作ると、種目カードがそのぶん下へ流れる。
+ * カードとカードのあいだに置く注記（sectionLabel）と同じ扱いにする。
+ */
+.checkTime {
+  margin: 0 2px 12px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  @include tabular;
+}
+
+.checkFields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.checkFields > label {
+  flex: 1 1 120px;
+}
+
+.suppressRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  font-size: 12px;
+  border-top: 1px solid var(--row-line);
+}
+
+.suppressName {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- 回復 --------------------------------------------------------- */
+.recoverySummary {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ink-muted);
+  text-align: right;
+}
+
+.recoveryRow {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 56px;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px 0;
+  font-size: 12px;
+  @include tabular;
+}
+
+.recoveryRow + .recoveryRow {
+  border-top: 1px solid var(--row-line);
+}
+
+.recoveryName {
+  font-weight: 550;
+}
+
+.recoveryWait {
+  text-align: right;
+  color: var(--warning);
+  font-weight: 620;
+}
+
+.recoveryReady {
+  text-align: right;
+  color: var(--ink-muted);
+}
+
+/*
+ * 根拠。**ゲージの列から右端まで使い、折り返させる。**
+ *
+ * 部位名の下に回すと列が狭くて見切れる。ゲージの列だけに収めても同じで、
+ * 「デッドリフト・スクワット」のような並びが入りきらない。
+ * 1 行に収めようとして省略記号で切ると、いちばん読みたい根拠が読めなくなる。
+ */
+.recoveryReason {
+  grid-column: 2 / -1;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
 }
