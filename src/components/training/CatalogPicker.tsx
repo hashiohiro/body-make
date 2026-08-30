@@ -77,7 +77,12 @@ export function CatalogPicker({ exercises, onAdd }: Props) {
   // 部位は主部位だけで絞る。一覧の見出しも主部位で切っているので、見え方が一致する
   const [group, setGroup] = useState<MuscleGroup | 'all'>('all');
 
-  const known = new Set(exercises.map((e) => e.id));
+  /*
+   * 非表示にしてある種目は **まだ持っていない扱い** にして、ここに出す。
+   * 「追加済み」として伏せると、戻す道がマイ種目の非表示欄しか無くなる。
+   * 選び直したら表示に戻る（useBodyData.addExercises）。
+   */
+  const known = new Set(exercises.filter((e) => !e.hidden).map((e) => e.id));
   const notAdded = CATALOG_CHOICES.filter(
     (c) =>
       !known.has(catalogId(c.entry, c.implement)) &&

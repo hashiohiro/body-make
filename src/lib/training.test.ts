@@ -12,7 +12,7 @@ import {
   resolveSets,
   summarizeSets,
 } from './training';
-import { sanitizeData, sanitizeWorkouts } from './storage';
+import { DATA_VERSION, sanitizeData, sanitizeWorkouts } from './storage';
 import type { DailyPoint, Exercise, SessionExercise, WorkSet } from '../types';
 
 /* ---------------- helpers ---------------- */
@@ -29,6 +29,7 @@ function ex(patch: Partial<Exercise> = {}): Exercise {
     rmDivisor: 30,
     goal: null,
     order: 0,
+    hidden: false,
     axial: false,
     minutesPerSet: null,
     ...patch,
@@ -371,7 +372,8 @@ describe('サニタイズと移行', () => {
       },
     };
     const data = sanitizeData(v1);
-    expect(data.version).toBe(4);
+    // 版は定数から引く。上げるたびにテストを書き換えるのは、上げ忘れの検出にならない
+    expect(data.version).toBe(DATA_VERSION);
     expect(data.entries['2026-03-01']!.am.weight).toBe(70);
     expect(data.settings.heightCm).toBe(170);
     expect(data.exercises).toEqual([]);
@@ -379,6 +381,23 @@ describe('サニタイズと移行', () => {
     // v3 で足したキーも既定値で埋まる（欠けたまま state に入ると判定が黙って止まる）
     expect(data.checks.enabled).toBe(false);
     expect(data.suppressed).toEqual([]);
+  });
+
+  it('非表示は既定で false。持っているデータは値をそのまま保つ', () => {
+    // 非表示を持たなかった頃のデータは、そのまま表示でよい（既定値を書き戻すだけ）
+    const old = sanitizeData({
+      exercises: [{ id: 'ex_bench', name: 'ベンチプレス', group: 'chest' }],
+    });
+    expect(old.exercises[0]!.hidden).toBe(false);
+
+    const hidden = sanitizeData({
+      version: 5,
+      exercises: [{ id: 'ex_bench', name: 'ベンチプレス', group: 'chest', hidden: true }],
+      workouts: { '2026-03-01': [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }] },
+    });
+    expect(hidden.exercises[0]!.hidden).toBe(true);
+    // 非表示にしても記録は落とさない。落とすのは削除だけ
+    expect(hidden.workouts['2026-03-01']).toHaveLength(1);
   });
 
   it('v2 バックアップは筋トレも含めて往復する', () => {

@@ -132,8 +132,16 @@ export function useBodyData(): BodyData {
     () => buildCheckHistory(sessions, data.exercises),
     [sessions, data.exercises],
   );
+  /*
+   * 目標一覧は表示中の種目だけ。非表示にした種目の目標は消さずに持ったままにして、
+   * 表示に戻したときにそのまま復活させる（消すのは「目標を外す」を押したときだけ）。
+   */
   const trainingGoals = useMemo(
-    () => exerciseGoals(sessions, data.exercises),
+    () =>
+      exerciseGoals(
+        sessions,
+        data.exercises.filter((e) => !e.hidden),
+      ),
     [sessions, data.exercises],
   );
 
@@ -471,14 +479,25 @@ export function useBodyData(): BodyData {
     });
   }, []);
 
+  /**
+   * カタログからマイ種目へ足す。
+   *
+   * **非表示にしてあった種目を選んだら、表示に戻す。**
+   * ID は同じなので新しく足すことはできず、何も起きないボタンになってしまう。
+   * 「もう一度これを使う」と言われたのだから、記録も設定も目標も付いたまま戻す。
+   */
   const addExercises = useCallback((exercises: readonly Exercise[]) => {
     setData((prev) => {
+      const incoming = new Set(exercises.map((e) => e.id));
       const known = new Set(prev.exercises.map((e) => e.id));
       const added = exercises
         .filter((e) => !known.has(e.id))
         .map((e, i) => ({ ...e, order: prev.exercises.length + i }));
-      if (added.length === 0) return prev;
-      return { ...prev, exercises: [...prev.exercises, ...added] };
+      const shown = prev.exercises.map((e) =>
+        e.hidden && incoming.has(e.id) ? { ...e, hidden: false } : e,
+      );
+      if (added.length === 0 && shown.every((e, i) => e === prev.exercises[i])) return prev;
+      return { ...prev, exercises: [...shown, ...added] };
     });
   }, []);
 

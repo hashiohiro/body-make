@@ -46,6 +46,9 @@ function PickDialog({
    */
   const [catalog, setCatalog] = useState(false);
 
+  // 非表示は候補に出さない。すでに入っているものは、外せるように残す
+  const choices = items.filter((e) => !e.hidden || selected.has(e.id));
+
   if (catalog) {
     return (
       <Modal open title="マイ種目に追加" onClose={onClose} onBack={() => setCatalog(false)}>
@@ -57,11 +60,11 @@ function PickDialog({
   return (
     <Modal open title={`${label}に種目を足す`} onClose={onClose}>
       <div>
-        {items.length === 0 ? (
+        {choices.length === 0 ? (
           <p className={ui.note}>マイ種目がまだありません。</p>
         ) : (
           GROUP_ORDER.map((group) => {
-            const list = items.filter((e) => e.group === group);
+            const list = choices.filter((e) => e.group === group);
             if (list.length === 0) return null;
             return (
               <div key={group} className={s.pickerGroup}>
@@ -160,6 +163,11 @@ export function PresetManager({
 
   const byId = new Map(exercises.map((e) => [e.id, e]));
   const nameOf = (id: string) => byId.get(id)?.name ?? '（削除された種目）';
+  /*
+   * プリセットを作れるかは **表示中の種目** で決まる。
+   * すでに保存してある組み合わせの中身は非表示になっても残す（掃除で消さない・設計 §2.2）。
+   */
+  const usable = exercises.filter((e) => !e.hidden);
 
   const trimmed = draft.trim().slice(0, PRESET_NAME_MAX);
   const taken = presets.some((p) => p.id !== renaming && p.name === trimmed);
@@ -235,7 +243,7 @@ export function PresetManager({
             type="button"
             className={`${ui.btn} ${presets.length === 0 ? ui.btnPrimary : ''}`}
             // 足せる種目が 1 つも無ければ、名前だけ付けても何も入らない
-            disabled={exercises.length === 0}
+            disabled={usable.length === 0}
             onClick={() => {
               setCreating({ name: '', exerciseIds: [] });
               setPickingDraft(true);
@@ -246,7 +254,7 @@ export function PresetManager({
         </div>
       )}
 
-      {exercises.length === 0 && (
+      {usable.length === 0 && (
         <p className={ui.note}>
           先にマイ種目を追加してください（設定 &gt; トレーニング &gt; マイ種目）。
         </p>

@@ -96,8 +96,6 @@ function setRows(): HTMLElement[] {
 
 beforeEach(() => {
   localStorage.clear();
-  // seed（作者の実測体重）が入ると体重側の初期状態が変わるので、投入済みにしておく
-  localStorage.setItem('bodymake.seeded.v1', '1');
 });
 
 afterEach(cleanup);
@@ -2853,5 +2851,120 @@ describe('種目の目標を決める', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '目標を外す' }));
     expect(screen.queryByRole('button', { name: '目標を外す' })).toBeNull();
+  });
+});
+
+describe('種目の表示 / 非表示', () => {
+  function ManagerHarness({ usage = new Map<string, number>() }: { usage?: Map<string, number> }) {
+    const body = useBodyData();
+    return (
+      <ExerciseManager
+        exercises={body.data.exercises}
+        sessions={body.sessions}
+        usage={usage}
+        onAdd={body.addExercises}
+        onUpdate={body.upsertExercise}
+        onRemove={body.removeExercise}
+      />
+    );
+  }
+
+  function PresetHarness() {
+    const body = useBodyData();
+    return (
+      <PresetManager
+        presets={body.data.presets}
+        exercises={body.data.exercises}
+        onCreate={body.savePreset}
+        onUpdate={body.updatePreset}
+        onRemove={body.removePreset}
+        onAddExercises={body.addExercises}
+      />
+    );
+  }
+
+  /** 非表示の種目を持った状態から始める（画面を触らずに作る） */
+  function seedHidden(hiddenIds: string[], ...ids: string[]) {
+    const exercises = ids.map((id, i) => ({
+      ...fromCatalog(
+        CATALOG.find((c) => c.id === id)!,
+        i,
+      ),
+      hidden: hiddenIds.includes(id),
+    }));
+    localStorage.setItem(
+      'bodymake.data.v1',
+      JSON.stringify({ version: 5, settings: {}, entries: {}, exercises, workouts: {} }),
+    );
+  }
+
+  it('非表示にすると候補から外れ、記録は残る', () => {
+    seedExercises('ex_lat_pulldown', 'ex_squat');
+    render(<ManagerHarness usage={new Map([['ex_lat_pulldown', 12]])} />);
+    expect(screen.getByText(/^2件 \/ 目標 0件$/)).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText('ラットプルダウンを非表示にする'));
+
+    // 件数は「使う種目が何件あるか」。非表示は別に添える
+    expect(screen.getByText(/^1件 \/ 目標 0件 \/ 非表示 1件$/)).toBeTruthy();
+    // 消えたのではなく末尾の「非表示」欄へ移る。記録の件数もそのまま出る
+    expect(screen.getByLabelText('ラットプルダウンを表示に戻す')).toBeTruthy();
+    expect(screen.getByText('記録 12日')).toBeTruthy();
+  });
+
+  it('表示に戻せる', () => {
+    seedHidden(['ex_lat_pulldown'], 'ex_lat_pulldown');
+    render(<ManagerHarness />);
+    expect(screen.getByText(/^0件 \/ 目標 0件 \/ 非表示 1件$/)).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText('ラットプルダウンを表示に戻す'));
+    expect(screen.getByText(/^1件 \/ 目標 0件$/)).toBeTruthy();
+    expect(screen.getByLabelText('ラットプルダウンを非表示にする')).toBeTruthy();
+  });
+
+  it('カタログから選び直しても二重にならず、記録が付いたまま表示に戻る', () => {
+    // 非表示を「追加済み」として伏せると、戻す道がマイ種目の非表示欄しか無くなる
+    seedHidden(['ex_lat_pulldown'], 'ex_lat_pulldown');
+    render(<ManagerHarness usage={new Map([['ex_lat_pulldown', 5]])} />);
+
+    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByText('＋ ラットプルダウン'));
+
+    expect(screen.getByText(/^1件 \/ 目標 0件$/)).toBeTruthy();
+    expect(screen.getByText('記録 5日')).toBeTruthy();
+  });
+
+  it('記録画面の種目選びに出ない', () => {
+    seedHidden(['ex_squat'], 'ex_lat_pulldown', 'ex_squat');
+    render(<Harness />);
+    openPicker();
+
+    expect(screen.getByText('＋ ラットプルダウン')).toBeTruthy();
+    expect(screen.queryByText('＋ スクワット')).toBeNull();
+  });
+
+  it('プリセットに足す候補にも出ない', () => {
+    seedHidden(['ex_squat'], 'ex_lat_pulldown', 'ex_squat');
+    render(<PresetHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
+    expect(screen.getByText('＋ ラットプルダウン')).toBeTruthy();
+    expect(screen.queryByText('＋ スクワット')).toBeNull();
+  });
+
+  it('すでに入っている種目は、非表示でも候補に残す（外せなくなるため）', () => {
+    seedHidden(['ex_squat'], 'ex_lat_pulldown', 'ex_squat');
+    localStorage.setItem(
+      'bodymake.data.v1',
+      JSON.stringify({
+        ...JSON.parse(localStorage.getItem('bodymake.data.v1')!),
+        workouts: { [todayISO()]: [{ exerciseId: 'ex_squat', sets: [] }] },
+      }),
+    );
+    render(<Harness />);
+    openPicker();
+
+    // ✓ が付いた状態で並ぶ。ここで押せないと、閉じてカードの × を探すことになる
+    expect(screen.getByText('✓ スクワット')).toBeTruthy();
   });
 });

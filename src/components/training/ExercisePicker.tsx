@@ -31,6 +31,13 @@ export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }:
    */
   const [panel, setPanel] = useState<'exercises' | 'catalog'>('exercises');
 
+  /*
+   * 非表示の種目は候補に出さない。
+   * ただし **その日にすでに入っているもの** は出す（プリセットから入ることがある）。
+   * 出さないと、ここで外せず閉じてカードの × を探すことになる。
+   */
+  const choices = exercises.filter((e) => !e.hidden || usedIds.has(e.id));
+
   const close = () => {
     setOpen(false);
     setPanel('exercises');
@@ -59,7 +66,7 @@ export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }:
               削除と種目ごとの設定は、設定 &gt; トレーニング &gt; マイ種目 でまとめて行えます。
             </p>
           </div>
-        ) : exercises.length === 0 ? (
+        ) : choices.length === 0 ? (
           /*
            * マイ種目が空のとき。以前は「設定 > トレーニング から追加してください」とだけ出していて、
            * 初めて開いた人がその場では何もできなかった。ここから追加できるようにする。
@@ -83,7 +90,7 @@ export function ExercisePicker({ exercises, usedIds, onToggle, onAddExercises }:
         ) : (
           <div>
             {GROUP_ORDER.map((group) => {
-              const items = exercises.filter((e) => e.group === group);
+              const items = choices.filter((e) => e.group === group);
               if (items.length === 0) return null;
               return (
                 <div key={group} className={s.pickerGroup}>

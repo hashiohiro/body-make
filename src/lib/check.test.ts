@@ -28,6 +28,7 @@ function ex(patch: Partial<Exercise> = {}): Exercise {
     rmDivisor: 30,
     goal: null,
     order: 0,
+    hidden: false,
     axial: false,
     minutesPerSet: null,
     ...patch,

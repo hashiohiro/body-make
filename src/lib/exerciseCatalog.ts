@@ -42,7 +42,8 @@ export const SUB_GROUP_WEIGHT_STEPS = [0.25, 0.5, 0.75, 1];
  */
 export type CatalogEntry = Omit<
   Exercise,
-  'goal' | 'order' | 'repUnit' | 'subGroups' | 'axial' | 'minutesPerSet'
+  // hidden はマイ種目に置いてからの状態。カタログは選択肢の一覧なので持たない
+  'goal' | 'order' | 'repUnit' | 'subGroups' | 'axial' | 'minutesPerSet' | 'hidden'
 > & {
   repUnit?: RepUnit;
   /**
@@ -1282,5 +1283,6 @@ export function fromCatalog(
     repUnit: entry.repUnit ?? 'reps',
     goal: null,
     order,
+    hidden: false,
   };
 }

@@ -150,7 +150,8 @@ export function TrainingGoalBoard({
     current == null
       ? []
       : exercises
-          .filter((e) => e.group === current.group && e.goal == null)
+          // 非表示の種目には目標を足さない（一覧にも出ない）
+          .filter((e) => !e.hidden && e.group === current.group && e.goal == null)
           .sort((a, b) => a.order - b.order);
 
   return (
@@ -521,7 +522,7 @@ export function TrainingGoalBoard({
                   <button
                     type="button"
                     className={`${ui.btn} ${current.items.length === 0 ? ui.btnPrimary : ''}`}
-                    disabled={exercises.every((e) => e.group !== current.group)}
+                    disabled={exercises.every((e) => e.hidden || e.group !== current.group)}
                     onClick={() => setPicking(true)}
                   >
                     {/*
@@ -534,7 +535,7 @@ export function TrainingGoalBoard({
                 </div>
               )}
 
-              {exercises.every((e) => e.group !== current.group) && (
+              {exercises.every((e) => e.hidden || e.group !== current.group) && (
                 <p className={ui.note}>
                   この部位の種目がマイ種目にありません（設定 &gt; トレーニング &gt; マイ種目）。
                 </p>

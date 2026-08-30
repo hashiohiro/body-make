@@ -95,10 +95,16 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
   const settingsExercise = editing ? (byId.get(editing) ?? null) : null;
 
   const sorted = [...exercises].sort((a, b) => a.order - b.order);
-  const visible =
+  const filtered =
     filter === 'all'
       ? sorted
       : sorted.filter((e) => e.group === filter || e.subGroups.some((x) => x.group === filter));
+  const shown = filtered.filter((e) => !e.hidden);
+  /*
+   * 非表示は部位で切らず、絞り込みにも掛けずに末尾へまとめる。
+   * ここは「使う種目を並べる場所」ではなく「戻す場所」なので、探し方が違う。
+   */
+  const hiddenItems = sorted.filter((e) => e.hidden);
 
   const submit = () => {
     const name = form.name.trim();
@@ -116,6 +122,7 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
         rmDivisor: form.rmDivisor,
         goal: null,
         order: exercises.length,
+        hidden: false,
         // 構成チェックの値は持たせない。必要になったら種目の設定から入れる
         ...emptyCheckValues(),
       },
@@ -136,12 +143,106 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
     if (confirm(message)) onRemove(ex.id);
   };
 
+  /*
+    1 種目ぶんの見せ方は、目標画面の種目カードと同じ部品を使う。
+    同じ種目を 2 つの画面で見るのに、違う形で出す理由がない。
+    変わるのは出す事実だけ（あちらはいまの値と到達率、ここは記録の量と数え方）。
+
+    非表示の行は操作だけ差し替える。目標と設定は表示に戻してから触ればよく、
+    使わないと決めた種目の下にボタンを 4 つ並べても選ぶ手間が増えるだけ。
+  */
+  const card = (ex: Exercise) => (
+    <ExerciseSummaryCard
+      key={ex.id}
+      name={ex.name}
+      // 主部位は見出しが持っているので、ここは補助部位だけ
+      tag={
+        ex.subGroups.length > 0 ? ex.subGroups.map((x) => GROUP_LABELS[x.group]).join('·') : null
+      }
+      kind={goalKind(ex)}
+      goal={goalValue(ex)}
+      factLeft={(usage.get(ex.id) ?? 0) > 0 ? `記録 ${usage.get(ex.id)}日` : '記録はまだありません'}
+      factRight={`${LOAD_MODE_LABELS[ex.loadMode]} ・ ${REP_UNIT_LABELS[ex.repUnit]}で数える`}
+      actions={
+        ex.hidden ? (
+          <>
+            <button
+              type="button"
+              className={s.miniBtn}
+              aria-label={`${ex.name}を表示に戻す`}
+              onClick={() => onUpdate({ ...ex, hidden: false })}
+            >
+              表示に戻す
+            </button>
+            <button
+              type="button"
+              className={s.miniBtn}
+              aria-label={`${ex.name}を削除`}
+              onClick={() => remove(ex)}
+            >
+              削除
+            </button>
+          </>
+        ) : (
+          <>
+            {/*
+              目標はこの場で決める。目標タブへ連れて行くと、
+              マイ種目を見ていたつもりが別の画面に移っていて、戻り方も分からない。
+              決める道具（GoalEditor）は目標タブと同じものを使う。
+            */}
+            <button
+              type="button"
+              className={s.miniBtn}
+              aria-pressed={goalOf === ex.id}
+              aria-label={ex.goal ? `${ex.name}の目標を変える` : `${ex.name}の目標を決める`}
+              onClick={() =>
+                setGoalOf((cur) => {
+                  setEditing(null);
+                  return cur === ex.id ? null : ex.id;
+                })
+              }
+            >
+              目標
+            </button>
+            <button
+              type="button"
+              className={s.miniBtn}
+              aria-pressed={editing === ex.id}
+              aria-label={`${ex.name}の設定`}
+              onClick={() => openDetail(ex)}
+            >
+              設定
+            </button>
+            <button
+              type="button"
+              className={s.miniBtn}
+              aria-label={`${ex.name}を非表示にする`}
+              onClick={() => onUpdate({ ...ex, hidden: true })}
+            >
+              非表示
+            </button>
+            <button
+              type="button"
+              className={s.miniBtn}
+              aria-label={`${ex.name}を削除`}
+              onClick={() => remove(ex)}
+            >
+              削除
+            </button>
+          </>
+        )
+      }
+    />
+  );
+
   return (
     <section className={ui.card}>
       <header className={ui.cardHeader}>
         <h2 className={ui.cardTitle}>マイ種目</h2>
         <span className={ui.hint}>
-          {sorted.length}件 / 目標 {sorted.filter((e) => e.goal != null).length}件
+          {sorted.length - hiddenItems.length}件 / 目標{' '}
+          {sorted.filter((e) => !e.hidden && e.goal != null).length}件
+          {hiddenItems.length > 0 && ` / 非表示 ${hiddenItems.length}件`}
         </span>
       </header>
 
@@ -319,85 +420,31 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
             「どの部位か」になる。見出しは主部位で切る（一覧の絞り込みと同じ切り方）
           */}
           {GROUP_ORDER.map((group) => {
-            const items = visible.filter((ex) => ex.group === group);
+            const items = shown.filter((ex) => ex.group === group);
             if (items.length === 0) return null;
 
             return (
               <div key={group}>
                 <div className={s.manageGroup}>{GROUP_LABELS[group]}</div>
 
-                {items.map((ex) => (
-                  /*
-                    1 種目ぶんの見せ方は、目標画面の種目カードと同じ部品を使う。
-                    同じ種目を 2 つの画面で見るのに、違う形で出す理由がない。
-                    変わるのは出す事実だけ（あちらはいまの値と到達率、ここは記録の量と数え方）。
-                  */
-                  <ExerciseSummaryCard
-                    key={ex.id}
-                    name={ex.name}
-                    // 主部位は見出しが持っているので、ここは補助部位だけ
-                    tag={
-                      ex.subGroups.length > 0
-                        ? ex.subGroups.map((x) => GROUP_LABELS[x.group]).join('·')
-                        : null
-                    }
-                    kind={goalKind(ex)}
-                    goal={goalValue(ex)}
-                    factLeft={
-                      (usage.get(ex.id) ?? 0) > 0
-                        ? `記録 ${usage.get(ex.id)}日`
-                        : '記録はまだありません'
-                    }
-                    factRight={`${LOAD_MODE_LABELS[ex.loadMode]} ・ ${REP_UNIT_LABELS[ex.repUnit]}で数える`}
-                    actions={
-                      <>
-                        {/*
-                          目標はこの場で決める。目標タブへ連れて行くと、
-                          マイ種目を見ていたつもりが別の画面に移っていて、戻り方も分からない。
-                          決める道具（GoalEditor）は目標タブと同じものを使う。
-                        */}
-                        <button
-                          type="button"
-                          className={s.miniBtn}
-                          aria-pressed={goalOf === ex.id}
-                          aria-label={
-                            ex.goal ? `${ex.name}の目標を変える` : `${ex.name}の目標を決める`
-                          }
-                          onClick={() =>
-                            setGoalOf((cur) => {
-                              setEditing(null);
-                              return cur === ex.id ? null : ex.id;
-                            })
-                          }
-                        >
-                          目標
-                        </button>
-                        <button
-                          type="button"
-                          className={s.miniBtn}
-                          aria-pressed={editing === ex.id}
-                          aria-label={`${ex.name}の設定`}
-                          onClick={() => openDetail(ex)}
-                        >
-                          設定
-                        </button>
-                        <button
-                          type="button"
-                          className={s.miniBtn}
-                          aria-label={`${ex.name}を削除`}
-                          onClick={() => remove(ex)}
-                        >
-                          削除
-                        </button>
-                      </>
-                    }
-                  />
-                ))}
+                {items.map(card)}
               </div>
             );
           })}
 
+          {hiddenItems.length > 0 && (
+            <>
+              <div className={s.manageGroup}>非表示</div>
+              {hiddenItems.map(card)}
+            </>
+          )}
+
           <p className={ui.note}>目標も、種目そのものの性質も、行の入口から開けます。</p>
+          {/* 80 文字以内 */}
+          <p className={ui.note}>
+            非表示にすると、記録やプリセットで選ぶときの候補から外れます。
+            記録は残るので、推移では今までどおり見られます。
+          </p>
         </>
       )}
 

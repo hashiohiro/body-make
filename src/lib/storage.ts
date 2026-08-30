@@ -32,7 +32,7 @@ const DATA_KEY = 'bodymake.data.v1';
  * 「本人が選んだ値」と誤って尊重する。実際 v3 では 2 度それが起きた
  * （`loads: 0` と `axial: false`）。版で見れば、その世代のデータをまとめて読み直せる。
  */
-export const DATA_VERSION = 4;
+export const DATA_VERSION = 5;
 
 /** レビューの値が信用できるようになった版。これ未満はカタログから引き直す */
 const CHECK_FIELDS_VERSION = 4;
@@ -66,7 +66,8 @@ const EMPTY_GROUP_GOALS: GroupGoals = {
 
 export function emptyData(): AppData {
   return {
-    version: 4,
+    // 定数から引く。直に書くと版を上げたときにここだけ古い値が残る
+    version: DATA_VERSION,
     settings: { ...DEFAULT_SETTINGS },
     entries: {},
     exercises: [],
@@ -248,12 +249,14 @@ function sanitizeExercise(raw: unknown, order: number, fromVersion: number): Exe
     rmDivisor: num(o.rmDivisor, RM_DIVISOR_RANGE[0], RM_DIVISOR_RANGE[1]) ?? 30,
     goal: sanitizeGoal(o),
     order: int(o.order, 0, 9999) ?? order,
+    // 既定は表示。キーが無いのは非表示を持たなかった頃のデータで、そのまま表示でよい
+    hidden: o.hidden === true,
     ...checkFieldsOf(o, id, fromVersion),
   };
 }
 
 /**
- * レビューの 4 フィールド。
+ * レビューの 2 フィールド。
  *
  * **どれも持っていない種目は v2 以前のデータ**なので、カタログから既定値を引き直す。
  * false のまま読むと、カタログからデッドリフトを入れてあるのに軸荷重でない、という
