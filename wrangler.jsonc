@@ -1,5 +1,17 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
+
+  /*
+   * 既定は本番。**公開済みの URL（bodymake.hashiohiro.workers.dev）を動かさない**ため、
+   * あとから足したデモのほうに別名を与えている。
+   * その URL の localStorage に記録が入っているので、本番の配信先は動かせない。
+   *
+   *   npm run deploy:prod … 本番。初期データなし
+   *   npm run deploy:demo … デモ。作者の実測値を初期データに入れる（VITE_DEMO=1）
+   *
+   * 別のワーカーなので配信元のオリジンが分かれ、**localStorage も別になる**。
+   * デモを触っても本番の記録には影響しない。
+   */
   "name": "bodymake",
   "compatibility_date": "2026-08-08",
 
@@ -14,5 +26,22 @@
 
   "observability": {
     "enabled": true,
+  },
+
+  "env": {
+    /*
+     * デモ。作者の実測値を初期データに入れたビルド（npm run build:demo）を配る。
+     * assets と observability は環境ごとに書く（環境ブロックへ引き継がれないため）。
+     */
+    "demo": {
+      "name": "bodymake-demo",
+      "assets": {
+        "directory": "./dist",
+        "not_found_handling": "single-page-application",
+      },
+      "observability": {
+        "enabled": true,
+      },
+    },
   },
 }

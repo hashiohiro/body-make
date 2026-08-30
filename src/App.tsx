@@ -3,10 +3,12 @@ import { DateNav } from './components/DateNav';
 import { TabBar } from './components/TabBar';
 import type { TabId } from './components/TabBar';
 import type { Domain } from './types';
+import { DemoNotice } from './components/DemoNotice';
 import { Toast, useToast } from './components/Toast';
 import { useBodyData } from './hooks/useBodyData';
 import { useTheme } from './hooks/useTheme';
 import { formatMDW, todayISO } from './lib/date';
+import { IS_DEMO } from './lib/env';
 import { ChartsView } from './views/ChartsView';
 import { GoalsView } from './views/GoalsView';
 import { HomeView } from './views/HomeView';
@@ -67,6 +69,8 @@ export function App() {
   const [date, setDate] = useState(todayISO);
   // ホーム・記録・目標・推移で共通。タブを移っても保つ
   const [domain, setDomain] = useState<Domain>('body');
+  // デモだけ。通り抜けた時点で初期データへ戻す（components/DemoNotice.tsx）
+  const [demoNotice, setDemoNotice] = useState(IS_DEMO);
   /*
    * マイ種目（設定）から名指しで開く種目の目標。
    *
@@ -229,6 +233,15 @@ export function App() {
 
       <TabBar active={route.tab} onChange={(tab) => open(tab)} />
       <Toast message={toast.message} />
+      {/* IS_DEMO はビルド時に畳まれる。本番のバンドルからはこの分岐ごと落ちる */}
+      {IS_DEMO && demoNotice && (
+        <DemoNotice
+          onStart={() => {
+            body.resetToSeed();
+            setDemoNotice(false);
+          }}
+        />
+      )}
     </div>
   );
 }

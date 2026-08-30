@@ -9,7 +9,14 @@
 
 もとはExcelでつけていた記録表でした。それをそのままスマホで使えるようにしたものです。
 
-デモ: https://bodymake.hashiohiro.workers.dev
+| | URL | 中身 |
+| --- | --- | --- |
+| **本番** | https://bodymake.hashiohiro.workers.dev | 空の状態から始まります。使うならこちら |
+| **デモ** | https://bodymake-demo.hashiohiro.workers.dev | 作成者の記録がひととおり入っています。中身を見るならこちら |
+
+記録は端末のブラウザごとに保存されるので、**2つは別のアプリとして動きます**（デモを触っても本番の記録は変わりません）。
+
+デモは**開き直すたびに初期データへ戻ります**。触った内容は残りません。開いたときに断り書きが出て、進んだ時点で上書きします。時刻も記録の最終日（8/29）で止めてあり、日が経っても「最後の記録から N 日」が伸びません。
 
 <p>
   <img src="docs/screenshot-home.png" width="380" alt="ホーム画面（体組成）。7日移動平均の現在の体重、除脂肪体重、体脂肪率と体脂肪量、連続記録日数" />
@@ -100,13 +107,13 @@
 
 ## スマホで使う
 
-デモURLをスマホのブラウザで開き、ホーム画面に追加します。オフラインでも起動し、アドレスバーのないアプリとして開きます。
+本番URLをスマホのブラウザで開き、ホーム画面に追加します。オフラインでも起動し、アドレスバーのないアプリとして開きます。
 
 自分でホストする場合は [デプロイ](#デプロイ) を参照してください。
 
-> デモには作者の実測値14日分が初期データとして入っています。自分用に使うなら、設定画面のすべての記録を削除で消せます。
+> デモには作成者の記録（体組成35日・筋トレ17日・種目26件・プリセット5件）が初期データとして入っています。デモは開き直すたびにそこへ戻るので、自分の記録をつけるなら本番URLか自前のホストを使ってください。
 >
-> この初期データが入るのはデモ向けのビルドだけです。`.env.demo` の `VITE_DEMO=1` が渡るのは `npm run build:demo` と `npm run deploy` だけで、`npm run build` で作ったものには入りません。自分でホストすれば空の状態から始まります。
+> この初期データが入るのはデモ向けのビルドだけです。`.env.demo` の `VITE_DEMO=1` が渡るのは `npm run build:demo` と `npm run deploy:demo` だけで、`npm run build` で作ったものには入りません。自分でホストすれば空の状態から始まります。
 
 ## 開発
 
@@ -125,7 +132,7 @@ npm run dev      # http://localhost:5173
 | `npm run build:demo` | デモ向けビルド。作者の実測値を初期データに入れる |
 | `npm run licenses` | 配布物に含まれる第三者コードを一覧 |
 | `npm run licenses:check` | 未申告があれば異常終了。CI用 |
-| `npm run deploy` | ビルドして Cloudflare へデプロイ |
+| `npm run deploy:prod` | 本番をビルドして Cloudflare へデプロイ（初期データなし） |
 
 Service Worker は本番ビルドでのみ有効です。ES モジュールと Service Worker が使えないため、`file://` で `index.html` を直接開くことはできません。ローカル確認には `npm run preview` を使ってください。
 
@@ -164,16 +171,23 @@ Service Worker は本番ビルドでのみ有効です。ES モジュールと S
 
 ## デプロイ
 
-Cloudflare Workers の static assets で配信します。
+Cloudflare Workers の static assets で配信します。**デモと自分用を別のワーカーに分けています。**
 
 ```bash
-npm run cf:login   # 初回のみ
-npm run deploy
+npm run cf:login    # 初回のみ
+npm run deploy:prod # 本番 bodymake.hashiohiro.workers.dev
+npm run deploy:demo # デモ bodymake-demo.hashiohiro.workers.dev
 ```
 
-プロジェクト名は `wrangler.jsonc` の `name` です。キャッシュ設定は `public/_headers` にあり、`sw.js` と `index.html` を `no-cache`、ハッシュ付きの `assets/*` を1年 immutable にしています。ここは PWA の更新可否に直結するので、変更する際は注意してください。
+違いは**初期データを入れるかどうかの1点**だけです。`deploy:demo` は `npm run build:demo`（`.env.demo` の `VITE_DEMO=1`）で作るので、開いてすぐグラフが動くよう作者の実測値が入ります。`deploy:prod` は素の `npm run build` なので空から始まります。
 
-Service Worker は `autoUpdate` 設定です。ホーム画面に追加済みの端末では、次に開いたときに新しいビルドを取得し、そのまた次の起動から反映されます。
+**別のワーカーなので配信元のオリジンが分かれ、localStorage も別になります。** デモを触っても本番の記録には影響しません。逆に、両方をホーム画面に追加すると別のアプリとして並びます。
+
+本番の配信先は動かせません。その URL の localStorage に記録が入っているので、名前を変えると過去の記録に触れなくなります。設定は `wrangler.jsonc` の1ファイルにまとめてあり、デモは `env.demo` として名前だけを上書きしています。`npm run cf:check` で両方のドライランを流せます。
+
+キャッシュ設定は `public/_headers` にあり、`sw.js` と `index.html` を `no-cache`、ハッシュ付きの `assets/*` を1年 immutable にしています。ここは PWA の更新可否に直結するので、変更する際は注意してください。
+
+Service Worker は `autoUpdate` 設定です。ホーム画面に追加済みの端末では、**次に開いたときに新しいビルドを取得し、そのまた次の起動から反映**されます。
 
 ## 構成
 

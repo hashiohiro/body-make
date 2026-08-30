@@ -5,6 +5,7 @@ import { ExerciseManager } from '../components/training/ExerciseManager';
 import { PresetManager } from '../components/training/PresetManager';
 import { exportCsv, exportJson, readImportFile } from '../lib/io';
 import type { ImportResult } from '../lib/io';
+import { DEMO_TODAY, formatMD } from '../lib/date';
 import { IS_DEMO } from '../lib/env';
 import { SEED_SOURCE } from '../lib/seed';
 import { THEME_OPTIONS } from '../lib/themes';
@@ -425,8 +426,12 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
             <>
               <br />
               <br />
-              初期データは {SEED_SOURCE} の「日次記録」シートから取り込んだ作成者の実測値です。
-              設定の「データ」から消せます。
+              初期データは {SEED_SOURCE}{' '}
+              です。体組成も筋トレも、作成者が実際に使っている記録をそのまま入れています。
+              <br />
+              <br />
+              このデモは開き直すたびに初期データへ戻ります。ここで入力した内容は残りません。
+              今日は記録の最終日（{formatMD(DEMO_TODAY)}）で止めてあります。
             </>
           )}
         </p>

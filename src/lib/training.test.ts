@@ -409,7 +409,7 @@ describe('loadData の seed 分岐', () => {
     expect(Object.keys(load().entries)).toHaveLength(0);
   });
 
-  it('デモ向けビルドでは、体重が 0 件で未 seed でも筋トレの記録を落とさない', async () => {
+  it('保存済みがあれば、読み込みでは上書きしない（戻すのは確認を通ってから）', async () => {
     // IS_DEMO はモジュールの読み込み時に決まるので、差し替えてから読み直す
     vi.stubEnv('VITE_DEMO', '1');
     vi.resetModules();
@@ -426,10 +426,88 @@ describe('loadData の seed 分岐', () => {
       }),
     );
 
+    /*
+     * デモは開くたびに初期データへ戻すが、戻すのは断り書き（DemoNotice）を通ってから。
+     * 読み込みの時点で消すと、触った内容が理由の分からないまま消えたように見える。
+     */
     const data = load();
-    expect(Object.keys(data.entries).length).toBeGreaterThan(0); // seed は入る
-    expect(data.exercises).toHaveLength(1); // 筋トレは残る
+    expect(Object.keys(data.entries)).toHaveLength(0);
+    expect(data.exercises).toHaveLength(1);
     expect(data.workouts['2026-03-01']).toBeDefined();
+  });
+
+  it('demoSeed はデモ向けビルドでなければ null（本番のバンドルから落とすため）', async () => {
+    const { demoSeed } = await import('./storage');
+    expect(demoSeed()).toBeNull();
+  });
+
+  it('demoSeed は何度呼んでも同じ初期データを返す（開き直すたびに同じ画面になる）', async () => {
+    vi.stubEnv('VITE_DEMO', '1');
+    vi.resetModules();
+    const { demoSeed } = await import('./storage');
+
+    const first = demoSeed();
+    expect(first).not.toBeNull();
+    expect(Object.keys(first!.workouts).length).toBeGreaterThan(0);
+    expect(demoSeed()).toEqual(first);
+  });
+
+  it('まっさらな端末には、体組成も筋トレも入れる', async () => {
+    vi.stubEnv('VITE_DEMO', '1');
+    vi.resetModules();
+    const { loadData: load } = await import('./storage');
+
+    const data = load();
+    expect(Object.keys(data.entries).length).toBeGreaterThan(0);
+    expect(data.exercises.length).toBeGreaterThan(0);
+    expect(Object.keys(data.workouts).length).toBeGreaterThan(0);
+    expect(data.presets.length).toBeGreaterThan(0);
+    // 配色は訪問者の環境に従わせる
+    expect(data.settings.theme).toBe('system');
+  });
+});
+
+describe('デモの今日', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('デモ向けビルドでなければ実際の今日を返す', async () => {
+    vi.resetModules();
+    const { todayISO, toISO } = await import('./date');
+    expect(todayISO()).toBe(toISO(new Date()));
+  });
+
+  it('デモ向けビルドでは固定した日を返す', async () => {
+    vi.stubEnv('VITE_DEMO', '1');
+    vi.resetModules();
+    const { todayISO, DEMO_TODAY } = await import('./date');
+    expect(todayISO()).toBe(DEMO_TODAY);
+  });
+
+  it('固定した日は初期データの最終記録日で、その週にトレーニングが入っている', async () => {
+    vi.stubEnv('VITE_DEMO', '1');
+    vi.resetModules();
+    (globalThis as { localStorage?: unknown }).localStorage = new MemStorage();
+    const { DEMO_TODAY, startOfWeek } = await import('./date');
+    const { demoSeed } = await import('./storage');
+
+    const seed = demoSeed();
+    expect(seed).not.toBeNull();
+
+    /*
+     * 固定日より先の記録があると、まだ来ていない日の記録が画面に出る。
+     * 逆に週が空だと、今週のセット数が全部位 0 のまま動かない。
+     * どちらもデモとして成り立たないので、日付を動かしたらここで落ちる。
+     */
+    const dates = [...Object.keys(seed!.entries), ...Object.keys(seed!.workouts)];
+    expect(dates.every((d) => d <= DEMO_TODAY)).toBe(true);
+    expect(dates).toContain(DEMO_TODAY);
+
+    const week = startOfWeek(DEMO_TODAY);
+    const inWeek = Object.keys(seed!.workouts).filter((d) => startOfWeek(d) === week);
+    expect(inWeek.length).toBeGreaterThan(0);
   });
 });
 

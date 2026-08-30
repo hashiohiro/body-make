@@ -20,8 +20,9 @@
     "licenses": "vite build --sourcemap && node scripts/licenses.mjs",
     "licenses:check": "vite build --sourcemap && node scripts/licenses.mjs --check && npm run build",
     "cf:login": "wrangler login",
-    "cf:check": "wrangler deploy --dry-run",
-    "deploy": "npm run build:demo && wrangler deploy"
+    "cf:check": "wrangler deploy --dry-run && wrangler deploy --dry-run --env demo",
+    "deploy:demo": "npm run build:demo && wrangler deploy --env demo",
+    "deploy:prod": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "react": "^19.1.0",

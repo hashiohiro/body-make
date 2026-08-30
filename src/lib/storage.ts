@@ -20,11 +20,10 @@ import type {
 import { SUB_GROUP_WEIGHT, SUB_GROUP_WEIGHT_RANGE, catalogCheckValues } from './exerciseCatalog';
 import { THEME_IDS } from './themes';
 import { IS_DEMO } from './env';
-import { seedEntries } from './seed';
+import { SEED_DATA } from './seed';
 
 /** キー名はスキーマ版ではなく保存先のアドレス。v2 でも変えない（変えると既存データが見えなくなる） */
 const DATA_KEY = 'bodymake.data.v1';
-const SEEDED_KEY = 'bodymake.seeded.v1';
 
 /**
  * スキーマ版。**移行の判定はこれで行う。**
@@ -450,6 +449,14 @@ export function sanitizeData(raw: unknown): AppData {
   };
 }
 
+/**
+ * 保存済みを読む。壊れていれば空から始める。
+ *
+ * **デモでは、ここで勝手に上書きしない。**
+ * 初期データへ戻すのは起動時の確認（DemoNotice）を通ってからで、
+ * 断りなく消すと、触った内容が理由の分からないまま消えたように見える。
+ * 何も入っていない端末のときだけ、空の画面を見せないためにここで入れる。
+ */
 export function loadData(): AppData {
   let stored: AppData | null = null;
   try {
@@ -461,28 +468,23 @@ export function loadData(): AppData {
 
   // 以降どの分岐でも base を土台にする。再構築すると筋トレのキーが落ちる
   const base = stored ?? emptyData();
-  if (Object.keys(base.entries).length > 0) return base;
 
   // 投入するのはデモ向けビルドだけ。自分の記録として使う側に他人の数字を入れない
   if (!IS_DEMO) return base;
+  // 触ったあとの内容は、確認を出すあいだだけそのまま見せる
+  if (stored) return base;
+  return demoSeed() ?? base;
+}
 
-  // 初回起動時のみエクセルの記録を投入する。ユーザーが全消ししたあとに復活させない
-  let seeded = false;
-  try {
-    seeded = localStorage.getItem(SEEDED_KEY) === '1';
-  } catch {
-    seeded = true;
-  }
-  if (!seeded) {
-    try {
-      localStorage.setItem(SEEDED_KEY, '1');
-    } catch {
-      /* プライベートモード等で書けなくても続行する */
-    }
-    return { ...base, entries: seedEntries() };
-  }
-
-  return base;
+/**
+ * デモの初期データ。デモ向けビルド以外では null を返す。
+ *
+ * `IS_DEMO` はビルド時に畳まれるので、本番のバンドルからは
+ * この分岐ごと（＝ seed の 60KB ごと）落ちる。
+ */
+export function demoSeed(): AppData | null {
+  // 生の書き出しなので、値域も参照も sanitizeData に通してから state へ入れる
+  return IS_DEMO ? sanitizeData(SEED_DATA) : null;
 }
 
 export function saveData(data: AppData): void {

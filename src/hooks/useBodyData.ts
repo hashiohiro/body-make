@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildDaily, buildWeeks, computeProjection, computeStats, emptyDay } from '../lib/derive';
-import { PRESET_NAME_MAX, emptyData, loadData, sanitizeData, saveData } from '../lib/storage';
+import {
+  PRESET_NAME_MAX,
+  demoSeed,
+  emptyData,
+  loadData,
+  sanitizeData,
+  saveData,
+} from '../lib/storage';
 import { buildSessions, computeTrainingStats, exerciseGoals } from '../lib/training';
 import { buildCheckHistory } from '../lib/check';
 import type { ImportPayload } from '../lib/io';
@@ -59,6 +66,8 @@ export interface BodyData {
   clearRecords: () => void;
   /** すべて削除（設定だけ残す） */
   clearAll: () => void;
+  /** デモの初期データへ戻す。デモ向けビルド以外では何もしない */
+  resetToSeed: () => void;
 
   addDayExercise: (date: string, exerciseId: string) => void;
   removeDayExercise: (date: string, exerciseId: string) => void;
@@ -252,6 +261,18 @@ export function useBodyData(): BodyData {
 
   const clearAll = useCallback(() => {
     setData((prev) => ({ ...emptyData(), settings: prev.settings }));
+  }, []);
+
+  /*
+   * デモを初期データへ戻す。
+   *
+   * テーマだけは引き継ぐ。見た目は端末の好みで、デモの中身とは別のもの。
+   * 戻す対象は記録・種目・目標・設定のほうで、配色まで巻き戻す理由がない。
+   */
+  const resetToSeed = useCallback(() => {
+    const seed = demoSeed();
+    if (!seed) return;
+    setData((prev) => ({ ...seed, settings: { ...seed.settings, theme: prev.settings.theme } }));
   }, []);
 
   /* ---- 筋トレのログ ---- */
@@ -494,6 +515,7 @@ export function useBodyData(): BodyData {
     importData,
     clearRecords,
     clearAll,
+    resetToSeed,
     addDayExercise,
     removeDayExercise,
     reorderDayExercises,

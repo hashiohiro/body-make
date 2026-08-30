@@ -1,5 +1,18 @@
 /** 日付はすべて「ローカル日付の YYYY-MM-DD 文字列」を正とする。
  *  UTC 変換を挟むと深夜の記録が前日にずれるため、Date への出入りは必ずここを通す。 */
+import { IS_DEMO } from './env';
+
+/**
+ * デモで「今日」として扱う日。**初期データの最終記録日に時計を止める。**
+ *
+ * 止めないと、日が経つほどデモが壊れていく。最終記録からの日数が伸び、
+ * 今週のセット数は 0 になり、連続記録は途切れ、回復は「記録なし」に寄っていく。
+ * 説明用のデモが、放置された記録の見本になってしまう。
+ *
+ * 8/29（土）にしてあるのは、その週（8/23〜8/29）に 5 日ぶんのトレーニングが入っていて、
+ * 週次の集計が埋まっているため。翌日の 8/30 は日曜＝週の初日で、今週が空になる。
+ */
+export const DEMO_TODAY = '2026-08-29';
 
 const WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'] as const;
 
@@ -25,8 +38,12 @@ export function isoToTime(iso: string): number {
   return d.getTime();
 }
 
+/**
+ * 「今日」。**アプリ内で現在時刻を読むのはここだけ**なので、ここを止めれば全体が止まる。
+ * （ほかの `new Date()` は epoch ms から日付を作るためのもので、現在時刻は見ていない）
+ */
 export function todayISO(): string {
-  return toISO(new Date());
+  return IS_DEMO ? DEMO_TODAY : toISO(new Date());
 }
 
 export function addDays(iso: string, n: number): string {
