@@ -8,10 +8,11 @@ import { GoalEditor } from '../components/training/GoalEditor';
 import { Modal } from '../components/Modal';
 import { OrderList } from '../components/training/OrderList';
 import { PresetCard } from '../components/training/PresetCard';
-import { groupsOf } from '../lib/exerciseCatalog';
+import { groupsOf, isCardio } from '../lib/exerciseCatalog';
 import { addDays } from '../lib/date';
 import { personalBest, pickVolume, previousPoint } from '../lib/training';
 import { isCardioSet } from '../types';
+import type { SessionSet } from '../types';
 import type { BodyData } from '../hooks/useBodyData';
 import ui from '../styles/ui.module.scss';
 
@@ -19,6 +20,13 @@ interface Props {
   body: BodyData;
   /** 記録する日。ヘッダの日付ナビが持つ */
   date: string;
+}
+
+/** その行に何か打ってあるか。器で見るものが違う */
+function hasValue(set: SessionSet): boolean {
+  return isCardioSet(set)
+    ? set.meters != null || set.seconds != null
+    : set.weight != null || set.reps != null;
 }
 
 export function TrainingView({ body, date }: Props) {
@@ -84,15 +92,40 @@ export function TrainingView({ body, date }: Props) {
       addDayExercise(date, id);
       return;
     }
-    const hasValue = entry.sets.some((set) =>
-      isCardioSet(set)
-        ? set.meters != null || set.seconds != null
-        : set.weight != null || set.reps != null,
-    );
+    removeExercise(id);
+  };
+
+  /**
+   * その日から種目を外す。**入力済みなら確認する**（設計 §2.2）。
+   *
+   * ピッカーの ✓ を外すのも、カードの × も同じ操作なので、同じ確認を通す。
+   * 片方だけ確認するのは、どちらを押したかで結果が変わるということになる。
+   */
+  const removeExercise = (id: string) => {
+    const entry = dayEntries.find((e) => e.exerciseId === id);
     const name = byId.get(id)?.name ?? '';
-    if (hasValue && !confirm(`「${name}」をこの日から外します。\n入力したセットも消えます。`))
-      return;
+    if (entry?.sets.some(hasValue)) {
+      if (!confirm(`「${name}」を削除します。`)) return;
+    }
     removeDayExercise(date, id);
+  };
+
+  /**
+   * セット行を 1 本消す。**その行に値が入っていれば確認する。**
+   *
+   * 打ち直すために消すこともあるが、押し間違いで消えた値は戻せない。
+   * 空の行は失うものが無いので、確認を挟まない（§2.2 の「消えるものがあるときだけ聞く」）。
+   */
+  const removeSetAt = (id: string, index: number) => {
+    const entry = dayEntries.find((e) => e.exerciseId === id);
+    const set = entry?.sets[index];
+    const exercise = byId.get(id);
+    if (set && hasValue(set)) {
+      // 押した行のすぐ隣に出るので、どれを消すかは番号だけで足りる
+      const unit = exercise && isCardio(exercise.group) ? '本' : 'セット';
+      if (!confirm(`${index + 1}${unit}目を削除します。`)) return;
+    }
+    removeSet(date, id, index);
   };
 
   return (
@@ -188,8 +221,8 @@ export function TrainingView({ body, date }: Props) {
                 setSetValue(date, entry.exerciseId, index, field, value)
               }
               onAddSet={() => addSet(date, entry.exerciseId)}
-              onRemoveSet={(index) => removeSet(date, entry.exerciseId, index)}
-              onRemove={() => removeDayExercise(date, entry.exerciseId)}
+              onRemoveSet={(index) => removeSetAt(entry.exerciseId, index)}
+              onRemove={() => removeExercise(entry.exerciseId)}
               // 1 種目しか無い日に、動かしようのない操作を出さない
               onMove={dayEntries.length > 1 ? () => setMoving(entry.exerciseId) : undefined}
               onOpenDetail={() => setDetailId(entry.exerciseId)}

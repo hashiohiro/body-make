@@ -170,7 +170,10 @@ describe('トレ画面', () => {
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
 
     typeSet(setRows()[0]!, '60', '10');
+    // 打ってある行なので確認が入る
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(screen.getByLabelText('1セット目を削除'));
+    confirmSpy.mockRestore();
 
     // 行は消えるが、種目そのものは頼まれていないので消さない
     expect(screen.queryByLabelText(/1セット目の重量/)).toBeNull();
@@ -3406,5 +3409,58 @@ describe('＋ ボタンの置き場所', () => {
     render(<Harness />);
     openPicker();
     expect(dialogOpen()).toBe(true);
+  });
+});
+
+describe('消えるものがあるときだけ聞く', () => {
+  function addBench() {
+    seedExercises('ex_bench');
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+  }
+
+  it('空のセット行は確認せずに消える', () => {
+    addBench();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    fireEvent.click(screen.getByLabelText('1セット目を削除'));
+    expect(confirmSpy).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it('打ってあるセット行は確認してから消す', () => {
+    addBench();
+    typeSet(setRows()[0]!, '60', '10');
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    fireEvent.click(screen.getByLabelText('1セット目を削除'));
+
+    expect(confirmSpy).toHaveBeenCalledOnce();
+    // 断ったので残っている
+    expect(setRows()).toHaveLength(1);
+    confirmSpy.mockRestore();
+  });
+
+  it('カードの × も、打ってあれば確認する（ピッカーの ✓ と同じ扱い）', () => {
+    addBench();
+    typeSet(setRows()[0]!, '60', '10');
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    fireEvent.click(screen.getByLabelText(/ベンチプレス.*をこの日から外す/));
+
+    expect(confirmSpy).toHaveBeenCalledOnce();
+    expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(1);
+    confirmSpy.mockRestore();
+  });
+
+  it('何も打っていない種目はカードの × で確認せずに外れる', () => {
+    addBench();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    fireEvent.click(screen.getByLabelText(/ベンチプレス.*をこの日から外す/));
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
+    confirmSpy.mockRestore();
   });
 });
