@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
+  EXERCISE_GROUP_ORDER,
   GROUP_LABELS,
-  GROUP_ORDER,
   LOAD_MODE_HINTS,
   LOAD_MODE_LABELS,
   LOAD_MODE_ORDER,
@@ -11,8 +11,14 @@ import {
 } from '../../lib/exerciseCatalog';
 import { FACTOR_RANGE, RM_DIVISOR_RANGE } from '../../lib/storage';
 import { DEFAULT_RM_DIVISOR } from '../../lib/training';
-import type { Exercise, LoadMode, MuscleGroup, RepUnit, SessionPoint } from '../../types';
+import type { Exercise, ExerciseGroup, LoadMode, RepUnit, SessionPoint } from '../../types';
 import { CatalogPicker } from './CatalogPicker';
+import {
+  ExerciseFilterBar,
+  FILTER_THRESHOLD,
+  matchesGroup,
+  matchesQuery,
+} from './ExerciseFilterBar';
 import { ExerciseSettingsForm } from './ExerciseSettingsForm';
 import { GoalEditor } from './GoalEditor';
 import { ExerciseSummaryCard } from './ExerciseSummaryCard';
@@ -54,16 +60,13 @@ function goalValue(exercise: Exercise): string | null {
 
 const EMPTY_FORM = {
   name: '',
-  group: 'chest' as MuscleGroup,
+  group: 'chest' as ExerciseGroup,
   // 既定のまま作れる値。触りたい人だけ「詳細設定」から変える
   loadMode: 'standard' as LoadMode,
   repUnit: 'reps' as RepUnit,
   bodyweightFactor: null as number | null,
   rmDivisor: DEFAULT_RM_DIVISOR,
 };
-
-/** 絞り込みチップを出す件数。これ以下なら一覧のまま見渡せる */
-const FILTER_THRESHOLD = 8;
 
 /**
  * マイ種目（カタログから選んで手元に置いた種目）の追加・削除と、種目ごとの性質。
@@ -76,7 +79,8 @@ const FILTER_THRESHOLD = 8;
  */
 export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, sessions }: Props) {
   const [adding, setAdding] = useState(false);
-  const [filter, setFilter] = useState<MuscleGroup | 'all'>('all');
+  const [filter, setFilter] = useState<ExerciseGroup | 'all'>('all');
+  const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   /** 目標を開いている種目。設定（詳細）とは同時に開かない */
   const [goalOf, setGoalOf] = useState<string | null>(null);
@@ -95,16 +99,18 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
   const settingsExercise = editing ? (byId.get(editing) ?? null) : null;
 
   const sorted = [...exercises].sort((a, b) => a.order - b.order);
-  const filtered =
-    filter === 'all'
-      ? sorted
-      : sorted.filter((e) => e.group === filter || e.subGroups.some((x) => x.group === filter));
+  const filtered = sorted.filter((e) => matchesGroup(e, filter) && matchesQuery(e.name, query));
   const shown = filtered.filter((e) => !e.hidden);
   /*
-   * 非表示は部位で切らず、絞り込みにも掛けずに末尾へまとめる。
-   * ここは「使う種目を並べる場所」ではなく「戻す場所」なので、探し方が違う。
+   * 非表示も部位で切る。**絞り込みは一覧ぜんぶに掛かる。**
+   *
+   * 末尾にまとめてあるからと絞り込みから外していたが、
+   * 「有酸素」で絞っているのに関係ない部位の非表示が下に並ぶ状態になっていた。
+   * 絞り込みは「この部位の話だけにする」という指示なので、例外を作らない。
    */
-  const hiddenItems = sorted.filter((e) => e.hidden);
+  const hiddenShown = filtered.filter((e) => e.hidden);
+  /** 件数の見出しは一覧ぜんぶの話。絞り込みでは動かさない */
+  const hiddenAll = sorted.filter((e) => e.hidden);
 
   const submit = () => {
     const name = form.name.trim();
@@ -240,9 +246,9 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
       <header className={ui.cardHeader}>
         <h2 className={ui.cardTitle}>マイ種目</h2>
         <span className={ui.hint}>
-          {sorted.length - hiddenItems.length}件 / 目標{' '}
+          {sorted.length - hiddenAll.length}件 / 目標{' '}
           {sorted.filter((e) => !e.hidden && e.goal != null).length}件
-          {hiddenItems.length > 0 && ` / 非表示 ${hiddenItems.length}件`}
+          {hiddenAll.length > 0 && ` / 非表示 ${hiddenAll.length}件`}
         </span>
       </header>
 
@@ -279,9 +285,9 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
               部位
               <select
                 value={form.group}
-                onChange={(e) => setForm((f) => ({ ...f, group: e.target.value as MuscleGroup }))}
+                onChange={(e) => setForm((f) => ({ ...f, group: e.target.value as ExerciseGroup }))}
               >
-                {GROUP_ORDER.map((g) => (
+                {EXERCISE_GROUP_ORDER.map((g) => (
                   <option key={g} value={g}>
                     {GROUP_LABELS[g]}
                   </option>
@@ -396,30 +402,20 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
       ) : (
         <>
           {sorted.length > FILTER_THRESHOLD && (
-            <div
-              className={`${ui.chipRow} ${s.filterRow}`}
-              role="group"
-              aria-label="部位で絞り込む"
-            >
-              {(['all', ...GROUP_ORDER] as (MuscleGroup | 'all')[]).map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  className={ui.chip}
-                  aria-pressed={filter === g}
-                  onClick={() => setFilter(g)}
-                >
-                  {g === 'all' ? 'すべて' : GROUP_LABELS[g]}
-                </button>
-              ))}
-            </div>
+            <ExerciseFilterBar
+              query={query}
+              onQuery={setQuery}
+              group={filter}
+              onGroup={setFilter}
+              exercises={sorted}
+            />
           )}
 
           {/*
             部位ごとに見出しを付ける。並び替えを持たないので、探し方は「何番目か」ではなく
             「どの部位か」になる。見出しは主部位で切る（一覧の絞り込みと同じ切り方）
           */}
-          {GROUP_ORDER.map((group) => {
+          {EXERCISE_GROUP_ORDER.map((group) => {
             const items = shown.filter((ex) => ex.group === group);
             if (items.length === 0) return null;
 
@@ -432,10 +428,14 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
             );
           })}
 
-          {hiddenItems.length > 0 && (
+          {filtered.length === 0 && (
+            <p className={ui.emptyState}>このフィルターに合う種目はありません。</p>
+          )}
+
+          {hiddenShown.length > 0 && (
             <>
               <div className={s.manageGroup}>非表示</div>
-              {hiddenItems.map(card)}
+              {hiddenShown.map(card)}
             </>
           )}
 

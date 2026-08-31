@@ -39,7 +39,7 @@ export interface Settings {
 }
 
 export interface AppData {
-  version: 5;
+  version: 7;
   settings: Settings;
   /** 観測レイヤー（測る） */
   entries: Entries;
@@ -171,6 +171,15 @@ export interface Stats {
 export type MuscleGroup = 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'core';
 
 /**
+ * 種目の分類。**有酸素は部位ではない**ので、`MuscleGroup` とは別の型にする。
+ *
+ * 同じ 1 つの enum にまとめると、部位別セット数・部位の回復・ヒートマップといった
+ * 「筋肉の話をしている集計」に有酸素が自動で流れ込む。それらは `Record<MuscleGroup, …>`
+ * のままにしておき、**部位として読んでいる箇所はコンパイラに炙り出させる。**
+ */
+export type ExerciseGroup = MuscleGroup | 'cardio';
+
+/**
  * 目標の立て方。加重できる種目は重量、自重種目は回数で決めたいことが多い。
  * どちらで判定するかは種目ごとに選ぶ。
  */
@@ -193,7 +202,23 @@ export interface SubGroup {
  * 種目によっては「これ以上は伸ばさない、いまの水準を保てればいい」が答えになる。
  * 全部の種目に数値を求めると、そう思っている種目にも未達の顔をさせることになる。
  */
-export type GoalType = 'maintain' | 'weight' | 'volume' | 'reps';
+/**
+ * 目標の測り方。前半 4 つは筋トレ、後半 3 つは有酸素で使う。
+ *
+ * 有酸素の分を `weight` / `volume` に相乗りさせない。
+ * 「重量目標 5」が km を指す状態は、読む側にも書く側にも説明が要る。
+ */
+export type GoalType =
+  | 'maintain'
+  | 'weight'
+  | 'volume'
+  | 'reps'
+  /** その日の合計距離（km） */
+  | 'distance'
+  /** その日の合計時間（分） */
+  | 'duration'
+  /** 速度（m/分）。**大きいほど良い** に揃えるため、ペース（分/km）では持たない */
+  | 'speed';
 
 export interface ExerciseTarget {
   type: GoalType;
@@ -221,6 +246,8 @@ export type LoadMode =
  *
  * 挙上量は「重量 × レップ数」なので、秒で数える種目は計上しない。
  * 別のフラグを持たず、単位から決まる。
+ *
+ * **有酸素はここを使わない。**距離と時間は `CardioSet` が別に持つ。
  */
 export type RepUnit = 'reps' | 'seconds';
 
@@ -228,8 +255,8 @@ export interface Exercise {
   /** 生成後は不変。ログはこれを参照する。カタログ由来は固定 ID、自作は randomUUID */
   id: string;
   name: string;
-  /** 主に効かせる部位。種目の並びや目標のグループ分けに使う */
-  group: MuscleGroup;
+  /** 主に効かせる部位。有酸素は部位を持たず 'cardio'（種目の並びと目標の見出しに使う） */
+  group: ExerciseGroup;
   /**
    * 補助的に使う部位。ベンチなら肩と腕など。
    * 部位別の集計では weight ぶんだけ数える（fractional set の数え方）。
@@ -276,6 +303,17 @@ export interface Exercise {
    */
   axial: boolean;
   /**
+   * 繰り返して行う種目か。**行を足せるかどうかを決める。**
+   *
+   * 筋トレはセットを重ねるのが前提だが、有酸素は種目で分かれる。
+   * ランニングはふつう通しで 1 回走るもので、そこで知りたいのは「どれだけ走ったか」。
+   * インターバル走・水泳（25m×20本）・サーキット（ラウンド）は逆に本数そのものが量。
+   *
+   * 偽なら記録画面から「＋ 追加」も連番も行の × も消えて、入力欄 2 つだけになる。
+   * 既定はカタログが持ち、種目ごとに設定から変えられる（走る人がインターバルもやる）。
+   */
+  repeated: boolean;
+  /**
    * 1 セットあたりの所要時間（分）。**null なら `CheckSettings.minutesPerSet` に落ちる。**
    *
    * 休憩が明らかに長い高重量コンパウンドだけ上書きする。
@@ -321,10 +359,35 @@ export interface WorkSet {
   reps: number | null;
 }
 
+/**
+ * 有酸素の 1 本。**筋トレのセットとは別の器で持つ。**
+ *
+ * 距離と時間を `weight` / `reps` に相乗りさせていたときは、
+ * 重量の丸め（小数第 1 位）でプールの 25m が 0 になり、
+ * レップの値域（1〜100）で 120 分のライドが保存できなかった。
+ * 数えているものが違えば、入る値の刻みも幅も違う。
+ *
+ * **どちらも整数で持つ。**m と 秒 なら丸めが要らず、
+ * 「25m」も「90秒」もそのまま入る。表示のとき km と 分に直す。
+ */
+export interface CardioSet {
+  /** m */
+  meters: number | null;
+  /** 秒 */
+  seconds: number | null;
+}
+
+/** 1 行ぶんの記録。種目が有酸素かどうかで、どちらが入るかが決まる */
+export type SessionSet = WorkSet | CardioSet;
+
+export function isCardioSet(set: SessionSet): set is CardioSet {
+  return 'meters' in set || 'seconds' in set;
+}
+
 export interface SessionExercise {
   exerciseId: string;
   /** 順序が意味を持つ（ランプアップ／バックオフの判定）ため、並びを保って保存する */
-  sets: WorkSet[];
+  sets: SessionSet[];
 }
 
 /** キーは 'YYYY-MM-DD'（entries と同じローカル日付）。同一種目は 1 日 1 エントリ */
@@ -353,6 +416,10 @@ export interface SetPoint {
   index: number;
   weight: number | null;
   reps: number | null;
+  /** 有酸素だけ。その 1 本の距離(m) */
+  meters: number | null;
+  /** 有酸素だけ。その 1 本の時間(秒) */
+  seconds: number | null;
   role: SetRole;
   /** 挙上量に数えるか（欠測・loadType none は false） */
   counted: boolean;
@@ -364,9 +431,9 @@ export interface SetPoint {
 export interface ExercisePoint {
   exerciseId: string;
   name: string;
-  /** 主部位 */
-  group: MuscleGroup;
-  /** 主部位 + 補助部位。「その部位をやったか」の判定に使う（係数は見ない） */
+  /** 主部位。有酸素は 'cardio' */
+  group: ExerciseGroup;
+  /** 主部位 + 補助部位。「その部位をやったか」の判定に使う（係数は見ない）。有酸素は空 */
   groups: MuscleGroup[];
   /** 補助部位と、その係数。セット数と挙上量の配分に使う */
   subGroups: SubGroup[];
@@ -383,7 +450,30 @@ export interface ExercisePoint {
   measured: boolean;
   /** そのセッションで挙げた最大レップ数（回数目標の判定に使う） */
   maxReps: number | null;
-  /** 成長の主指標。挙上量が出せない種目（loadMode none）は最大レップ数 */
+  /**
+   * 有酸素だけ。そのセッションの合計距離（m）。距離を打っていなければ null。
+   * 筋トレの挙上量にあたる「量」。
+   *
+   * **単位は入力欄と同じ m。**打つのが m なのに目標や合計が km だと、
+   * 見るたびに桁を合わせ直すことになる。
+   */
+  meters: number | null;
+  /** 有酸素だけ。そのセッションの合計時間（分）。保存は秒 */
+  minutes: number | null;
+  /**
+   * 有酸素だけ。速度（m/分）= 合計距離 ÷ 合計時間。どちらか欠ければ null。
+   *
+   * **単位は入力欄に揃える。**距離が m、時間が分なので、割った答えは m/分。
+   * km/h に直すと、打った 2 つの数字からどう出た値なのかが読めなくなる。
+   *
+   * 筋トレの推定1RM にあたる「強度」。**実測 2 つからの導出**なので、
+   * 推定1RM と違って経験式を通していない。
+   *
+   * ペース（分/km）では持たない。小さいほど良い値を 1 つ混ぜると、
+   * 自己最高・到達率・停滞判定・グラフの向きがその指標だけ反転する。
+   */
+  speed: number | null;
+  /** 成長の主指標。挙上量が出せない種目は最大レップ数、有酸素は合計距離 */
   metric: number | null;
 }
 

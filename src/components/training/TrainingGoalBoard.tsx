@@ -5,13 +5,13 @@ import { ExerciseSummaryCard } from './ExerciseSummaryCard';
 import { GoalEditor } from './GoalEditor';
 import { Modal } from '../Modal';
 import { NumericInput } from '../NumericInput';
-import { GROUP_LABELS, GROUP_ORDER, goalTypeLabel } from '../../lib/exerciseCatalog';
+import { GROUP_LABELS, GROUP_ORDER, goalTypeLabel, isCardio } from '../../lib/exerciseCatalog';
 import { deltaTone, fmt, fmtDelta, fmtPercent } from '../../lib/format';
 import { GROUP_GOAL_RANGE } from '../../lib/storage';
 import { addDays, formatMD, startOfWeek, todayISO } from '../../lib/date';
 import { RECENT_DAYS, STALE_WEEKS, formatSets } from '../../lib/training';
 import type { ExerciseGoal, TrainingStats } from '../../lib/training';
-import type { Exercise, GroupGoals, MuscleGroup, SessionPoint } from '../../types';
+import type { Exercise, ExerciseGroup, GroupGoals, MuscleGroup, SessionPoint } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
@@ -78,7 +78,7 @@ export function TrainingGoalBoard({
   onSetGroupGoal,
   onUpdate,
 }: Props) {
-  const [open, setOpen] = useState<MuscleGroup | null>(null);
+  const [open, setOpen] = useState<ExerciseGroup | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
@@ -111,7 +111,7 @@ export function TrainingGoalBoard({
   };
 
   /** 面ごとに見出しを変える。いまどこを触っているのかを、上に出しておく */
-  const dialogTitle = (group: MuscleGroup) =>
+  const dialogTitle = (group: ExerciseGroup) =>
     editingExercise
       ? `${editingExercise.name}の目標`
       : settingsExercise
@@ -123,6 +123,31 @@ export function TrainingGoalBoard({
   const totalSets = GROUP_ORDER.reduce((sum, g) => sum + stats.thisWeekSetsByGroup[g], 0);
   const thisWeekStart = startOfWeek(todayISO());
   const thisWeekEnd = addDays(thisWeekStart, 6);
+
+  /*
+   * 有酸素の今週。**距離は種目をまたいで足さない**（走った 10km と漕いだ 30km を
+   * 足した 40km に読み方がない／§11-18）。足せるのは回数と時間まで。
+   * 距離と速度は種目ごとの話なので、種目の詳細ダイアログが持つ。
+   */
+  const cardioWeek = (() => {
+    const days = new Set<string>();
+    let minutes = 0;
+    for (const session of sessions) {
+      if (session.date < thisWeekStart || session.date > thisWeekEnd) continue;
+      for (const point of session.exercises) {
+        if (!isCardio(point.group)) continue;
+        days.add(session.date);
+        minutes += point.minutes ?? 0;
+      }
+    }
+    return { days: days.size, minutes: Math.round(minutes) };
+  })();
+
+  const cardioRow = {
+    group: 'cardio' as const,
+    items: goals.filter((g) => g.group === 'cardio'),
+    days: stats.daysSinceCardio,
+  };
 
   const rows = GROUP_ORDER.map((group) => {
     const items = goals.filter((g) => g.group === group);
@@ -143,7 +168,27 @@ export function TrainingGoalBoard({
     };
   });
 
-  const current = open == null ? null : rows.find((r) => r.group === open)!;
+  /**
+   * 開いている面。**muscle が null なら部位ではない（有酸素）。**
+   * 部位目標・週のセット数・補助部位の話はそこでは出さない。
+   */
+  const current =
+    open == null
+      ? null
+      : open === 'cardio'
+        ? {
+            group: 'cardio' as ExerciseGroup,
+            muscle: null,
+            items: cardioRow.items,
+            days: cardioRow.days,
+            target: null as number | null,
+            sets: 0,
+            progress: null as number | null,
+          }
+        : (() => {
+            const row = rows.find((r) => r.group === open)!;
+            return { ...row, group: row.group as ExerciseGroup, muscle: row.group };
+          })();
   const pickedExercise = picked ? byId.get(picked) : null;
   /** その部位の、まだ目標を持たない種目 */
   const withoutGoal =
@@ -209,6 +254,44 @@ export function TrainingGoalBoard({
           </span>
         </button>
       ))}
+
+      {/*
+        有酸素は部位ではないので、**週のセット数も部位目標も持たない。**
+        代わりに出すのは回数と時間で、これは種目をまたいでも足せる量。
+        行が出るのは有酸素の種目を持っているときだけ（持たない人に空の行を見せない）。
+      */}
+      {exercises.some((e) => isCardio(e.group) && !e.hidden) && (
+        <button
+          type="button"
+          className={s.boardRow}
+          aria-label={`${GROUP_LABELS.cardio}の目標`}
+          onClick={() => setOpen('cardio')}
+        >
+          <span className={s.boardHead}>
+            <span className={s.boardName}>{GROUP_LABELS.cardio}</span>
+            <span className={s.boardStatus}>{lastDoneLabel(cardioRow.days)}</span>
+            <span className={s.chevron} aria-hidden="true">
+              ›
+            </span>
+          </span>
+
+          <span className={s.boardLine}>
+            <span className={s.boardLabel}>今週</span>
+            <span className={s.boardValue}>
+              {cardioWeek.days}回 / {cardioWeek.minutes}分
+            </span>
+          </span>
+
+          <span className={s.boardLine}>
+            <span className={s.boardLabel}>種目の目標</span>
+            <span className={s.boardValue}>
+              {cardioRow.items.length === 0
+                ? '未設定'
+                : `${cardioRow.items.filter((g) => g.reached).length} / ${cardioRow.items.length} 到達`}
+            </span>
+          </span>
+        </button>
+      )}
 
       <p className={ui.note}>
         <b>今週のセット数</b>は日曜に 0 へ戻ります（今週は {formatMD(thisWeekStart)} 〜{' '}
@@ -279,7 +362,7 @@ export function TrainingGoalBoard({
                     type="button"
                     className={ui.chip}
                     aria-pressed={current.target === preset.sets}
-                    onClick={() => onSetGroupGoal(current.group, preset.sets)}
+                    onClick={() => current.muscle && onSetGroupGoal(current.muscle, preset.sets)}
                   >
                     {preset.label}
                   </button>
@@ -298,7 +381,8 @@ export function TrainingGoalBoard({
                     step={1}
                     placeholder="—"
                     onCommit={(v) =>
-                      onSetGroupGoal(current.group, v == null ? null : Math.round(v))
+                      current.muscle &&
+                      onSetGroupGoal(current.muscle, v == null ? null : Math.round(v))
                     }
                   />
                   <span>セット</span>
@@ -332,10 +416,18 @@ export function TrainingGoalBoard({
                 区切り線はここには引かない（部位目標のかたまりは設定ボタンまで続く）
               */}
               <div className={s.groupSummary}>
-                <span>今週のセット数</span>
+                <span>{current.muscle ? '今週のセット数' : '今週'}</span>
                 <span className={s.boardValue}>
-                  {formatSets(current.sets)}
-                  {current.target == null ? ' セット（目標なし）' : ` / ${current.target} セット`}
+                  {current.muscle ? (
+                    <>
+                      {formatSets(current.sets)}
+                      {current.target == null
+                        ? ' セット（目標なし）'
+                        : ` / ${current.target} セット`}
+                    </>
+                  ) : (
+                    `${cardioWeek.days}回 / ${cardioWeek.minutes}分`
+                  )}
                 </span>
               </div>
 
@@ -350,11 +442,17 @@ export function TrainingGoalBoard({
 
               <p className={ui.note}>
                 {current.days == null
-                  ? 'この部位の記録はまだありません'
+                  ? current.muscle
+                    ? 'この部位の記録はまだありません'
+                    : '有酸素の記録はまだありません'
                   : current.days === 0
                     ? '今日やりました'
                     : `最後にやってから ${current.days}日`}
-                。補助部位は既定で 0.5 セットとして数えます。
+                。
+                {current.muscle
+                  ? '補助部位は既定で 0.5 セットとして数えます。'
+                  : /* 走った km と漕いだ km を足しても読めない（§11-18） */
+                    '距離は種目ごとに見ます（種目の行から開けます）。'}
               </p>
 
               {/*
@@ -362,21 +460,26 @@ export function TrainingGoalBoard({
                 どちらが読むもので どちらが押すものか分からなくなる。
                 種目カードの「推移を見る / 設定」と同じ部品を使う。
               */}
-              <div className={`${ui.btnRow} ${s.groupSummaryEnd}`}>
-                <button
-                  type="button"
-                  className={s.miniBtn}
-                  onClick={() => setEditingGroupGoal(true)}
-                >
-                  部位目標を設定
-                </button>
-              </div>
+              {current.muscle && (
+                <div className={`${ui.btnRow} ${s.groupSummaryEnd}`}>
+                  <button
+                    type="button"
+                    className={s.miniBtn}
+                    onClick={() => setEditingGroupGoal(true)}
+                  >
+                    部位目標を設定
+                  </button>
+                </div>
+              )}
 
               {/* 強さ。その部位の種目ごとの目標 */}
               <div className={s.pickerLabel}>種目の目標</div>
 
               {current.items.length === 0 ? (
-                <p className={ui.emptyState}>この部位の種目には、まだ目標がありません。</p>
+                <p className={ui.emptyState}>
+                  {current.muscle ? 'この部位の種目には' : '有酸素の種目には'}
+                  、まだ目標がありません。
+                </p>
               ) : (
                 current.items.map((goal) => {
                   const exercise = byId.get(goal.exerciseId);

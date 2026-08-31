@@ -10,6 +10,8 @@ export interface Metric {
   digits: number;
   /** 挙上量に計上しない種目では出さない */
   needsWeight?: boolean;
+  /** 有酸素だけで意味を持つ指標。筋トレの一覧には出さない */
+  cardioOnly?: boolean;
   /** 目標の参照線と進捗を出す指標。実際に扱えた最大重量だけが目標と直接比較できる */
   weightLike?: boolean;
   pick: (point: ExercisePoint) => number | null;
@@ -25,6 +27,8 @@ export const METRICS: Metric[] = [
     pick: (p) => (p.volume > 0 ? p.volume : null),
   },
   { id: 'sets', label: 'セット数', unit: 'セット', digits: 0, pick: (p) => p.workSets },
+  // 有酸素は本数（インターバルの本数、サーキットのラウンド数）
+  { id: 'bouts', label: '本数', unit: '本', digits: 0, cardioOnly: true, pick: (p) => p.workSets },
   // レップ数に左右されない「その日いちばん重かった重量」。推定1RM と並べると、
   // 重量が上がったのか同じ重量で回数が伸びたのかを切り分けられる
   // 最大重量と目標は「バーに載せた数字」で見る。挙上量と推定1RM は換算後の負荷
@@ -39,6 +43,37 @@ export const METRICS: Metric[] = [
   },
   { id: 'maxReps', label: '最大回数', unit: '', digits: 0, pick: (p) => p.maxReps },
   { id: 'oneRm', label: '推定1RM', unit: 'kg', digits: 1, needsWeight: true, pick: (p) => p.oneRm },
+
+  /*
+   * 有酸素。距離が「量」、速度が「強度」で、筋トレの 挙上量 / 推定1RM にあたる。
+   * どれも大きいほど良い向きに揃えてある（ペースで持つと速度だけ向きが反転する）。
+   */
+  {
+    id: 'distance',
+    label: '距離',
+    // 入力欄と同じ m。桁を合わせ直さずに読める
+    unit: 'm',
+    digits: 0,
+    cardioOnly: true,
+    weightLike: true,
+    pick: (p) => p.meters,
+  },
+  {
+    id: 'minutes',
+    label: '時間',
+    unit: '分',
+    digits: 0,
+    cardioOnly: true,
+    pick: (p) => p.minutes,
+  },
+  {
+    id: 'speed',
+    label: '速度',
+    unit: 'm/分',
+    digits: 1,
+    cardioOnly: true,
+    pick: (p) => p.speed,
+  },
 ];
 
 /** 開始値は最初の 3 セッションの平均。初回 1 点だと当日の調子が以後すべての差分に乗る */

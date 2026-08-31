@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Modal } from '../Modal';
 import { TimeSeriesChart } from '../charts/TimeSeriesChart';
 import type { ChartSeries, SeriesPoint } from '../charts/TimeSeriesChart';
-import { GROUP_LABELS } from '../../lib/exerciseCatalog';
+import { GROUP_LABELS, countsReps, isCardio } from '../../lib/exerciseCatalog';
 import { addDays, formatMD, isoToTime, startOfWeek, todayISO } from '../../lib/date';
 import { deltaTone, fmt, fmtDelta } from '../../lib/format';
 import {
@@ -13,7 +13,7 @@ import {
   plateau,
 } from '../../lib/training';
 import { METRICS, baselineOf, lastOf } from './metrics';
-import type { Exercise, SessionPoint } from '../../types';
+import type { Exercise, MuscleGroup, SessionPoint } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
@@ -61,8 +61,46 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
    * 週の部位別セット数は種目をまたいだ合計なので、そこに自分がどれだけ効いたかは
    * 合計だけを見ても分からない。
    */
+  /**
+   * 有酸素のその週の合計。回数・距離・時間と、そこから出した速度。
+   * 部位別セット数の代わりに置く「現状の可視化」。
+   */
+  const cardioWeek = useMemo(() => {
+    if (!exercise || !isCardio(exercise.group)) return null;
+    const weekEnd = addDays(weekStart, 6);
+    let days = 0;
+    let distance = 0;
+    let hasDistance = false;
+    let minutes = 0;
+    for (const session of sessions) {
+      if (session.date < weekStart || session.date > weekEnd) continue;
+      const point = session.exercises.find((p) => p.exerciseId === exercise.id);
+      if (!point) continue;
+      days++;
+      minutes += point.minutes ?? 0;
+      if (point.meters != null) {
+        distance += point.meters;
+        hasDistance = true;
+      }
+    }
+    if (days === 0) return null;
+    const meters = hasDistance ? Math.round(distance) : null;
+    const mins = Math.round(minutes);
+    return {
+      weekStart,
+      weekEnd,
+      days,
+      distance: meters,
+      minutes: mins,
+      // 距離も速度も入力欄と同じ単位（m と m/分）
+      speed:
+        meters != null && meters > 0 && mins > 0 ? Math.round((meters / mins) * 10) / 10 : null,
+    };
+  }, [exercise, sessions, weekStart]);
+
   const contribution = useMemo(() => {
-    if (!exercise) return null;
+    // 有酸素は部位を持たないので、部位への貢献という話にならない
+    if (!exercise || isCardio(exercise.group)) return null;
     const weekEnd = addDays(weekStart, 6);
     let sets = 0;
     for (const session of sessions) {
@@ -75,7 +113,7 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
 
     const week = buildWeeklySets(sessions, weekStart).find((w) => w.start === weekStart) ?? null;
     const rows = [
-      { group: exercise.group, weight: 1, sets },
+      { group: exercise.group as MuscleGroup, weight: 1, sets },
       ...exercise.subGroups.map((sub) => ({
         group: sub.group,
         weight: sub.weight,
@@ -87,9 +125,17 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
 
   if (!exercise) return null;
 
-  // 秒で数える種目は挙上量に計上しないので、重量系の指標を出さない
-  const metrics = METRICS.filter((m) => !m.needsWeight || exercise.repUnit !== 'seconds');
-  const fallbackId = exercise.repUnit === 'seconds' ? 'maxReps' : 'volume';
+  // 秒で数える種目は挙上量に計上しないので重量系を出さない。有酸素は距離・時間・速度に入れ替わる
+  const metrics = METRICS.filter((m) =>
+    isCardio(exercise.group)
+      ? m.cardioOnly
+      : !m.cardioOnly && (!m.needsWeight || countsReps(exercise.repUnit)),
+  );
+  const fallbackId = isCardio(exercise.group)
+    ? 'distance'
+    : exercise.repUnit === 'seconds'
+      ? 'maxReps'
+      : 'volume';
   const metric =
     metrics.find((m) => m.id === metricId) ??
     metrics.find((m) => m.id === fallbackId) ??
@@ -209,6 +255,26 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
         />
 
         {metric.id === 'oneRm' && <p className={ui.note}>推定1RMは記録からの換算値です。</p>}
+
+        {cardioWeek && (
+          <>
+            <div className={s.dialogHead}>
+              <span>今週の合計</span>
+              <span>
+                {formatMD(cardioWeek.weekStart)}〜{formatMD(cardioWeek.weekEnd)}
+              </span>
+            </div>
+            <div className={s.goalFoot}>
+              <span>{cardioWeek.days}回</span>
+              <span>
+                {cardioWeek.distance != null && `${cardioWeek.distance}m ・ `}
+                {cardioWeek.minutes}分{cardioWeek.speed != null && ` ・ ${cardioWeek.speed}m/分`}
+              </span>
+            </div>
+            {/* 種目をまたいだ合計は出さない。走った距離と漕いだ距離を足しても読めない */}
+            <p className={ui.note}>この種目ぶんだけの合計です。</p>
+          </>
+        )}
 
         {contribution && (
           <>

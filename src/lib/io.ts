@@ -58,6 +58,9 @@ const TRAINING_HEADER = [
   '単位',
   '有効重量',
   '挙上量',
+  // 有酸素だけ埋まる。保存している値（m と 秒）をそのまま出す
+  '距離m',
+  '時間秒',
 ];
 
 const WEEKLY_HEADER = [
@@ -126,6 +129,8 @@ export function buildCsvRows(
         point.repUnit === 'seconds' ? '秒' : '回',
         cell(set.effectiveWeight),
         cell(set.volume, 0),
+        set.meters == null ? '' : String(set.meters),
+        set.seconds == null ? '' : String(set.seconds),
       ]),
     ),
   );

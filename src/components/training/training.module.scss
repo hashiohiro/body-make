@@ -116,6 +116,18 @@
   grid-template-columns: 34px minmax(0, 1fr) 34px;
 }
 
+/*
+ * 1 回で完結する種目の行。連番も × も置かないので、その列ごと落とす。
+ * 空の列を残すと入力欄が中央から寄って見える
+ */
+.setRowBare {
+  grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr);
+}
+
+.setRowBare.setRowSolo {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .setActions {
   display: flex;
   align-items: stretch;
@@ -358,6 +370,36 @@
   margin-top: 14px;
   flex-wrap: wrap;
   overflow-x: visible;
+}
+
+/* 検索欄と部位チップの組。組の外側の余白はここが持つ */
+.filterBar {
+  margin-top: 14px;
+
+  .filterRow {
+    margin-top: 8px;
+  }
+
+  .filterToggle {
+    margin: 0 0 8px;
+  }
+}
+
+/* フィルターの開閉ボタン。幅はほかのボタンと同じく btnRow に任せる */
+.filterToggle {
+  margin: 14px 0 0;
+}
+
+.searchField {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink);
+  /* 16px 未満だと iOS が focus のたびに画面を拡大する */
+  font-size: 16px;
 }
 
 /*
@@ -781,6 +823,30 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/*
+ * 「維持」は数値を持たない。欄は置いたまま見えなくする。
+ *
+ * 高さを別に指定して場所だけ確保すると、欄の実際の高さとわずかにずれる。
+ * 同じ要素を残せば、確保される高さは定義上いつも一致する
+ */
+.goalValueHidden {
+  visibility: hidden;
+}
+
+/* 「目標を外す」が出ていないときの場所取り。ボタン（btnSm）と同じ高さ */
+.goalRemoveEmpty {
+  min-height: 36px;
+}
+
+/*
+ * 説明は種類によって 1 行だったり 2 行だったりする。
+ * 高さを 2 行ぶんで固定して、切り替えで下の要素が動かないようにする
+ * （font-size は ui.note の 11px、line-height は 1.65）
+ */
+.goalNote {
+  min-height: 3.3em;
 }
 
 /* 決める値なので、フォームの中でいちばん大きく出す */

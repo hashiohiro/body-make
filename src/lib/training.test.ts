@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CATALOG } from './exerciseCatalog';
+import { CATALOG, GROUP_ORDER } from './exerciseCatalog';
 import {
   buildBodyWeightLookup,
   buildExercisePoint,
   buildSessions,
+  buildWeeklySets,
+  computeTrainingStats,
   effectiveWeight,
   estimateOneRm,
   exerciseBaseline,
@@ -13,7 +15,14 @@ import {
   summarizeSets,
 } from './training';
 import { DATA_VERSION, sanitizeData, sanitizeWorkouts } from './storage';
-import type { DailyPoint, Exercise, SessionExercise, WorkSet } from '../types';
+import type {
+  CardioSet,
+  DailyPoint,
+  Exercise,
+  SessionExercise,
+  SessionSet,
+  WorkSet,
+} from '../types';
 
 /* ---------------- helpers ---------------- */
 
@@ -30,6 +39,7 @@ function ex(patch: Partial<Exercise> = {}): Exercise {
     goal: null,
     order: 0,
     hidden: false,
+    repeated: true,
     axial: false,
     minutesPerSet: null,
     ...patch,
@@ -40,7 +50,7 @@ function sets(...rows: [number | null, number | null][]): WorkSet[] {
   return rows.map(([weight, reps]) => ({ weight, reps }));
 }
 
-function entry(sets: WorkSet[], exerciseId = 'ex_test'): SessionExercise {
+function entry(sets: SessionSet[], exerciseId = 'ex_test'): SessionExercise {
   return { exerciseId, sets };
 }
 
@@ -334,7 +344,7 @@ describe('サニタイズと移行', () => {
   });
 
   it('値が空でも種目は残る（読み込みのたびに掃かない）', () => {
-    const known = new Set(['a']);
+    const known = new Map([['a', { cardio: false, repUnit: 'reps' as const }]]);
     const out = sanitizeWorkouts(
       { '2026-03-01': [{ exerciseId: 'a', sets: [{ weight: null, reps: null }] }] },
       known,
@@ -343,13 +353,13 @@ describe('サニタイズと移行', () => {
   });
 
   it('セットが 0 本の種目も残る（外すのは種目カードの × だけ）', () => {
-    const known = new Set(['a']);
+    const known = new Map([['a', { cardio: false, repUnit: 'reps' as const }]]);
     const out = sanitizeWorkouts({ '2026-03-01': [{ exerciseId: 'a', sets: [] }] }, known);
     expect(out['2026-03-01']).toEqual([{ exerciseId: 'a', sets: [] }]);
   });
 
   it('同じ種目が 1 日に重複していたらセットを連結する', () => {
-    const known = new Set(['a']);
+    const known = new Map([['a', { cardio: false, repUnit: 'reps' as const }]]);
     const out = sanitizeWorkouts(
       {
         '2026-03-01': [
@@ -530,13 +540,143 @@ describe('デモの今日', () => {
   });
 });
 
+describe('有酸素', () => {
+  const run = ex({ id: 'ex_running', name: 'ランニング', group: 'cardio' });
+  const rope = ex({ id: 'ex_jump_rope', name: '縄跳び', group: 'cardio' });
+  const bench = ex({ id: 'ex_bench', name: 'ベンチプレス', group: 'chest' });
+
+  /** 有酸素の 1 本。距離(m) と 時間(秒) */
+  function bouts(...rows: [number | null, number | null][]): CardioSet[] {
+    return rows.map(([meters, seconds]) => ({ meters, seconds }));
+  }
+
+  it('距離と時間から速度を出す（合計 ÷ 合計）', () => {
+    // 5000m を 1800秒。166.7 m/分
+    const p = buildExercisePoint(run, entry(bouts([5000, 1800]), 'ex_running'), null);
+    // 距離は入力欄と同じ m のまま。km に直すのは速度を出すときだけ
+    expect(p.meters).toBe(5000);
+    expect(p.minutes).toBe(30);
+    expect(p.speed).toBe(166.7);
+    // 量の指標は合計距離。挙上量は出さない
+    expect(p.metric).toBe(5000);
+    expect(p.volume).toBe(0);
+    expect(p.oneRm).toBeNull();
+  });
+
+  it('プールの 25m も 90 秒も、丸められずに入る', () => {
+    /*
+     * 相乗りしていた頃は距離が重量の欄で小数第 1 位に丸められ、
+     * 0.025km が 0 になっていた。m と 秒の整数で持てば起きない
+     */
+    const p = buildExercisePoint(run, entry(bouts([25, 90]), 'ex_running'), null);
+    expect(p.meters).toBe(25);
+    expect(p.minutes).toBe(1.5);
+    expect(p.speed).toBe(16.7);
+  });
+
+  it('インターバルは合計で数える（セットごとの速度を平均しない）', () => {
+    /*
+     * 400m×300秒 と 1600m×480秒。
+     * セットごとの速度を平均すると (80 + 200) / 2 = 140 になるが、
+     * 実際に動いた量は 2000m / 13分 = 153.8 m/分。短い 1 本が同じ重みで効いてはいけない
+     */
+    const p = buildExercisePoint(run, entry(bouts([400, 300], [1600, 480]), 'ex_running'), null);
+    expect(p.meters).toBe(2000);
+    expect(p.minutes).toBe(13);
+    expect(p.speed).toBe(153.8);
+  });
+
+  it('距離を打たない種目は時間だけで扱い、速度を出さない', () => {
+    const p = buildExercisePoint(rope, entry(bouts([null, 1200]), 'ex_jump_rope'), null);
+    expect(p.meters).toBeNull();
+    expect(p.speed).toBeNull();
+    // 主指標は時間に落ちる（推測で距離を埋めない）
+    expect(p.metric).toBe(20);
+  });
+
+  it('部位別セット数に入らない（有酸素は部位ではない）', () => {
+    const sessions = buildSessions(
+      {
+        '2026-03-02': [entry(bouts([5000, 1800]), 'ex_running'), entry(sets([60, 10]), 'ex_bench')],
+      },
+      [run, bench],
+      [],
+    );
+    const week = buildWeeklySets(sessions, '2026-03-01')[0]!;
+    expect(week.setsByGroup.chest).toBe(1);
+    // 脚にも体幹にもどこにも入らない
+    expect(GROUP_ORDER.reduce((sum, g) => sum + week.setsByGroup[g], 0)).toBe(1);
+  });
+
+  it('実施日数には数える（走った日はトレーニングした日）', () => {
+    const sessions = buildSessions(
+      { '2026-03-02': [entry(bouts([5000, 1800]), 'ex_running')] },
+      [run],
+      [],
+    );
+    expect(sessions).toHaveLength(1);
+    expect(computeTrainingStats(sessions).sessions).toBe(1);
+  });
+
+  it('まとめは合計で書く（セットの並びを出さない）', () => {
+    const p = buildExercisePoint(run, entry(bouts([5000, 1800]), 'ex_running'), null);
+    expect(summarizeSets(p)).toBe('5000m / 30分 / 166.7m/分');
+    const r = buildExercisePoint(rope, entry(bouts([null, 1200]), 'ex_jump_rope'), null);
+    expect(summarizeSets(r)).toBe('20分');
+  });
+
+  it('保存も m と 秒のまま往復する（120 分のライドが消えない）', () => {
+    const data = sanitizeData({
+      version: DATA_VERSION,
+      exercises: [{ id: 'ex_cycling', name: 'サイクリング', group: 'cardio' }],
+      workouts: {
+        '2026-03-01': [{ exerciseId: 'ex_cycling', sets: [{ meters: 40000, seconds: 7200 }] }],
+      },
+    });
+    expect(data.workouts['2026-03-01']![0]!.sets).toEqual([{ meters: 40000, seconds: 7200 }]);
+  });
+
+  it('相乗りしていた頃の形（km と 分）は m と 秒に読み替える', () => {
+    const data = sanitizeData({
+      version: 5,
+      exercises: [{ id: 'ex_running', name: 'ランニング', group: 'cardio' }],
+      workouts: { '2026-03-01': [{ exerciseId: 'ex_running', sets: [{ weight: 5.2, reps: 30 }] }] },
+    });
+    expect(data.workouts['2026-03-01']![0]!.sets).toEqual([{ meters: 5200, seconds: 1800 }]);
+  });
+});
+
 describe('カタログ', () => {
   it('ID が重複していない（重複すると過去ログの参照先が曖昧になる）', () => {
     expect(new Set(CATALOG.map((c) => c.id)).size).toBe(CATALOG.length);
   });
 
-  it('6 部位すべてが埋まっている', () => {
-    expect(new Set(CATALOG.map((c) => c.group)).size).toBe(6);
+  it('6 部位すべてが埋まっていて、有酸素もある', () => {
+    const groups = new Set(CATALOG.map((c) => c.group));
+    for (const g of GROUP_ORDER) expect(groups.has(g)).toBe(true);
+    expect(groups.has('cardio')).toBe(true);
+  });
+
+  it('水中は泳法で分ける（速度の物差しが違うものを 1 つにまとめない）', () => {
+    const names = CATALOG.filter((c) => c.group === 'cardio').map((c) => c.name);
+    // 「水泳」で引くと泳法がぜんぶ出る（検索は名前で照合する）
+    expect(names.filter((n) => n.includes('水泳')).length).toBeGreaterThan(1);
+    // 歩くのは泳ぐのとは別。歩き方のバリエーションはここに畳む
+    expect(names).toContain('水中ウォーキング');
+    // 自転車も同じ基準。屋外の実距離と、機種が推定するエアロバイクの距離は別物
+    expect(names.filter((n) => n.includes('サイクリング')).length).toBe(2);
+    expect(names.some((n) => n.includes('横歩き') || n.includes('後ろ歩き'))).toBe(false);
+  });
+
+  it('有酸素は部位も単位も持たない', () => {
+    const cardio = CATALOG.filter((c) => c.group === 'cardio');
+    expect(cardio.length).toBeGreaterThan(0);
+    for (const entry of cardio) {
+      // セットは CardioSet（m と 秒）なので、回でも秒でも数えない
+      expect(entry.repUnit).toBeUndefined();
+      // 補助部位を持たせない。持たせると部位別セット数に流れ込む
+      expect(entry.subGroups ?? []).toEqual([]);
+    }
   });
 
   it('サニタイズを通しても ID が変わらない（削除して入れ直しても過去ログが繋がる）', () => {

@@ -1,5 +1,5 @@
 import type { CheckSettings, Exercise, MuscleGroup, SessionExercise, SessionPoint } from '../types';
-import { GROUP_LABELS, GROUP_ORDER } from './exerciseCatalog';
+import { GROUP_LABELS, GROUP_ORDER, muscleOf } from './exerciseCatalog';
 import { addDays, diffDays, formatMD, startOfWeek } from './date';
 
 /**
@@ -185,7 +185,10 @@ export function buildCheckHistory(
     // 部位別セット数の数え方は buildWeeklySets と同じ。2 通りの数え方を持たない
     const sets = emptyGroupSets();
     for (const point of session.exercises) {
-      sets[point.group] += point.workSets;
+      // 有酸素は部位ではない。回復（筋肥大の回復モデル）にも乗せない
+      const muscle = muscleOf(point.group);
+      if (muscle == null) continue;
+      sets[muscle] += point.workSets;
       for (const sub of point.subGroups) sets[sub.group] += point.workSets * sub.weight;
     }
     groupSets.set(session.date, sets);

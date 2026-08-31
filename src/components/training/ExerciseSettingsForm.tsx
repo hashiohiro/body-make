@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import {
+  EXERCISE_GROUP_ORDER,
   GROUP_LABELS,
   GROUP_ORDER,
+  isCardio,
   LOAD_MODE_HINTS,
   LOAD_MODE_LABELS,
   LOAD_MODE_ORDER,
@@ -10,7 +12,7 @@ import {
   SUB_GROUP_WEIGHT_STEPS,
 } from '../../lib/exerciseCatalog';
 import { FACTOR_RANGE, MINUTES_PER_SET_RANGE, RM_DIVISOR_RANGE } from '../../lib/storage';
-import type { Exercise, LoadMode, MuscleGroup, RepUnit } from '../../types';
+import type { Exercise, ExerciseGroup, LoadMode, RepUnit } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
@@ -51,7 +53,7 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
         <select
           value={ex.group}
           onChange={(e) => {
-            const group = e.target.value as MuscleGroup;
+            const group = e.target.value as ExerciseGroup;
             // 新しい主部位が補助部位に残っていると、その部位を二重に数える。
             // 保存時のサニタイズは読み込みでしか走らないので、ここで落とす
             onUpdate({
@@ -61,7 +63,7 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
             });
           }}
         >
-          {GROUP_ORDER.map((g) => (
+          {EXERCISE_GROUP_ORDER.map((g) => (
             <option key={g} value={g}>
               {GROUP_LABELS[g]}
             </option>
@@ -174,6 +176,24 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
               ))}
             </select>
             <small>秒で数える種目は挙上量に計上しません</small>
+          </label>
+
+          {/*
+            繰り返すかどうか。既定はカタログが持っていて、ここで種目ごとに変えられる。
+            走る人がインターバルもやる、という切り替えがここで済む
+          */}
+          <label className={s.newField}>
+            {isCardio(ex.group) ? '本数' : 'セット'}
+            <select
+              value={ex.repeated ? 'many' : 'one'}
+              onChange={(e) => onUpdate({ ...ex, repeated: e.target.value === 'many' })}
+            >
+              <option value="many">
+                {isCardio(ex.group) ? '分けて記録する（インターバル）' : '複数セットで記録する'}
+              </option>
+              <option value="one">1回で完結する</option>
+            </select>
+            <small>1回で完結する種目は、行を足すボタンを出しません</small>
           </label>
 
           {ex.loadMode === 'bodyweight' && (

@@ -4,20 +4,27 @@ import type {
   DayEntry,
   Entries,
   Exercise,
+  ExerciseGroup,
   ExerciseTarget,
   GroupGoals,
   LoadMode,
   Measurement,
   MuscleGroup,
   Preset,
+  RepUnit,
   SessionExercise,
+  SessionSet,
   Settings,
   SubGroup,
   ThemePref,
-  WorkSet,
   Workouts,
 } from '../types';
-import { SUB_GROUP_WEIGHT, SUB_GROUP_WEIGHT_RANGE, catalogCheckValues } from './exerciseCatalog';
+import {
+  SUB_GROUP_WEIGHT,
+  SUB_GROUP_WEIGHT_RANGE,
+  catalogCheckValues,
+  isCardio,
+} from './exerciseCatalog';
 import { THEME_IDS } from './themes';
 import { IS_DEMO } from './env';
 import { SEED_DATA } from './seed';
@@ -32,10 +39,12 @@ const DATA_KEY = 'bodymake.data.v1';
  * 「本人が選んだ値」と誤って尊重する。実際 v3 では 2 度それが起きた
  * （`loads: 0` と `axial: false`）。版で見れば、その世代のデータをまとめて読み直せる。
  */
-export const DATA_VERSION = 5;
+export const DATA_VERSION = 7;
 
 /** レビューの値が信用できるようになった版。これ未満はカタログから引き直す */
 const CHECK_FIELDS_VERSION = 4;
+/** 「繰り返して行う種目か」を足した版。それ以前のデータはカタログから引き直す */
+const REPEATED_VERSION = 7;
 
 export const DEFAULT_SETTINGS: Settings = {
   heightCm: null,
@@ -110,7 +119,33 @@ export const HEIGHT_RANGE: [number, number] = [100, 250];
 
 /** セットの重量は体重と値域が違う（自重種目の追加重量は 0 もありうる） */
 export const SET_WEIGHT_RANGE: [number, number] = [0, 500];
+/**
+ * 2 つ目の欄の値域。**単位ごとに分ける。**
+ *
+ * 1 つの範囲で兼ねていたころは 1〜100 で、3 分プランク（180秒）が入らなかった。
+ * 単位が違えば取りうる幅も違う。
+ */
 export const REPS_RANGE: [number, number] = [1, 100];
+/** 秒。プランクや保持系。1 時間を上限にする */
+export const SECONDS_RANGE: [number, number] = [1, 3600];
+
+export function repRangeOf(repUnit: RepUnit): [number, number] {
+  return repUnit === 'seconds' ? SECONDS_RANGE : REPS_RANGE;
+}
+
+/* ---- 有酸素。筋トレとは器が違うので値域も別に持つ ---- */
+/** 距離（m）。整数で持つので 25m も入り、フルマラソンでも収まる */
+export const DISTANCE_M_RANGE: [number, number] = [1, 200000];
+/** 時間（秒）。整数で持つので 90 秒がそのまま入る */
+export const DURATION_SEC_RANGE: [number, number] = [1, 86400];
+
+export function parseMeters(value: unknown): number | null {
+  return int(value, DISTANCE_M_RANGE[0], DISTANCE_M_RANGE[1]);
+}
+
+export function parseSeconds(value: unknown): number | null {
+  return int(value, DURATION_SEC_RANGE[0], DURATION_SEC_RANGE[1]);
+}
 export const RM_DIVISOR_RANGE: [number, number] = [20, 60];
 export const FACTOR_RANGE: [number, number] = [0, 2];
 export const TARGET_WEIGHT_RANGE: [number, number] = [0, 500];
@@ -118,6 +153,11 @@ export const TARGET_WEIGHT_RANGE: [number, number] = [0, 500];
 export const TARGET_VOLUME_RANGE: [number, number] = [0, 100000];
 export const TARGET_REPS_RANGE: [number, number] = [1, 200];
 export const GROUP_GOAL_RANGE: [number, number] = [1, 50];
+/** 有酸素の目標。距離(m) / 時間(分) / 速度(m/分)。どれも入力欄と同じ単位 */
+export const TARGET_DISTANCE_RANGE: [number, number] = [1, 200000];
+export const TARGET_DURATION_RANGE: [number, number] = [1, 600];
+/** 歩いて 80、走って 170、自転車で 420 前後 */
+export const TARGET_SPEED_RANGE: [number, number] = [1, 1000];
 
 /* ---- 構成チェック ---- */
 /** 1 セッションの上限（分）。null は「時間を見ない」 */
@@ -137,8 +177,9 @@ export function parseSetWeight(value: unknown): number | null {
   return num(value, SET_WEIGHT_RANGE[0], SET_WEIGHT_RANGE[1]);
 }
 
-export function parseReps(value: unknown): number | null {
-  return int(value, REPS_RANGE[0], REPS_RANGE[1]);
+export function parseReps(value: unknown, repUnit: RepUnit = 'reps'): number | null {
+  const [min, max] = repRangeOf(repUnit);
+  return int(value, min, max);
 }
 
 function sanitizeMeasurement(raw: unknown): Measurement {
@@ -171,7 +212,10 @@ export function sanitizeEntries(raw: unknown): Entries {
   return out;
 }
 
+/** 部位（補助部位に使える値）。有酸素は部位ではないので入れない */
 const GROUPS: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
+/** 種目が主分類として持てる値。有酸素を含む */
+const EXERCISE_GROUPS: ExerciseGroup[] = [...GROUPS, 'cardio'];
 
 const LOAD_MODES: LoadMode[] = ['standard', 'perSide', 'bodyweight'];
 
@@ -198,6 +242,19 @@ function sanitizeGoal(o: Record<string, unknown>): ExerciseTarget | null {
     const value = num(raw.value, TARGET_WEIGHT_RANGE[0], TARGET_WEIGHT_RANGE[1]);
     return value == null ? null : { type: 'weight', value };
   }
+  // 距離は m の整数。速度だけ小数を持つ（166.7 m/分）
+  if (raw && raw.type === 'distance') {
+    const value = int(raw.value, TARGET_DISTANCE_RANGE[0], TARGET_DISTANCE_RANGE[1]);
+    return value == null ? null : { type: 'distance', value };
+  }
+  if (raw && raw.type === 'duration') {
+    const value = int(raw.value, TARGET_DURATION_RANGE[0], TARGET_DURATION_RANGE[1]);
+    return value == null ? null : { type: 'duration', value };
+  }
+  if (raw && raw.type === 'speed') {
+    const value = num(raw.value, TARGET_SPEED_RANGE[0], TARGET_SPEED_RANGE[1]);
+    return value == null ? null : { type: 'speed', value };
+  }
   // 目標を重量固定で持っていた頃のデータを拾う
   const legacy = num(o.targetWeight, TARGET_WEIGHT_RANGE[0], TARGET_WEIGHT_RANGE[1]);
   return legacy == null ? null : { type: 'weight', value: legacy };
@@ -212,7 +269,11 @@ function subWeight(value: unknown): number | null {
   return Math.round(n * 100) / 100;
 }
 
-function sanitizeSubGroups(raw: unknown, primary: MuscleGroup): SubGroup[] {
+function sanitizeRepUnit(raw: unknown): RepUnit {
+  return raw === 'seconds' ? 'seconds' : 'reps';
+}
+
+function sanitizeSubGroups(raw: unknown, primary: ExerciseGroup): SubGroup[] {
   if (!Array.isArray(raw)) return [];
   const out: SubGroup[] = [];
   for (const item of raw) {
@@ -236,7 +297,9 @@ function sanitizeExercise(raw: unknown, order: number, fromVersion: number): Exe
   // ID と名前が無い種目はログから参照できず、画面にも出せないので落とす
   if (!id || !name) return null;
 
-  const group = GROUPS.includes(o.group as MuscleGroup) ? (o.group as MuscleGroup) : 'chest';
+  const group = EXERCISE_GROUPS.includes(o.group as ExerciseGroup)
+    ? (o.group as ExerciseGroup)
+    : 'chest';
 
   return {
     id,
@@ -244,7 +307,7 @@ function sanitizeExercise(raw: unknown, order: number, fromVersion: number): Exe
     group,
     subGroups: sanitizeSubGroups(o.subGroups, group),
     loadMode: sanitizeLoadMode(o),
-    repUnit: o.repUnit === 'seconds' ? 'seconds' : 'reps',
+    repUnit: sanitizeRepUnit(o.repUnit),
     bodyweightFactor: num(o.bodyweightFactor, FACTOR_RANGE[0], FACTOR_RANGE[1]),
     rmDivisor: num(o.rmDivisor, RM_DIVISOR_RANGE[0], RM_DIVISOR_RANGE[1]) ?? 30,
     goal: sanitizeGoal(o),
@@ -269,7 +332,7 @@ function checkFieldsOf(
   o: Record<string, unknown>,
   id: string,
   fromVersion: number,
-): Pick<Exercise, 'axial' | 'minutesPerSet'> {
+): Pick<Exercise, 'axial' | 'minutesPerSet' | 'repeated'> {
   /*
    * **版で判定する。キーの有無では判定しない。**
    *
@@ -286,7 +349,23 @@ function checkFieldsOf(
     axial: o.axial === true,
     // 空欄は「既定値に落とす」という意味を持つので、値域外も null に潰す
     minutesPerSet: num(o.minutesPerSet, MINUTES_PER_SET_RANGE[0], MINUTES_PER_SET_RANGE[1]),
+    repeated: repeatedOf(o, id, fromVersion),
   };
+}
+
+/**
+ * 繰り返して行う種目か。
+ *
+ * **版で判定する**（checkFieldsOf と同じ理由）。この項目より前に保存されたデータは
+ * 値を持っていないので、既定を false で埋めるとランニングもベンチプレスも
+ * 1 回で完結する種目になってしまう。カタログから引き直す。
+ */
+function repeatedOf(o: Record<string, unknown>, id: string, fromVersion: number): boolean {
+  if (fromVersion < REPEATED_VERSION) {
+    return catalogCheckValues(id)?.repeated ?? true;
+  }
+  // 自作種目も含め、持っていなければ繰り返す側にする（1 回で完結する種目のほうが少ない）
+  return o.repeated !== false;
 }
 
 /**
@@ -368,15 +447,36 @@ export function sanitizeExercises(raw: unknown, fromVersion = DATA_VERSION): Exe
   return out.sort((a, b) => a.order - b.order).map((ex, i) => ({ ...ex, order: i }));
 }
 
+/** 種目ごとに、セットをどちらの器で読むか */
+export interface SetShape {
+  cardio: boolean;
+  repUnit: RepUnit;
+}
+
 /**
  * 値だけを直す。**行そのものは落とさない。**
  * 値域外は null に潰すが、空欄の行は「まだ打っていない」であって「消してよい」ではない。
+ *
+ * **どちらの器で読むかは種目が決める。**同じ「2 つ目の数字」でも、
+ * 回・秒・距離・時間で取りうる幅も刻みも違う。1 つの値域で兼ねると、
+ * 画面には入っているのに次の読み込みで消える、という壊れ方をする。
  */
-function sanitizeWorkSet(raw: unknown): WorkSet {
+function sanitizeSet(raw: unknown, shape: SetShape): SessionSet {
   const o = (raw ?? {}) as Record<string, unknown>;
+  if (!shape.cardio) {
+    return { weight: parseSetWeight(o.weight), reps: parseReps(o.reps, shape.repUnit) };
+  }
+  /*
+   * 距離と時間を weight / reps に相乗りさせていた頃の形を拾う（km と 分）。
+   * 公開前の形なので、いずれ落としてよい。
+   */
+  const legacyMeters = o.meters == null && o.weight != null ? num(o.weight, 0, 500) : null;
+  const legacySeconds = o.seconds == null && o.reps != null ? int(o.reps, 0, 600) : null;
   return {
-    weight: parseSetWeight(o.weight),
-    reps: parseReps(o.reps),
+    meters:
+      parseMeters(o.meters) ?? (legacyMeters == null ? null : parseMeters(legacyMeters * 1000)),
+    seconds:
+      parseSeconds(o.seconds) ?? (legacySeconds == null ? null : parseSeconds(legacySeconds * 60)),
   };
 }
 
@@ -389,7 +489,11 @@ function sanitizeWorkSet(raw: unknown): WorkSet {
  * 種目を並べただけで閉じた日が、開き直すと空になっている（設計 §2.2）。
  * 実績として数えないのは buildSessions 側の仕事（hasAnySet）。
  */
-export function sanitizeWorkouts(raw: unknown, knownIds: ReadonlySet<string>): Workouts {
+export function sanitizeWorkouts(
+  raw: unknown,
+  /** 種目 ID → セットの器。ここに無い ID のログは参照先が無いので落とす */
+  shapes: ReadonlyMap<string, SetShape>,
+): Workouts {
   const out: Workouts = {};
   if (!raw || typeof raw !== 'object') return out;
 
@@ -400,10 +504,11 @@ export function sanitizeWorkouts(raw: unknown, knownIds: ReadonlySet<string>): W
     for (const item of value) {
       const o = (item ?? {}) as Record<string, unknown>;
       const exerciseId = typeof o.exerciseId === 'string' ? o.exerciseId : '';
-      if (!exerciseId || !knownIds.has(exerciseId)) continue;
+      const shape = shapes.get(exerciseId);
+      if (!exerciseId || shape == null) continue;
       if (!Array.isArray(o.sets)) continue;
 
-      const sets = o.sets.map(sanitizeWorkSet);
+      const sets = o.sets.map((set) => sanitizeSet(set, shape));
 
       const existing = byId.get(exerciseId);
       if (existing) existing.sets.push(...sets);
@@ -439,12 +544,16 @@ export function sanitizeData(raw: unknown): AppData {
   const fromVersion = typeof o.version === 'number' ? o.version : 1;
   const exercises = sanitizeExercises(o.exercises, fromVersion);
   const knownIds = new Set(exercises.map((e) => e.id));
+  // 値域はセットの器で決まるので、種目の側の情報をログの読み込みへ渡す
+  const shapes = new Map<string, SetShape>(
+    exercises.map((e) => [e.id, { cardio: isCardio(e.group), repUnit: e.repUnit }]),
+  );
   return {
     version: DATA_VERSION,
     settings: sanitizeSettings(o.settings),
     entries: sanitizeEntries(o.entries),
     exercises,
-    workouts: sanitizeWorkouts(o.workouts, knownIds),
+    workouts: sanitizeWorkouts(o.workouts, shapes),
     groupGoals: sanitizeGroupGoals(o.groupGoals),
     presets: sanitizePresets(o.presets, knownIds),
     checks: sanitizeChecks(o.checks),

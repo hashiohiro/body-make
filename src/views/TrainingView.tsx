@@ -11,6 +11,7 @@ import { PresetCard } from '../components/training/PresetCard';
 import { groupsOf } from '../lib/exerciseCatalog';
 import { addDays } from '../lib/date';
 import { personalBest, pickVolume, previousPoint } from '../lib/training';
+import { isCardioSet } from '../types';
 import type { BodyData } from '../hooks/useBodyData';
 import ui from '../styles/ui.module.scss';
 
@@ -83,7 +84,11 @@ export function TrainingView({ body, date }: Props) {
       addDayExercise(date, id);
       return;
     }
-    const hasValue = entry.sets.some((set) => set.weight != null || set.reps != null);
+    const hasValue = entry.sets.some((set) =>
+      isCardioSet(set)
+        ? set.meters != null || set.seconds != null
+        : set.weight != null || set.reps != null,
+    );
     const name = byId.get(id)?.name ?? '';
     if (hasValue && !confirm(`「${name}」をこの日から外します。\n入力したセットも消えます。`))
       return;

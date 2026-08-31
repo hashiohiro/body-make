@@ -570,6 +570,8 @@ describe('種目管理（設定タブ）', () => {
     fireEvent.click(screen.getByText('＋ マイ種目に追加'));
     expect(screen.getByText(/^＋ スクワット/)).toBeTruthy();
 
+    // フィルターは畳んである
+    fireEvent.click(screen.getByRole('button', { name: 'フィルター' }));
     fireEvent.click(within(screen.getByRole('group', { name: '部位' })).getByText('胸'));
     // 「すべて」は器具でも絞らないので、両方の器具ぶんが出る
     expect(screen.getByText('＋ ベンチプレス（バーベル）')).toBeTruthy();
@@ -590,7 +592,7 @@ describe('種目管理（設定タブ）', () => {
     // （自重はどの部位にもあるので、ダンベル × 体幹で見る）
     fireEvent.click(within(screen.getByRole('group', { name: '器具' })).getByText('ダンベル'));
     fireEvent.click(within(screen.getByRole('group', { name: '部位' })).getByText('体幹'));
-    expect(screen.getByText('この絞り込みに合う種目はありません。')).toBeTruthy();
+    expect(screen.getByText('このフィルターに合う種目はありません。')).toBeTruthy();
   });
 
   it('計算方法は設定のさらに内側に畳む', () => {
@@ -2798,16 +2800,21 @@ describe('種目の目標を決める', () => {
       expect(types.getByRole('button', { name: label })).toBeTruthy(),
     );
 
-    // 維持は数値を持たない。選んだ時点で目標として成立する
+    // 維持は数値を持たない。選んだ時点で目標として成立する。
+    // 欄はダイアログの高さを保つために残るが、隠れていて触れない
     fireEvent.click(types.getByRole('button', { name: '維持' }));
-    expect(screen.queryByLabelText(/ベンチプレス.*の目標$/)).toBeNull();
+    expect(
+      screen.getByLabelText(/ベンチプレス.*の目標$/).closest('[aria-hidden="true"]'),
+    ).not.toBeNull();
 
     const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
     expect(stored.exercises[0].goal).toEqual({ type: 'maintain', value: null });
 
     // 挙上量に切り替えると、また数値を決める形に戻る
     fireEvent.click(types.getByRole('button', { name: '挙上量' }));
-    expect(screen.getByLabelText(/ベンチプレス.*の目標$/)).toBeTruthy();
+    expect(
+      screen.getByLabelText(/ベンチプレス.*の目標$/).closest('[aria-hidden="true"]'),
+    ).toBeNull();
     expect(screen.getByText(/総挙上量（有効重量 × レップ数の合計）/)).toBeTruthy();
   });
 
@@ -2912,6 +2919,39 @@ describe('種目の表示 / 非表示', () => {
     expect(screen.getByText('記録 12日')).toBeTruthy();
   });
 
+  it('絞り込みは非表示の欄にも掛かる', () => {
+    /*
+     * 絞り込みチップが出るのは 8 件を超えてから。
+     * 有酸素で絞ったときに、関係ない部位の非表示が下に並ばないことを見る
+     */
+    seedHidden(
+      ['ex_squat', 'ex_running'],
+      'ex_lat_pulldown',
+      'ex_bench',
+      'ex_squat',
+      'ex_ohp',
+      'ex_curl',
+      'ex_plank',
+      'ex_dips',
+      'ex_leg_press',
+      'ex_running',
+      'ex_cycling',
+    );
+    render(<ManagerHarness />);
+
+    // 絞り込む前は、どちらの非表示も出ている
+    expect(screen.getByLabelText('スクワットを表示に戻す')).toBeTruthy();
+    expect(screen.getByLabelText('ランニングを表示に戻す')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'フィルター' }));
+    fireEvent.click(screen.getByRole('button', { name: '有酸素' }));
+
+    expect(screen.getByLabelText('ランニングを表示に戻す')).toBeTruthy();
+    expect(screen.queryByLabelText('スクワットを表示に戻す')).toBeNull();
+    // 件数の見出しは一覧ぜんぶの話なので、絞り込みでは動かない
+    expect(screen.getByText(/非表示 2件$/)).toBeTruthy();
+  });
+
   it('表示に戻せる', () => {
     seedHidden(['ex_lat_pulldown'], 'ex_lat_pulldown');
     render(<ManagerHarness />);
@@ -2966,5 +3006,405 @@ describe('種目の表示 / 非表示', () => {
 
     // ✓ が付いた状態で並ぶ。ここで押せないと、閉じてカードの × を探すことになる
     expect(screen.getByText('✓ スクワット')).toBeTruthy();
+  });
+});
+
+describe('有酸素', () => {
+  function GoalsHarness() {
+    const body = useBodyData();
+    return <GoalsView body={body} domain="training" />;
+  }
+
+  /** 有酸素の種目と、その記録を持った状態から始める */
+  function seedCardio(ids: string[], workouts: Record<string, unknown> = {}) {
+    const exercises = ids.map((id, i) =>
+      fromCatalog(
+        CATALOG.find((c) => c.id === id)!,
+        i,
+      ),
+    );
+    localStorage.setItem(
+      'bodymake.data.v1',
+      JSON.stringify({ version: 5, settings: {}, entries: {}, exercises, workouts }),
+    );
+  }
+
+  it('記録の欄が 時間(分) と 距離(km) になる', () => {
+    seedCardio(['ex_running']);
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText('＋ ランニング'));
+
+    // 重量ではなく距離。回数でも秒数でもなく時間
+    expect(screen.getByLabelText('1セット目の時間')).toBeTruthy();
+    expect(screen.getByLabelText('1セット目の距離')).toBeTruthy();
+    expect(screen.queryByLabelText('1セット目の重量')).toBeNull();
+    expect(screen.queryByLabelText('1セット目の回数')).toBeNull();
+  });
+
+  it('120分のライドが入る（値域は単位ごとに違う）', () => {
+    seedCardio(['ex_cycling']);
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText('＋ サイクリング（屋外）'));
+
+    const row = setRows()[0]!;
+    const minutes = within(row).getByLabelText('1セット目の時間') as HTMLInputElement;
+    // 回の上限（100）で切られない
+    fireEvent.change(minutes, { target: { value: '120' } });
+    expect(minutes.value).toBe('120');
+  });
+
+  it('繰り返す種目は「セット」ではなく「本」で数える', () => {
+    // 水泳は 25m×20本 のように分けて打つ種目
+    seedCardio(['ex_swim_free'], {
+      [todayISO()]: [
+        {
+          exerciseId: 'ex_swim_free',
+          sets: [
+            { meters: 25, seconds: 45 },
+            { meters: 25, seconds: 47 },
+          ],
+        },
+      ],
+    });
+    render(<Harness />);
+
+    expect(screen.getByText(/2\s*本/)).toBeTruthy();
+    expect(screen.queryByText(/2\s*セット/)).toBeNull();
+    expect(screen.getByRole('button', { name: '＋ 本を追加' })).toBeTruthy();
+  });
+
+  it('秒を分に直しても長い小数にならない（打ち直しても同じ秒に戻る）', () => {
+    // 47 秒。そのまま割ると 0.7833333333 が欄に出る
+    seedCardio(['ex_swim_free'], {
+      [todayISO()]: [{ exerciseId: 'ex_swim_free', sets: [{ meters: 25, seconds: 47 }] }],
+    });
+    render(<Harness />);
+
+    const field = screen.getByLabelText('1セット目の時間') as HTMLInputElement;
+    expect(field.value).toBe('0.78');
+  });
+
+  it('1 回で完結する種目は、行の道具立てを出さない', () => {
+    seedCardio(['ex_running'], {
+      [todayISO()]: [{ exerciseId: 'ex_running', sets: [{ meters: 5200, seconds: 1800 }] }],
+    });
+    render(<Harness />);
+
+    // 残るのは入力欄 2 つだけ。足す・消す・何本目か はどれも要らない
+    expect(screen.getByLabelText('1セット目の時間')).toBeTruthy();
+    expect(screen.getByLabelText('1セット目の距離')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '＋ 本を追加' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '1セット目を削除' })).toBeNull();
+    expect(screen.queryByText(/1\s*本/)).toBeNull();
+    expect(screen.getByText(/5200\s*m/)).toBeTruthy();
+  });
+
+  it('繰り返すかどうかはカタログが決める', async () => {
+    const { CATALOG: catalog } = await import('../lib/exerciseCatalog');
+    const of = (id: string) => catalog.find((c) => c.id === id);
+    // 通しで 1 回やるもの
+    expect(of('ex_running')!.repeated).toBe(false);
+    expect(of('ex_cycling')!.repeated).toBe(false);
+    // 本数そのものが量になるもの（既定は繰り返す側なので未指定）
+    expect(of('ex_swim_free')!.repeated).toBeUndefined();
+    expect(of('ex_circuit')!.repeated).toBeUndefined();
+    expect(of('ex_bench')!.repeated).toBeUndefined();
+  });
+
+  it('サーキットトレーニングはラウンド数を本数として持てる', () => {
+    seedCardio(['ex_circuit'], {
+      [todayISO()]: [
+        {
+          exerciseId: 'ex_circuit',
+          sets: [
+            { meters: null, seconds: 360 },
+            { meters: null, seconds: 360 },
+            { meters: null, seconds: 400 },
+          ],
+        },
+      ],
+    });
+    render(<Harness />);
+
+    // 距離は出ないので、量は時間と本数で見る
+    expect(screen.getByText(/3\s*本/)).toBeTruthy();
+    expect(screen.getByText(/18.7\s*分/)).toBeTruthy();
+  });
+
+  it('部位の回復には出ない（筋肥大の回復モデルに乗せない）', () => {
+    seedCardio(['ex_running'], {
+      [todayISO()]: [{ exerciseId: 'ex_running', sets: [{ weight: 5, reps: 30 }] }],
+    });
+    render(<Harness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '回復の状態を見る' }));
+    const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
+    expect(dialog.getByText('脚')).toBeTruthy();
+    // 6 部位だけが並ぶ。有酸素は部位ではない
+    expect(dialog.queryByText('有酸素')).toBeNull();
+  });
+
+  it('目標画面には部位とは別の行で出る（週のセット数ではなく回数と時間）', () => {
+    seedCardio(['ex_running'], {
+      [todayISO()]: [{ exerciseId: 'ex_running', sets: [{ weight: 5, reps: 30 }] }],
+    });
+    render(<GoalsHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '有酸素の目標' }));
+    const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
+    expect(dialog.getByText('1回 / 30分')).toBeTruthy();
+    // 部位目標（週のセット数）は持たない
+    expect(dialog.queryByText('部位目標を設定')).toBeNull();
+  });
+
+  it('カタログに有酸素の欄がある（部位の並びで切ると出てこない）', () => {
+    seedCardio(['ex_bench']);
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByRole('button', { name: '＋ マイ種目を増やす' }));
+
+    // 絞り込みチップと見出しの 2 か所に出る
+    expect(screen.getAllByText('有酸素').length).toBeGreaterThan(0);
+    expect(screen.getByText('＋ ランニング')).toBeTruthy();
+    expect(screen.getByText('＋ サイクリング（屋外）')).toBeTruthy();
+  });
+
+  it('目標は 距離 / 時間 / 速度 から選ぶ', () => {
+    seedCardio(['ex_running'], {
+      [todayISO()]: [{ exerciseId: 'ex_running', sets: [{ weight: 5, reps: 30 }] }],
+    });
+    render(<GoalsHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '有酸素の目標' }));
+    fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
+    fireEvent.click(screen.getByText('ランニング'));
+
+    const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
+    expect(dialog.getByRole('button', { name: '距離' })).toBeTruthy();
+    expect(dialog.getByRole('button', { name: '時間' })).toBeTruthy();
+    expect(dialog.getByRole('button', { name: '速度' })).toBeTruthy();
+    // 重量と挙上量は有酸素では届きようがない
+    expect(dialog.queryByRole('button', { name: '重量' })).toBeNull();
+    expect(dialog.queryByRole('button', { name: '挙上量' })).toBeNull();
+  });
+});
+
+describe('種目の絞り込み（検索と部位）', () => {
+  function ManagerHarness() {
+    const body = useBodyData();
+    return (
+      <ExerciseManager
+        exercises={body.data.exercises}
+        sessions={body.sessions}
+        usage={new Map()}
+        onAdd={body.addExercises}
+        onUpdate={body.upsertExercise}
+        onRemove={body.removeExercise}
+      />
+    );
+  }
+
+  /** 絞り込みが出るのは 8 件を超えてから */
+  const MANY = [
+    'ex_bench',
+    'ex_dips',
+    'ex_lat_pulldown',
+    'ex_squat',
+    'ex_leg_press',
+    'ex_ohp',
+    'ex_curl',
+    'ex_plank',
+    'ex_running',
+  ];
+
+  function seedMany() {
+    const exercises = MANY.map((id, i) =>
+      fromCatalog(
+        CATALOG.find((c) => c.id === id)!,
+        i,
+      ),
+    );
+    localStorage.setItem(
+      'bodymake.data.v1',
+      JSON.stringify({ version: 5, settings: {}, entries: {}, exercises, workouts: {} }),
+    );
+  }
+
+  /** フィルターは畳んであるので、開いてから触る */
+  function openFilter(root: { getByRole: typeof screen.getByRole } = screen) {
+    fireEvent.click(root.getByRole('button', { name: 'フィルター' }));
+  }
+
+  it('件数が少ないうちは絞り込みを出さない', () => {
+    seedExercises('ex_bench', 'ex_squat');
+    render(<ManagerHarness />);
+    expect(screen.queryByRole('button', { name: 'フィルター' })).toBeNull();
+    expect(screen.queryByLabelText('種目を検索')).toBeNull();
+  });
+
+  it('既定では畳んでいて、押すと開く', () => {
+    seedMany();
+    render(<ManagerHarness />);
+
+    expect(screen.queryByLabelText('種目を検索')).toBeNull();
+    openFilter();
+    expect(screen.getByLabelText('種目を検索')).toBeTruthy();
+    expect(screen.getByRole('group', { name: '部位で絞り込む' })).toBeTruthy();
+  });
+
+  it('閉じても条件は効いたまま。効いていることは文言で分かる', () => {
+    seedMany();
+    render(<ManagerHarness />);
+
+    openFilter();
+    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'スクワット' } });
+    expect(screen.queryByText('プランク')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'フィルターを閉じる' }));
+    // 畳んでも減ったまま。理由がボタンから読める
+    expect(screen.queryByText('プランク')).toBeNull();
+    expect(screen.getByText('スクワット')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'フィルター中' })).toBeTruthy();
+
+    // 開き直すと打った内容も残っている
+    fireEvent.click(screen.getByRole('button', { name: 'フィルター中' }));
+    expect((screen.getByLabelText('種目を検索') as HTMLInputElement).value).toBe('スクワット');
+  });
+
+  it('名前で検索できる', () => {
+    seedMany();
+    render(<ManagerHarness />);
+    openFilter();
+
+    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'スクワット' } });
+    expect(screen.getByText('スクワット')).toBeTruthy();
+    expect(screen.queryByText('プランク')).toBeNull();
+  });
+
+  it('ひらがなで打っている途中でも当たる', () => {
+    seedMany();
+    render(<ManagerHarness />);
+    openFilter();
+
+    // 変換前の「ぷらんく」で「プランク」に届く
+    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'ぷらんく' } });
+    expect(screen.getByText('プランク')).toBeTruthy();
+    expect(screen.queryByText('スクワット')).toBeNull();
+  });
+
+  it('検索と部位は同時に効く', () => {
+    seedMany();
+    render(<ManagerHarness />);
+    openFilter();
+
+    fireEvent.click(screen.getByRole('button', { name: '脚' }));
+    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'スクワット' } });
+    expect(screen.getByText('スクワット')).toBeTruthy();
+    expect(screen.queryByText('レッグプレス')).toBeNull();
+
+    // 合わなくなったら、そう言う（黙って空にしない）
+    fireEvent.click(screen.getByRole('button', { name: '胸' }));
+    expect(screen.getByText('このフィルターに合う種目はありません。')).toBeTruthy();
+  });
+
+  it('カタログ（マイ種目に追加）でも検索できる', () => {
+    seedMany();
+    render(<ManagerHarness />);
+    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
+    openFilter(dialog);
+
+    // 変換前のひらがなでも当たる（マイ種目に無い種目で見る）
+    fireEvent.change(dialog.getByLabelText('種目を検索'), { target: { value: 'でっど' } });
+    expect(screen.getByText(/^＋ デッドリフト/)).toBeTruthy();
+    expect(screen.queryByText(/^＋ 懸垂/)).toBeNull();
+
+    // 器具の絞り込みと重ねて効く。シュラッグはバーベル版とダンベル版が並ぶ
+    fireEvent.change(dialog.getByLabelText('種目を検索'), { target: { value: 'シュラッグ' } });
+    expect(screen.getByText('＋ シュラッグ（バーベル）')).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('group', { name: '器具' })).getByText('ダンベル'));
+    expect(screen.getByText('＋ シュラッグ（ダンベル）')).toBeTruthy();
+    expect(screen.queryByText('＋ シュラッグ（バーベル）')).toBeNull();
+  });
+
+  it('記録画面のピッカーでも同じように絞り込める', () => {
+    seedMany();
+    render(<Harness />);
+    openPicker();
+    openFilter();
+
+    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'らんにんぐ' } });
+    expect(screen.getByText('＋ ランニング')).toBeTruthy();
+    expect(screen.queryByText('＋ ベンチプレス')).toBeNull();
+  });
+
+  it('ピッカーを閉じると絞り込みは白紙に戻る', () => {
+    seedMany();
+    render(<Harness />);
+    openPicker();
+    openFilter();
+    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'スクワット' } });
+
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    openPicker();
+    // 開き直すと畳んだ状態、条件も白紙から始まる
+    expect(screen.queryByLabelText('種目を検索')).toBeNull();
+    expect(screen.getByRole('button', { name: 'フィルター' })).toBeTruthy();
+    openFilter();
+    expect((screen.getByLabelText('種目を検索') as HTMLInputElement).value).toBe('');
+  });
+});
+
+describe('＋ ボタンの置き場所', () => {
+  /** ドラッグを 1 往復ぶん流す。jsdom には PointerEvent が無いので最低限だけ組む */
+  function dragFab(dx: number, dy: number) {
+    const fab = screen.getByRole('button', { name: '種目を追加' });
+    fab.setPointerCapture = () => {};
+    fab.getBoundingClientRect = () => ({
+      left: 300 + dx,
+      right: 356 + dx,
+      top: 500 + dy,
+      bottom: 556 + dy,
+      width: 56,
+      height: 56,
+      x: 300 + dx,
+      y: 500 + dy,
+      toJSON: () => ({}),
+    });
+    const opts = { isPrimary: true, button: 0, pointerId: 1 };
+    fireEvent.pointerDown(fab, { ...opts, clientX: 328, clientY: 528 });
+    fireEvent.pointerMove(fab, { ...opts, clientX: 328 + dx, clientY: 528 + dy });
+    fireEvent.pointerUp(fab, { ...opts, clientX: 328 + dx, clientY: 528 + dy });
+    return fab;
+  }
+
+  it('動かすと左右の端に寄って、その高さを覚える', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+
+    // 左へ大きく、上へ少し
+    dragFab(-260, -100);
+
+    const saved = JSON.parse(localStorage.getItem('bodymake.fab.v1')!);
+    expect(saved.side).toBe('left');
+    expect(typeof saved.bottom).toBe('number');
+  });
+
+  it('動かした指で離してもピッカーは開かない', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+
+    const fab = dragFab(-260, 0);
+    fireEvent.click(fab);
+    expect(dialogOpen()).toBe(false);
+  });
+
+  it('動かさずに押せば今までどおり開く', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+    openPicker();
+    expect(dialogOpen()).toBe(true);
   });
 });

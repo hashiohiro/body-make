@@ -1,13 +1,13 @@
 import { Fragment } from 'react';
 import { GROUP_LABELS } from '../../lib/exerciseCatalog';
-import type { MuscleGroup } from '../../types';
+import type { ExerciseGroup } from '../../types';
 import s from './training.module.scss';
 
 export interface OrderEntry {
   id: string;
   name: string;
-  /** 部位。マイ種目から消えた種目を指している行では null */
-  group: MuscleGroup | null;
+  /** 種目の分類（有酸素を含む）。マイ種目から消えた種目を指している行では null */
+  group: ExerciseGroup | null;
 }
 
 /**

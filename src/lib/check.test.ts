@@ -29,6 +29,7 @@ function ex(patch: Partial<Exercise> = {}): Exercise {
     goal: null,
     order: 0,
     hidden: false,
+    repeated: true,
     axial: false,
     minutesPerSet: null,
     ...patch,

@@ -2,13 +2,14 @@ import { useState } from 'react';
 import {
   CATALOG,
   GROUP_LABELS,
-  GROUP_ORDER,
+  EXERCISE_GROUP_ORDER,
   IMPLEMENT_LABELS,
   catalogId,
   fromCatalog,
 } from '../../lib/exerciseCatalog';
 import type { CatalogEntry, Implement } from '../../lib/exerciseCatalog';
-import type { Exercise, MuscleGroup } from '../../types';
+import { FilterToggle, matchesQuery } from './ExerciseFilterBar';
+import type { Exercise, ExerciseGroup } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
@@ -75,7 +76,11 @@ interface Props {
 export function CatalogPicker({ exercises, onAdd }: Props) {
   const [filter, setFilter] = useState<CatalogFilter>('all');
   // 部位は主部位だけで絞る。一覧の見出しも主部位で切っているので、見え方が一致する
-  const [group, setGroup] = useState<MuscleGroup | 'all'>('all');
+  const [group, setGroup] = useState<ExerciseGroup | 'all'>('all');
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+
+  const toggle = () => setOpen(!open);
 
   /*
    * 非表示にしてある種目は **まだ持っていない扱い** にして、ここに出す。
@@ -87,71 +92,90 @@ export function CatalogPicker({ exercises, onAdd }: Props) {
     (c) =>
       !known.has(catalogId(c.entry, c.implement)) &&
       matchesFilter(c, filter) &&
-      (group === 'all' || c.entry.group === group),
+      (group === 'all' || c.entry.group === group) &&
+      // 器具の接尾辞は付けずに、名前そのもので照合する（「ベンチ」で両方に当たる）
+      matchesQuery(c.entry.name, query),
   );
-  const filtered = filter !== 'all' || group !== 'all';
+  const filtered = filter !== 'all' || group !== 'all' || query.trim() !== '';
 
   return (
     <div className={s.pickerGroup}>
       <div className={s.pickerLabel}>カタログから追加（{notAdded.length}件）</div>
 
-      <div className={s.filters}>
-        {/* ダンベルに切り替えて追加すれば、バーベル版と別種目として両方持てる */}
-        <div className={s.pickerLabel} id="filter-implement">
-          器具
-        </div>
-        <div
-          className={`${ui.chipRow} ${s.filterRow}`}
-          role="group"
-          aria-labelledby="filter-implement"
-        >
-          {CATALOG_FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              className={ui.chip}
-              aria-pressed={filter === f.id}
-              onClick={() => setFilter(f.id)}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+      <FilterToggle open={open} active={filtered} onToggle={toggle} />
 
-        <div className={s.pickerLabel} id="filter-group">
-          部位
-        </div>
-        <div className={`${ui.chipRow} ${s.filterRow}`} role="group" aria-labelledby="filter-group">
-          <button
-            type="button"
-            className={ui.chip}
-            aria-pressed={group === 'all'}
-            onClick={() => setGroup('all')}
+      {open && (
+        <div className={s.filters}>
+          <input
+            type="search"
+            className={s.searchField}
+            value={query}
+            placeholder="種目を検索"
+            aria-label="種目を検索"
+            onChange={(e) => setQuery(e.target.value)}
+          />
+
+          {/* ダンベルに切り替えて追加すれば、バーベル版と別種目として両方持てる */}
+          <div className={s.pickerLabel} id="filter-implement">
+            器具
+          </div>
+          <div
+            className={`${ui.chipRow} ${s.filterRow}`}
+            role="group"
+            aria-labelledby="filter-implement"
           >
-            すべて
-          </button>
-          {GROUP_ORDER.map((g) => (
+            {CATALOG_FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                className={ui.chip}
+                aria-pressed={filter === f.id}
+                onClick={() => setFilter(f.id)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <div className={s.pickerLabel} id="filter-group">
+            部位
+          </div>
+          <div
+            className={`${ui.chipRow} ${s.filterRow}`}
+            role="group"
+            aria-labelledby="filter-group"
+          >
             <button
-              key={g}
               type="button"
               className={ui.chip}
-              aria-pressed={group === g}
-              onClick={() => setGroup(g)}
+              aria-pressed={group === 'all'}
+              onClick={() => setGroup('all')}
             >
-              {GROUP_LABELS[g]}
+              すべて
             </button>
-          ))}
+            {EXERCISE_GROUP_ORDER.map((g) => (
+              <button
+                key={g}
+                type="button"
+                className={ui.chip}
+                aria-pressed={group === g}
+                onClick={() => setGroup(g)}
+              >
+                {GROUP_LABELS[g]}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {notAdded.length === 0 ? (
         <p className={ui.note}>
           {filtered
-            ? 'この絞り込みに合う種目はありません。'
+            ? 'このフィルターに合う種目はありません。'
             : 'カタログの種目はすべて追加済みです。'}
         </p>
       ) : (
-        GROUP_ORDER.map((g) => {
+        EXERCISE_GROUP_ORDER.map((g) => {
           const items = notAdded.filter((c) => c.entry.group === g);
           if (items.length === 0) return null;
           return (

@@ -1,6 +1,8 @@
 import type {
+  CardioSet,
   DailyPoint,
   Exercise,
+  ExerciseGroup,
   ExercisePoint,
   GoalType,
   MuscleGroup,
@@ -13,6 +15,8 @@ import type {
   Workouts,
 } from '../types';
 import { addDays, diffDays, formatMD, isoToTime, startOfWeek, todayISO } from './date';
+import { REP_UNIT_LABELS, isCardio, muscleOf } from './exerciseCatalog';
+import { isCardioSet } from '../types';
 
 /** 高レップほど外挿が大きく誤差が増えるため、12 レップを超えたセットは 1RM に採らない */
 export const E1RM_MAX_REPS = 12;
@@ -159,17 +163,31 @@ export function buildExercisePoint(
   entry: SessionExercise,
   bodyWeight: number | null,
 ): ExercisePoint {
-  const { roles, effective, topIndex } = resolveSets(exercise, entry.sets, bodyWeight);
+  const cardio = isCardio(exercise.group);
+  /*
+   * 有酸素は 1 本ぶんが { m, 秒 }。筋トレの { kg, 回 } とは器が違うので、
+   * ここで**片方に寄せてから**共通の集計へ渡す。
+   * 距離は「量」なので重量ではなくレップ側（数えるもの）でもなく、専用に足し上げる。
+   */
+  const strengthSets: WorkSet[] = cardio
+    ? entry.sets.map(() => ({ weight: null, reps: null }))
+    : (entry.sets as WorkSet[]);
+  const bouts = cardio ? (entry.sets as CardioSet[]) : [];
 
-  const sets: SetPoint[] = entry.sets.map((set, i) => {
+  const { roles, effective, topIndex } = resolveSets(exercise, strengthSets, bodyWeight);
+
+  const sets: SetPoint[] = strengthSets.map((set, i) => {
     const ew = effective[i]!;
     // 挙上量は「重量 × レップ数」なので、秒で数える種目は計上しない。
     // 欠測セットも 0 として数えず、母数から外す
     const counted = ew != null && set.reps != null && exercise.repUnit === 'reps';
+    const bout = bouts[i];
     return {
       index: i,
       weight: set.weight,
       reps: set.reps,
+      meters: bout?.meters ?? null,
+      seconds: bout?.seconds ?? null,
       role: roles[i]!,
       counted,
       effectiveWeight: ew,
@@ -205,14 +223,40 @@ export function buildExercisePoint(
     ? estimateOneRm(top.effectiveWeight, top.reps, exercise.rmDivisor)
     : null;
   const measured = oneRm != null && top?.reps === 1;
-  // 挙上量が出せない種目（プランクなど）は最大レップ数を主指標にする
-  const metric = volume > 0 ? volume : maxReps;
+
+  /*
+   * 有酸素の合計。**合計 ÷ 合計で速度を出す。**
+   *
+   * セットごとの速度を平均すると、400m×5分 と 1.6km×8分 が同じ重みで効いて
+   * 実際に動いた速さから外れる。距離も時間も足してから割る。
+   */
+  let meterSum = 0;
+  let secondSum = 0;
+  for (const bout of bouts) {
+    if (bout.meters != null) meterSum += bout.meters;
+    if (bout.seconds != null) secondSum += bout.seconds;
+  }
+  // 距離は入力欄と同じ m のまま。時間だけ読む側の単位（分）へ直す
+  const meters = meterSum > 0 ? meterSum : null;
+  const minutes = secondSum > 0 ? Math.round(secondSum / 6) / 10 : null;
+  // m/秒 → m/分。単位は入力欄（m と 分）に揃える
+  const speed =
+    meterSum > 0 && secondSum > 0 ? Math.round((meterSum / secondSum) * 600) / 10 : null;
+
+  /*
+   * 主指標。挙上量が出せない種目（プランクなど）は最大レップ数。
+   * 有酸素は合計距離で、距離を打っていなければ時間に落ちる。
+   */
+  const metric = cardio ? (meters ?? minutes) : volume > 0 ? volume : maxReps;
 
   return {
     exerciseId: exercise.id,
     name: exercise.name,
     group: exercise.group,
-    groups: [exercise.group, ...exercise.subGroups.map((sub) => sub.group)],
+    // 有酸素は部位を持たない。部位別の集計に流れ込ませない
+    groups: cardio
+      ? []
+      : [exercise.group as MuscleGroup, ...exercise.subGroups.map((sub) => sub.group)],
     subGroups: exercise.subGroups,
     repUnit: exercise.repUnit,
     sets,
@@ -223,6 +267,9 @@ export function buildExercisePoint(
     oneRm,
     measured,
     maxReps,
+    meters,
+    minutes,
+    speed,
     metric,
   };
 }
@@ -235,7 +282,11 @@ export function buildExercisePoint(
  * 「書いたものはすべて数える」（設計 §4.2）の裏側で、書いていないものは数えない。
  */
 function hasAnySet(entry: SessionExercise): boolean {
-  return entry.sets.some((set) => set.weight != null || set.reps != null);
+  return entry.sets.some((set) =>
+    isCardioSet(set)
+      ? set.meters != null || set.seconds != null
+      : set.weight != null || set.reps != null,
+  );
 }
 
 export function buildSessions(
@@ -342,9 +393,23 @@ export const pickMetric = (p: ExercisePoint) => p.metric;
 
 /** 「60kg×10,10,9」形式。同じ重量が続く間はまとめる。重量のない種目は「60,60秒」 */
 export function summarizeSets(point: ExercisePoint): string {
-  const unit = point.repUnit === 'seconds' ? '秒' : '';
+  /*
+   * 有酸素は「その日にどれだけ動いたか」なので、セットの並びではなく合計で書く。
+   * 400m×5本 を「0.4km,0.4km,…」と並べても読むものが増えるだけで、
+   * 知りたいのは 2.0km 走ったこと。速度は距離が入っているときだけ添える。
+   */
+  if (isCardio(point.group)) {
+    const parts: string[] = [];
+    if (point.meters != null) parts.push(`${point.meters}m`);
+    if (point.minutes != null) parts.push(`${point.minutes}分`);
+    if (point.speed != null) parts.push(`${point.speed}m/分`);
+    return parts.length > 0 ? parts.join(' / ') : '—';
+  }
+
   const work = point.sets.filter((s) => s.reps != null);
   if (work.length === 0) return '—';
+
+  const unit = point.repUnit === 'reps' ? '' : REP_UNIT_LABELS[point.repUnit];
 
   const groups: { weight: number | null; reps: number[] }[] = [];
   for (const s of work) {
@@ -410,9 +475,12 @@ export function buildWeeklySets(sessions: readonly SessionPoint[], from: string)
     const volumeByGroup = { ...EMPTY_GROUPS };
     for (const session of inWeek) {
       for (const point of session.exercises) {
+        // 有酸素は部位ではないので、部位別の数には入れない
+        const muscle = muscleOf(point.group);
+        if (muscle == null) continue;
         // 主部位は 1 セット、補助部位は種目ごとの係数（既定 0.5）ぶん
-        setsByGroup[point.group] += point.workSets;
-        volumeByGroup[point.group] += point.volume;
+        setsByGroup[muscle] += point.workSets;
+        volumeByGroup[muscle] += point.volume;
         for (const sub of point.subGroups) {
           setsByGroup[sub.group] += point.workSets * sub.weight;
           volumeByGroup[sub.group] += point.volume * sub.weight;
@@ -490,6 +558,8 @@ export interface TrainingStats {
   weeklyAverage: number | null;
   /** 部位ごとの最終実施からの日数。null は記録なし */
   daysSinceGroup: Record<MuscleGroup, number | null>;
+  /** 有酸素の最終実施からの日数。部位ではないので daysSinceGroup とは別に持つ */
+  daysSinceCardio: number | null;
   /** 今週の部位別セット数。0 の部位は daysSinceGroup で「何日空いているか」を見る */
   thisWeekSetsByGroup: Record<MuscleGroup, number>;
   /**
@@ -535,7 +605,9 @@ export const TRAINED_SETS = 1;
 export function sessionGroups(session: SessionPoint): MuscleGroup[] {
   const totals = { ...EMPTY_GROUPS };
   for (const point of session.exercises) {
-    totals[point.group] += point.workSets;
+    const muscle = muscleOf(point.group);
+    if (muscle == null) continue;
+    totals[muscle] += point.workSets;
     for (const sub of point.subGroups) totals[sub.group] += point.workSets * sub.weight;
   }
   return ALL_GROUPS.filter((g) => Math.round(totals[g] * 100) / 100 >= TRAINED_SETS);
@@ -556,6 +628,7 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
     firstDate: null,
     weeklyAverage: null,
     daysSinceGroup: noGroups,
+    daysSinceCardio: null,
     thisWeekSetsByGroup: { ...EMPTY_GROUPS },
     lastWeekSetsByGroup: { ...EMPTY_GROUPS },
     recentBests: 0,
@@ -598,6 +671,12 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
       return [g, last == null ? null : diffDays(today, last)];
     }),
   ) as Record<MuscleGroup, number | null>;
+
+  let lastCardio: string | null = null;
+  for (const session of sessions) {
+    if (session.exercises.some((p) => isCardio(p.group))) lastCardio = session.date;
+  }
+  const daysSinceCardio = lastCardio == null ? null : diffDays(today, lastCardio);
 
   // 種目ごとに「最近伸びたか」「止まっているか」を数える。
   // 数えるのはイベントの件数なので、種目をまたいでも合計が壊れない（量を足すのとは違う）
@@ -647,6 +726,7 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
     exerciseKinds: exerciseIds.size,
     spanDays: diffDays(today, firstDate) + 1,
     daysSinceGroup,
+    daysSinceCardio,
     thisWeekSetsByGroup: weekOf(thisStart)?.setsByGroup ?? { ...EMPTY_GROUPS },
     lastWeekSetsByGroup: weekOf(lastStart)?.setsByGroup ?? { ...EMPTY_GROUPS },
     recentBests,
@@ -665,7 +745,8 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
 export interface ExerciseGoal {
   exerciseId: string;
   name: string;
-  group: MuscleGroup;
+  /** 目標画面の見出し分け。有酸素は 'cardio' */
+  group: ExerciseGroup;
   type: GoalType;
   unit: string;
   digits: number;
@@ -694,8 +775,11 @@ export interface ExerciseGoal {
  * 換算値が 100 を超えたから達成、では嘘になる。
  *
  * 回数目標はそのセッションの最大レップ数（自重種目・時間種目で使う）。
+ *
+ * 有酸素は距離と時間を **合計** で見る。1 本の最長ではなく、その日に積んだ量が目標になる
+ * （インターバルを 5 本に割っても、通しで 1 本走っても同じ 5km として数える）。
  */
-const currentOf = (type: GoalType, repUnit: RepUnit, p: ExercisePoint): number | null => {
+const currentOf = (type: GoalType, p: ExercisePoint): number | null => {
   switch (type) {
     case 'weight':
       return p.top?.weight ?? null;
@@ -703,13 +787,23 @@ const currentOf = (type: GoalType, repUnit: RepUnit, p: ExercisePoint): number |
       return p.volume > 0 ? p.volume : null;
     case 'reps':
       return p.maxReps;
+    case 'distance':
+      return p.meters;
+    case 'duration':
+      return p.minutes;
+    case 'speed':
+      return p.speed;
     case 'maintain':
-      return repUnit === 'seconds' ? p.maxReps : p.volume > 0 ? p.volume : null;
+      // 維持は主指標にそろえる。有酸素は合計距離、時間種目は最大保持、ほかは挙上量
+      return p.metric;
   }
 };
 
 /** 目標の単位。維持は主指標に合わせる */
 function goalUnitOf(type: GoalType, repUnit: RepUnit): string {
+  if (type === 'distance') return 'm';
+  if (type === 'duration') return '分';
+  if (type === 'speed') return 'm/分';
   if (type === 'weight') return 'kg';
   if (type === 'volume') return 'kg';
   if (type === 'maintain') return repUnit === 'seconds' ? '秒' : 'kg';
@@ -728,7 +822,7 @@ export function exerciseGoals(
 
     const history = exerciseHistory(sessions, exercise.id);
     const values = history
-      .map((h) => currentOf(goal.type, exercise.repUnit, h.point))
+      .map((h) => currentOf(goal.type, h.point))
       .filter((v): v is number => v != null);
 
     const current = values.length ? values[values.length - 1]! : null;
@@ -763,7 +857,8 @@ export function exerciseGoals(
       group: exercise.group,
       type: goal.type,
       unit: goalUnitOf(goal.type, exercise.repUnit),
-      digits: goal.type === 'weight' ? 1 : 0,
+      // 重量と速度は 0.1 刻みで意味が変わる。距離は m なので整数
+      digits: goal.type === 'weight' || goal.type === 'speed' ? 1 : 0,
       target: goal.value,
       current,
       baseline,

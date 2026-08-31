@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildDaily, buildWeeks, computeProjection, computeStats, emptyDay } from '../lib/derive';
+import { isCardio } from '../lib/exerciseCatalog';
 import {
   PRESET_NAME_MAX,
   demoSeed,
@@ -13,6 +14,7 @@ import { buildCheckHistory } from '../lib/check';
 import type { ImportPayload } from '../lib/io';
 import type {
   AppData,
+  CardioSet,
   CheckSettings,
   Entries,
   Exercise,
@@ -20,6 +22,7 @@ import type {
   MuscleGroup,
   Preset,
   SessionExercise,
+  SessionSet,
   Settings,
   SlotId,
   WorkSet,
@@ -27,9 +30,17 @@ import type {
 } from '../types';
 
 export type MeasurementField = keyof Measurement;
-export type SetField = 'weight' | 'reps';
+/** 筋トレは 重量 と 回/秒、有酸素は 距離(m) と 時間(秒)。どちらが来るかは種目が決める */
+export type SetField = 'weight' | 'reps' | 'meters' | 'seconds';
 
 const EMPTY_SET: WorkSet = { weight: null, reps: null };
+const EMPTY_BOUT: CardioSet = { meters: null, seconds: null };
+
+/** その種目の空行。器が違うので、種目を見てから作る */
+function emptySetOf(exercises: readonly Exercise[], exerciseId: string): SessionSet {
+  const exercise = exercises.find((e) => e.id === exerciseId);
+  return exercise && isCardio(exercise.group) ? { ...EMPTY_BOUT } : { ...EMPTY_SET };
+}
 
 function mapDayExercise(
   workouts: Workouts,
@@ -82,7 +93,7 @@ export interface BodyData {
     field: SetField,
     value: number | null,
   ) => void;
-  copySets: (date: string, exerciseId: string, sets: readonly WorkSet[]) => void;
+  copySets: (date: string, exerciseId: string, sets: readonly SessionSet[]) => void;
   /** 過去の日から種目だけをまとめて足す。すでにある種目は飛ばす */
   addDayExercises: (date: string, exerciseIds: readonly string[]) => void;
 
@@ -292,7 +303,10 @@ export function useBodyData(): BodyData {
       const day = prev.workouts[date] ?? [];
       return {
         ...prev,
-        workouts: { ...prev.workouts, [date]: [...day, { exerciseId, sets: [{ ...EMPTY_SET }] }] },
+        workouts: {
+          ...prev.workouts,
+          [date]: [...day, { exerciseId, sets: [emptySetOf(prev.exercises, exerciseId)] }],
+        },
       };
     });
   }, []);
@@ -333,7 +347,12 @@ export function useBodyData(): BodyData {
       workouts: mapDayExercise(prev.workouts, date, exerciseId, (e) => ({
         ...e,
         // 直前のセットを複製する。同じ重量で続けるのが普通なので、入力は差分だけで済む
-        sets: [...e.sets, e.sets.length > 0 ? { ...e.sets[e.sets.length - 1]! } : { ...EMPTY_SET }],
+        sets: [
+          ...e.sets,
+          e.sets.length > 0
+            ? { ...e.sets[e.sets.length - 1]! }
+            : emptySetOf(prev.exercises, exerciseId),
+        ],
       })),
     }));
   }, []);
@@ -369,12 +388,12 @@ export function useBodyData(): BodyData {
     [],
   );
 
-  const copySets = useCallback((date: string, exerciseId: string, sets: readonly WorkSet[]) => {
+  const copySets = useCallback((date: string, exerciseId: string, sets: readonly SessionSet[]) => {
     setData((prev) => ({
       ...prev,
       workouts: mapDayExercise(prev.workouts, date, exerciseId, (e) => ({
         ...e,
-        sets: sets.map((s) => ({ weight: s.weight, reps: s.reps })),
+        sets: sets.map((s) => ({ ...s })),
       })),
     }));
   }, []);
@@ -395,7 +414,7 @@ export function useBodyData(): BodyData {
       const known = new Set(day.map((e) => e.exerciseId));
       const added = exerciseIds
         .filter((id) => !known.has(id))
-        .map((exerciseId) => ({ exerciseId, sets: [{ ...EMPTY_SET }] }));
+        .map((exerciseId) => ({ exerciseId, sets: [emptySetOf(prev.exercises, exerciseId)] }));
       if (added.length === 0) return prev;
       return { ...prev, workouts: { ...prev.workouts, [date]: [...day, ...added] } };
     });

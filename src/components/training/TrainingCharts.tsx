@@ -2,10 +2,15 @@ import { useMemo, useState } from 'react';
 import { Sparkline } from '../charts/Sparkline';
 import { ExerciseDetailDialog } from './ExerciseDetailDialog';
 import { METRICS, baselineOf, lastOf } from './metrics';
-import { GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
+import {
+  EXERCISE_GROUP_ORDER,
+  GROUP_LABELS,
+  countsReps,
+  isCardio,
+} from '../../lib/exerciseCatalog';
 import { deltaTone, fmt, fmtDelta } from '../../lib/format';
 import { exerciseHistory } from '../../lib/training';
-import type { Exercise, MuscleGroup, SessionPoint } from '../../types';
+import type { Exercise, ExerciseGroup, SessionPoint } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
@@ -43,19 +48,30 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
 
   const [openId, setOpenId] = useState<string | null>(initialOpenId ?? null);
   const [metricId, setMetricId] = useState<string | null>(null);
-  const [group, setGroup] = useState<MuscleGroup | 'all'>('all');
+  const [group, setGroup] = useState<ExerciseGroup | 'all'>('all');
 
   // 部位は主部位だけで絞る。ここで見たいのは種目の推移で、配分ではない
   // （補助部位まで拾うと、腕にベンチプレスが並ぶ）
-  const groups = GROUP_ORDER.filter((g) => recorded.some((e) => e.group === g));
+  const groups = EXERCISE_GROUP_ORDER.filter((g) => recorded.some((e) => e.group === g));
   const shown = group === 'all' ? recorded : recorded.filter((e) => e.group === group);
 
-  // 指標は一覧ぜんぶに効くので、出ている種目全体で出せるかを見る。
-  // 秒で数える種目しか無いときだけ、重量系の指標が消える
-  const metrics = METRICS.filter(
-    (m) => !m.needsWeight || shown.some((e) => e.repUnit !== 'seconds'),
+  /*
+   * 指標は一覧ぜんぶに効くので、出ている種目全体で出せるかを見る。
+   * 秒で数える種目しか無いときは重量系が消え、有酸素だけのときは距離・時間・速度に入れ替わる。
+   * 混在しているとき（すべて）は筋トレ側を出す。有酸素の行は空欄になるが、
+   * 有酸素チップを選べば専用の指標に切り替わる。
+   */
+  const allCardio = shown.length > 0 && shown.every((e) => isCardio(e.group));
+  const metrics = METRICS.filter((m) =>
+    allCardio
+      ? m.cardioOnly
+      : !m.cardioOnly && (!m.needsWeight || shown.some((e) => countsReps(e.repUnit))),
   );
-  const fallbackId = metrics.some((m) => m.id === 'volume') ? 'volume' : 'maxReps';
+  const fallbackId = allCardio
+    ? 'distance'
+    : metrics.some((m) => m.id === 'volume')
+      ? 'volume'
+      : 'maxReps';
   const metric =
     metrics.find((m) => m.id === metricId) ??
     metrics.find((m) => m.id === fallbackId) ??
@@ -156,7 +172,7 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
 
         <div className={s.trendList}>
           {/* 見出しは主部位で切る。並びも部位順にして、どこを見ているかを見失わないようにする */}
-          {GROUP_ORDER.filter((g) => rows.some((r) => r.ex.group === g)).map((g) => (
+          {EXERCISE_GROUP_ORDER.filter((g) => rows.some((r) => r.ex.group === g)).map((g) => (
             <div key={g} className={s.trendGroup}>
               <div className={s.pickerLabel}>{GROUP_LABELS[g]}</div>
               {rows

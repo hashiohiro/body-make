@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { CatalogPicker } from './CatalogPicker';
 import { OrderList } from './OrderList';
 import { Modal } from '../Modal';
-import { GROUP_LABELS, GROUP_ORDER, groupsOf } from '../../lib/exerciseCatalog';
+import { EXERCISE_GROUP_ORDER, GROUP_LABELS, groupsOf } from '../../lib/exerciseCatalog';
 import { PRESET_NAME_MAX } from '../../lib/storage';
 import type { Exercise, Preset } from '../../types';
 import ui from '../../styles/ui.module.scss';
@@ -63,7 +63,7 @@ function PickDialog({
         {choices.length === 0 ? (
           <p className={ui.note}>マイ種目がまだありません。</p>
         ) : (
-          GROUP_ORDER.map((group) => {
+          EXERCISE_GROUP_ORDER.map((group) => {
             const list = choices.filter((e) => e.group === group);
             if (list.length === 0) return null;
             return (

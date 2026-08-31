@@ -1,12 +1,19 @@
-import type { Exercise, GoalType, LoadMode, MuscleGroup, RepUnit, SubGroup } from '../types';
+import type {
+  Exercise,
+  ExerciseGroup,
+  GoalType,
+  LoadMode,
+  MuscleGroup,
+  RepUnit,
+  SubGroup,
+} from '../types';
 
 /**
  * 種目カタログ。
  *
  * localStorage へ投入する初期データではなく、コード内の不変の一覧。
  * ユーザーが選んだものだけが AppData.exercises に入る。
- * 体重側の seed（seed.ts / SEEDED_KEY）とは別物で、
- * 「一度消したら復活させない」フラグも持たない。消してもここには残るので入れ直せる。
+ * デモの初期データ（seed.ts）とは別物。消してもここには残るので入れ直せる。
  *
  * id は固定文字列にしてある。削除して入れ直しても過去ログの exerciseId 参照が繋がる。
  * （自作種目は randomUUID なのでこの保証はなく、JSON バックアップだけが担保）
@@ -43,8 +50,11 @@ export const SUB_GROUP_WEIGHT_STEPS = [0.25, 0.5, 0.75, 1];
 export type CatalogEntry = Omit<
   Exercise,
   // hidden はマイ種目に置いてからの状態。カタログは選択肢の一覧なので持たない
-  'goal' | 'order' | 'repUnit' | 'subGroups' | 'axial' | 'minutesPerSet' | 'hidden'
+  'goal' | 'order' | 'repUnit' | 'subGroups' | 'axial' | 'minutesPerSet' | 'hidden' | 'repeated'
 > & {
+  /** 繰り返して行う種目か。**既定は真**（筋トレはセットを重ねるのが前提） */
+  repeated?: boolean;
+} & {
   repUnit?: RepUnit;
   /**
    * 補助的に使う部位。明らかなものだけ入れてある。種目の詳細設定で変えられる。
@@ -99,11 +109,15 @@ export const GOAL_TYPE_LABELS: Record<GoalType, string> = {
   weight: '重量',
   volume: '挙上量',
   reps: '回数',
+  distance: '距離',
+  duration: '時間',
+  speed: '速度',
 };
 
-/** 秒で数える種目は「回数」ではなく「秒数」。バッジは矢印つき */
+/** 単位に合わせて「回数」を言い換える。バッジは矢印つき */
 export function goalTypeLabel(type: GoalType, repUnit: RepUnit, arrow = false): string {
-  const base = type === 'reps' && repUnit === 'seconds' ? '秒数' : GOAL_TYPE_LABELS[type];
+  const base =
+    type === 'reps' && repUnit !== 'reps' ? REP_UNIT_NOUNS[repUnit] : GOAL_TYPE_LABELS[type];
   return arrow && type !== 'maintain' ? `${base}↑` : base;
 }
 
@@ -189,6 +203,22 @@ const MINUTES_PER_SET: Readonly<Record<string, number>> = {
   ex_bench: 4.5,
   ex_ohp: 4.5,
   ex_rdl: 4.5,
+  // 有酸素は 1 本がそのままセッションの一部を占める。既定の 3 分では見積もりが崩れる
+  ex_running: 30,
+  ex_walking: 30,
+  ex_cycling: 40,
+  ex_stationary_bike: 25,
+  ex_rowing_erg: 20,
+  ex_elliptical: 25,
+  ex_stair_climber: 20,
+  ex_jump_rope: 10,
+  // 1 ラウンドぶん
+  ex_circuit: 6,
+  ex_swim_free: 30,
+  ex_swim_breast: 30,
+  ex_swim_back: 30,
+  ex_swim_fly: 20,
+  ex_water_walking: 30,
 };
 
 /**
@@ -198,8 +228,9 @@ const MINUTES_PER_SET: Readonly<Record<string, number>> = {
  * （design-training.md §11-23 がわざわざ 4 つに減らした経緯があるので、そこは動かさない）。
  * 軸荷重かどうかと時間は、必要になったら種目の設定から入れる。
  */
-export function emptyCheckValues(): Pick<Exercise, 'axial' | 'minutesPerSet'> {
-  return { axial: false, minutesPerSet: null };
+export function emptyCheckValues(): Pick<Exercise, 'axial' | 'minutesPerSet' | 'repeated'> {
+  // 自作種目は繰り返す前提。1 回で完結する種目のほうが少ない
+  return { axial: false, minutesPerSet: null, repeated: true };
 }
 
 export const CATALOG: readonly CatalogEntry[] = [
@@ -1143,18 +1174,211 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+  /*
+   * 有酸素。**部位を持たない**ので `group: 'cardio'`。
+   *
+   * 記録する 2 つの欄は 距離(m) と 時間(秒)。速度はそこから出す（推測しない）。
+   * `repUnit` は使わない（有酸素のセットは `CardioSet` で、回でも秒でも数えない）。
+   * 距離の出ない種目（縄跳びなど）は時間だけで、速度は出さない。
+   */
+  {
+    id: 'ex_running',
+    // 通しで 1 回。分けて打つなら種目の設定から変えられる
+    repeated: false,
+    equipment: 'bodyweight',
+    name: 'ランニング',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_walking',
+    // 通しで 1 回。分けて打つなら種目の設定から変えられる
+    repeated: false,
+    equipment: 'bodyweight',
+    name: 'ウォーキング',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  /*
+   * 自転車も**物差しで分ける。**
+   *
+   * 屋外は実距離で 25km/h 前後。エアロバイクの距離は抵抗と回転数からの機種ごとの推定で、
+   * 同じ 10km でも意味が違う。混ぜると速度の推移が「その日どちらに乗ったか」で動く。
+   * 機種が変わればエアロバイク側の値も揃わないが、同じジムで使い続けるかぎり
+   * 自分の推移としては読める（種目をまたいで比べないので、それで足りる）。
+   */
+  {
+    id: 'ex_cycling',
+    // 通しで 1 回。分けて打つなら種目の設定から変えられる
+    repeated: false,
+    equipment: 'bodyweight',
+    name: 'サイクリング（屋外）',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_stationary_bike',
+    // 通しで 1 回。分けて打つなら種目の設定から変えられる
+    repeated: false,
+    name: 'サイクリング（エアロバイク）',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_rowing_erg',
+    // 通しで 1 回。分けて打つなら種目の設定から変えられる
+    repeated: false,
+    // 背中の「シーテッドロウ」とは別物。こちらは漕ぎ続ける有酸素
+    name: 'ローイングマシン',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_elliptical',
+    // 通しで 1 回。分けて打つなら種目の設定から変えられる
+    repeated: false,
+    name: 'エリプティカル',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_stair_climber',
+    // 通しで 1 回。分けて打つなら種目の設定から変えられる
+    repeated: false,
+    name: 'ステアクライマー',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_circuit',
+    equipment: 'bodyweight',
+    /*
+     * 種目を続けて回すものなので、**1 ラウンドが 1 本**になる。
+     * 距離は出ないので時間だけで扱う。
+     * 個々の種目の伸びを見たいなら、その種目を別々に記録するほうが向いている。
+     */
+    name: 'サーキットトレーニング',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_jump_rope',
+    equipment: 'bodyweight',
+    name: '縄跳び',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  /*
+   * 水中は**泳法ごとに分ける。**
+   *
+   * 分ける基準は器具でも部位でもなく、**速度が同じ物差しに乗るか**。
+   * クロールと平泳ぎは 1.5 倍ほど違うので、1 つの種目にまとめると
+   * 速度の推移が「その日どちらを多くやったか」で上下して、伸びが読めなくなる
+   * （挙上量にベンチとフライを混ぜるのと同じこと）。
+   *
+   * 逆に、歩き方のバリエーション（前・横・後ろ・もも上げ）は種目にしない。
+   * 1 回の中で混ぜてやるもので距離も測りにくく、分けると 1 回の記録に
+   * 4 種目を並べることになるうえ、入るのは時間だけで数字が育たない。
+   */
+  {
+    id: 'ex_swim_free',
+    equipment: 'bodyweight',
+    name: '水泳（クロール）',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_swim_breast',
+    equipment: 'bodyweight',
+    name: '水泳（平泳ぎ）',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_swim_back',
+    equipment: 'bodyweight',
+    name: '水泳（背泳ぎ）',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_swim_fly',
+    equipment: 'bodyweight',
+    name: '水泳（バタフライ）',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_water_walking',
+    // 通しで 1 回。分けて打つなら種目の設定から変えられる
+    repeated: false,
+    equipment: 'bodyweight',
+    // 泳ぐのとは速度も動作もまったく別。歩き方の違いはここに畳む
+    name: '水中ウォーキング',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
 ];
 
-export const GROUP_LABELS: Record<MuscleGroup, string> = {
+export const GROUP_LABELS: Record<ExerciseGroup, string> = {
   chest: '胸',
   back: '背中',
   legs: '脚',
   shoulders: '肩',
   arms: '腕',
   core: '体幹',
+  cardio: '有酸素',
 };
 
+/**
+ * **部位の並び。有酸素を含まない。**
+ *
+ * これを回している集計はどれも「筋肉の話」で（部位別セット数・週の配分・
+ * ヒートマップ・回復）、有酸素はそこに乗らない。
+ * 種目を並べるだけの一覧には `EXERCISE_GROUP_ORDER` を使う。
+ */
 export const GROUP_ORDER: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
+
+/** 種目を並べる見出しの順。カタログ・マイ種目・ピッカー・目標の見出しで使う */
+export const EXERCISE_GROUP_ORDER: ExerciseGroup[] = [...GROUP_ORDER, 'cardio'];
+
+/** 有酸素か。部位として集計してよいかの判定はすべてここを通す */
+export function isCardio(group: ExerciseGroup): boolean {
+  return group === 'cardio';
+}
+
+/** 部位として読める分類だけを返す。有酸素は部位ではないので null */
+export function muscleOf(group: ExerciseGroup): MuscleGroup | null {
+  return group === 'cardio' ? null : group;
+}
 
 /**
  * 種目 ID の並びから、やる部位の並びを作る（「胸・肩・腕」）。
@@ -1162,12 +1386,12 @@ export const GROUP_ORDER: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders',
  */
 export function groupsOf(exercises: readonly Exercise[], ids: readonly string[]): string {
   const byId = new Map(exercises.map((e) => [e.id, e]));
-  const groups = new Set<MuscleGroup>();
+  const groups = new Set<ExerciseGroup>();
   for (const id of ids) {
     const group = byId.get(id)?.group;
     if (group) groups.add(group);
   }
-  return GROUP_ORDER.filter((g) => groups.has(g))
+  return EXERCISE_GROUP_ORDER.filter((g) => groups.has(g))
     .map((g) => GROUP_LABELS[g])
     .join('・');
 }
@@ -1207,6 +1431,17 @@ export const REP_UNIT_LABELS: Record<RepUnit, string> = {
   reps: '回',
   seconds: '秒',
 };
+
+/** 「回数」「秒数」。目標の立て方の名前に使う */
+const REP_UNIT_NOUNS: Record<RepUnit, string> = {
+  reps: '回数',
+  seconds: '秒数',
+};
+
+/** 回で数えるか。挙上量・推定1RM を出せるのはこれが真のときだけ */
+export function countsReps(repUnit: RepUnit): boolean {
+  return repUnit === 'reps';
+}
 
 function toSubGroup(entry: MuscleGroup | [MuscleGroup, number]): SubGroup {
   return Array.isArray(entry)
@@ -1248,16 +1483,17 @@ const IMPLEMENT_LOAD: Partial<Record<Implement, LoadMode>> = {
  * 器具で分かれる種目でも値は変わらない。ダンベルショルダープレスもバーベル版と同じく
  * 立って行うので、腰の使い方も引き方も変わらない。
  */
-function checkValues(entry: CatalogEntry): Pick<Exercise, 'axial' | 'minutesPerSet'> {
+function checkValues(entry: CatalogEntry): Pick<Exercise, 'axial' | 'minutesPerSet' | 'repeated'> {
   return {
     axial: AXIAL.has(entry.id),
     minutesPerSet: MINUTES_PER_SET[entry.id] ?? null,
+    repeated: entry.repeated ?? true,
   };
 }
 
 export function catalogCheckValues(
   id: string,
-): Pick<Exercise, 'axial' | 'minutesPerSet'> | undefined {
+): Pick<Exercise, 'axial' | 'minutesPerSet' | 'repeated'> | undefined {
   const suffix = id.endsWith('_bw') || id.endsWith('_db');
   const base = suffix ? id.slice(0, id.lastIndexOf('_')) : id;
   const entry = CATALOG.find((c) => c.id === base);
