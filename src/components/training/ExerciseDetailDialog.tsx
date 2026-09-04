@@ -9,6 +9,7 @@ import {
   buildWeeklySets,
   exerciseHistory,
   formatSets,
+  formatTopSet,
   personalBest,
   plateau,
 } from '../../lib/training';
@@ -145,11 +146,9 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
   for (const h of history) {
     const v = metric.pick(h.point);
     if (v == null) continue;
-    const top = h.point.top;
     // 換算元のセットを添える。同じ種目でもレップ帯が変わると外挿量が変わる
-    points.push(
-      top?.weight != null ? { t: h.time, v, note: `${top.weight}×${top.reps}` } : { t: h.time, v },
-    );
+    const note = formatTopSet(h.point);
+    points.push(note ? { t: h.time, v, note } : { t: h.time, v });
   }
 
   const series: ChartSeries[] = [
@@ -332,11 +331,7 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
               {[...history].reverse().map((h) => (
                 <tr key={h.date}>
                   <th scope="row">{formatMD(h.date)}</th>
-                  <td>
-                    {h.point.top?.weight != null
-                      ? `${h.point.top.weight} × ${h.point.top.reps ?? '—'}`
-                      : '—'}
-                  </td>
+                  <td>{formatTopSet(h.point) ?? '—'}</td>
                   <td>{h.point.workSets}</td>
                   <td>
                     {h.point.volume > 0 ? (
@@ -349,7 +344,8 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
                     {h.point.oneRm == null ? (
                       <span className={ui.cellEmpty}>—</span>
                     ) : (
-                      `${fmt(h.point.oneRm)}${h.point.measured ? ' *' : ''}`
+                      // 挙上量と同じく重さなので、こちらにも単位を付ける
+                      `${fmt(h.point.oneRm)} kg${h.point.measured ? ' *' : ''}`
                     )}
                   </td>
                 </tr>

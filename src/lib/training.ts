@@ -391,7 +391,22 @@ export const pickMetric = (p: ExercisePoint) => p.metric;
  * 表示用
  * ------------------------------------------------------------------ */
 
-/** 「60kg×10,10,9」形式。同じ重量が続く間はまとめる。重量のない種目は「60,60秒」 */
+/**
+ * トップセットの書き方。**入力画面と同じ 回数 × 重量。**
+ *
+ * 打った順と読む順が逆だと、同じセットを見るたびに読み替えることになる。
+ * 重量には単位を付ける（数字だけだと、どちらが回数か見分けが付かない）。
+ *
+ * トップセットは「最大重量のセット」なので、重量を持たない種目では決まらない。
+ * そのときは null を返し、呼ぶ側が出し方を決める。
+ */
+export function formatTopSet(point: ExercisePoint): string | null {
+  const top = point.top;
+  if (!top || top.weight == null || top.reps == null) return null;
+  return `${top.reps} × ${top.weight}kg`;
+}
+
+/** 「10,10,9 × 60kg」形式。同じ重量が続く間はまとめる。重量のない種目は「60,60秒」 */
 export function summarizeSets(point: ExercisePoint): string {
   /*
    * 有酸素は「その日にどれだけ動いたか」なので、セットの並びではなく合計で書く。
@@ -417,8 +432,9 @@ export function summarizeSets(point: ExercisePoint): string {
     if (last && last.weight === s.weight) last.reps.push(s.reps!);
     else groups.push({ weight: s.weight, reps: [s.reps!] });
   }
+  // 並びは入力画面と同じ 回数 × 重量
   return groups
-    .map((g) => `${g.weight == null ? '' : `${g.weight}kg×`}${g.reps.join(',')}${unit}`)
+    .map((g) => `${g.reps.join(',')}${unit}${g.weight == null ? '' : ` × ${g.weight}kg`}`)
     .join(' / ');
 }
 

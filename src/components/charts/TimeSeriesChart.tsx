@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useElementWidth } from '../../hooks/useElementWidth';
 import { formatMD, formatMDW, toISO } from '../../lib/date';
@@ -52,6 +52,33 @@ export function TimeSeriesChart({
 }: TimeSeriesChartProps) {
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
+  const [tipW, setTipW] = useState(128);
+
+  /*
+   * **グラフの外を触ったら選択を解く。**
+   *
+   * 指を離しても残すようにしたぶん、放っておくと消す手段が無くなる。
+   * 別のグラフを触ったときもそちらが選ばれてこちらは消える（同時に 2 つ出さない）。
+   * 捕捉フェーズで見るのは、内側のハンドラが動く前に外かどうかを決めたいため。
+   */
+  useEffect(() => {
+    if (active == null) return;
+    const onDown = (e: PointerEvent) => {
+      const node = wrapRef.current;
+      if (node && !node.contains(e.target as Node)) setActive(null);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    return () => document.removeEventListener('pointerdown', onDown, true);
+  }, [active, wrapRef]);
+
+  // 中身で幅が変わるので測る。同じ値なら state を触らない（再描画を呼ばない）
+  useLayoutEffect(() => {
+    const el = tipRef.current;
+    if (!el) return;
+    const w = el.offsetWidth;
+    setTipW((prev) => (prev === w ? prev : w));
+  });
 
   const times = useMemo(() => {
     const set = new Set<number>();
@@ -100,9 +127,16 @@ export function TimeSeriesChart({
     setActive(best);
   }
 
+  /*
+   * ツールチップの横位置。**実測した幅で寄せる。**
+   *
+   * 以前は幅を 128px と決め打ちしてクランプしていたが、中身は
+   * 「● 日平均（実測） 72.3kg」のような行が入るので実際は 150px を超える。
+   * その差ぶんだけ、右端の点を選んだときに画面からはみ出していた。
+   */
   const tipLeft =
     activeTime != null && width > 0
-      ? Math.min(Math.max(x(activeTime) - 60, 4), Math.max(4, width - 128))
+      ? Math.min(Math.max(x(activeTime) - tipW / 2, 4), Math.max(4, width - tipW - 4))
       : 0;
 
   const showLegend = legend ?? series.length >= 2;
@@ -286,13 +320,22 @@ export function TimeSeriesChart({
               height={plotH}
               onPointerMove={handleMove}
               onPointerDown={handleMove}
-              onPointerLeave={() => setActive(null)}
+              /*
+                **指を離しても選択を残す。**
+                タッチは離した時点でポインタが消えて pointerleave が飛ぶので、
+                ここで捨てると「押しっぱなしにしないと読めない」になる。
+                押したまま滑らせて合わせ、離して読む、という操作を通す。
+                マウスは離れたら消す（ホバーはそういうもの）。
+              */
+              onPointerLeave={(e) => {
+                if (e.pointerType === 'mouse') setActive(null);
+              }}
             />
           </svg>
         )}
 
         {activeTime != null && (
-          <div className={`${s.tip} ${s.tipOn}`} style={{ left: tipLeft }}>
+          <div ref={tipRef} className={`${s.tip} ${s.tipOn}`} style={{ left: tipLeft }}>
             <div className={s.tipDate}>{formatMDW(toISO(new Date(activeTime)))}</div>
             {series.map((serie) => {
               const p = serie.points.find((point) => point.t === activeTime);

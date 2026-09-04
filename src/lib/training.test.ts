@@ -300,13 +300,13 @@ describe('主指標と履歴', () => {
     expect(personalBest(s, 'ex_bench', '2026-03-04', pickOneRm)).toBeCloseTo(120 * k, 6);
   });
 
-  it('セット構成を「60kg×10,10,9」形式にまとめる', () => {
+  it('セット構成を「10,10,9 × 60kg」形式にまとめる（並びは入力画面と同じ）', () => {
     const point = buildExercisePoint(
       ex(),
       entry(sets([40, 10], [60, 10], [60, 10], [60, 9])),
       null,
     );
-    expect(summarizeSets(point)).toBe('40kg×10 / 60kg×10,10,9');
+    expect(summarizeSets(point)).toBe('10 × 40kg / 10,10,9 × 60kg');
   });
 });
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { formatMD } from '../../lib/date';
 import { deltaTone, fmt, fmtDelta } from '../../lib/format';
 import { GROUP_LABELS, catalogEquipment, goalTypeLabel, isCardio } from '../../lib/exerciseCatalog';
-import { summarizeSets } from '../../lib/training';
+import { formatTopSet, summarizeSets } from '../../lib/training';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import { isCardioSet } from '../../types';
 import type { SetField } from '../../hooks/useBodyData';
@@ -273,7 +273,7 @@ export function ExerciseCard({
             {point?.oneRm != null && (
               <span>
                 推定1RM {fmt(point.oneRm)} kg{point.measured ? ' *' : ''}
-                {point.top?.weight != null && ` （${point.top.weight}×${point.top.reps} から）`}
+                {formatTopSet(point) && ` （${formatTopSet(point)} から）`}
               </span>
             )}
             <b>

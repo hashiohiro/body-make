@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialog';
 import { ExerciseManager } from '../components/training/ExerciseManager';
 import { PresetManager } from '../components/training/PresetManager';
 import { App } from '../App';
@@ -145,7 +146,7 @@ describe('トレ画面', () => {
     // 推定1RM は種目カードにだけ出す。ベンチは分母 40 なので 60 × (1 + 10/40) = 75.0
     expect(screen.getByText(/推定1RM 75\.0 kg/)).toBeTruthy();
     // 換算元のセットを併記する（外挿の大きさが読めるように）
-    expect(screen.getByText(/60×10 から/)).toBeTruthy();
+    expect(screen.getByText(/10 × 60kg から/)).toBeTruthy();
   });
 
   it('書いたセットはすべて挙上量に数える（ウォームアップの区別を持たない）', () => {
@@ -3462,5 +3463,41 @@ describe('消えるものがあるときだけ聞く', () => {
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
     confirmSpy.mockRestore();
+  });
+});
+
+describe('元データの一覧', () => {
+  function DetailHarness({ id }: { id: string }) {
+    const body = useBodyData();
+    return (
+      <ExerciseDetailDialog
+        open
+        onClose={() => {}}
+        exercise={body.data.exercises.find((e) => e.id === id) ?? null}
+        sessions={body.sessions}
+        from="2020-01-01"
+      />
+    );
+  }
+
+  it('トップセットは入力画面と同じ 回数 × 重量 で、重量に単位を付ける', () => {
+    seedData(['ex_bench'], {
+      '2026-03-01': [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+    });
+    render(<DetailHarness id="ex_bench" />);
+
+    expect(screen.getByText('10 × 60kg')).toBeTruthy();
+    // 逆の並びは出さない
+    expect(screen.queryByText('60 × 10')).toBeNull();
+  });
+
+  it('推定1RM にも単位を付ける（同じ表の中で挙上量だけ kg なのは読みにくい）', () => {
+    seedData(['ex_bench'], {
+      '2026-03-01': [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+    });
+    render(<DetailHarness id="ex_bench" />);
+
+    // ベンチは分母 40 なので 60 × (1 + 10/40) = 75.0
+    expect(screen.getByText('75.0 kg')).toBeTruthy();
   });
 });
