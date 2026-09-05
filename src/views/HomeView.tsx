@@ -71,6 +71,14 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
 
   return (
     <>
+      {/*
+        記録が消えることの案内は、いちばん上——切り替えと現在地のあいだ——に置く。
+        いったん下に置いていたが、**毎日見る数字より下にあると読まれない。**
+        言っているのは「この端末にしか無い」なので、読まれなければ意味がない。
+        切り替えのどちら側でも同じことを言うので、出し分けない。
+      */}
+      <SafetyNotices data={body.data} />
+
       {domain === 'body' &&
         (daily.length === 0 ? (
           <section className={ui.card}>
@@ -137,12 +145,6 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
           <BadgeGrid badges={badges} />
         </>
       )}
-
-      {/*
-        記録の置き場所の話は、毎日見る数字のあとに置く。
-        切り替えのどちら側でも同じことを言うので、出し分けない
-      */}
-      <SafetyNotices data={body.data} />
     </>
   );
 }

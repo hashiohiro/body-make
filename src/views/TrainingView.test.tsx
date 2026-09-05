@@ -795,6 +795,77 @@ describe('設定（カテゴリ別の画面遷移）', () => {
   });
 });
 
+describe('記録が消えることの案内', () => {
+  function HomeHarness() {
+    const body = useBodyData(seeded);
+    return (
+      <HomeView
+        body={body}
+        domain="body"
+        onOpenRecords={() => undefined}
+        onOpenTrend={() => undefined}
+      />
+    );
+  }
+
+  /** n 日ぶんの体組成の記録を作る */
+  function seedDays(n: number) {
+    const entries: Record<string, unknown> = {};
+    for (let i = 0; i < n; i++) {
+      entries[isoAdd(todayISO(), -i)] = {
+        am: { weight: 70, bodyFat: 20 },
+        pm: { weight: null, bodyFat: null },
+      };
+    }
+    seedRaw({ version: 7, settings: {}, entries, exercises: [], workouts: {} });
+  }
+
+  const setDevice = (state: Record<string, unknown>) =>
+    localStorage.setItem('bodymake.device.v1', JSON.stringify(state));
+
+  const backupNotice = () => screen.queryByRole('button', { name: 'JSONで書き出す' });
+
+  it('未書き出しが 30 日ぶんに満たなければ出さない', () => {
+    seedDays(20);
+    render(<HomeHarness />);
+    expect(backupNotice()).toBeNull();
+  });
+
+  it('一度も書き出していなければ、通算 30 日ぶんで出る', () => {
+    seedDays(40);
+    render(<HomeHarness />);
+    expect(backupNotice()).toBeTruthy();
+    expect(screen.getByText(/まだ一度も書き出していません/)).toBeTruthy();
+  });
+
+  /*
+   * ここが「前回の書き出しから 60 日」をやめた理由。
+   * 書き出したあとに増えていなければ、時間が経っても出さない。
+   */
+  it('書き出したあと記録が増えていなければ、時間が経っても出さない', () => {
+    seedDays(300);
+    setDevice({ exportedAt: isoAdd(todayISO(), -1), backupClosedAt: null, installClosedAt: null });
+    render(<HomeHarness />);
+    expect(backupNotice()).toBeNull();
+  });
+
+  it('書き出したあとに 30 日ぶん増えたら、また出る', () => {
+    seedDays(300);
+    setDevice({ exportedAt: isoAdd(todayISO(), -40), backupClosedAt: null, installClosedAt: null });
+    render(<HomeHarness />);
+    expect(backupNotice()).toBeTruthy();
+    // 失う量そのものを言う（通算ではなく、書き出してから増えたぶん）
+    expect(screen.getByText(/40日ぶん記録しています/)).toBeTruthy();
+  });
+
+  it('閉じたら 30 日は出ない', () => {
+    seedDays(300);
+    setDevice({ exportedAt: null, backupClosedAt: isoAdd(todayISO(), -10), installClosedAt: null });
+    render(<HomeHarness />);
+    expect(backupNotice()).toBeNull();
+  });
+});
+
 describe('記録タブ', () => {
   function RecordsHarness({ domain = 'body' as Domain }) {
     const body = useBodyData(seeded);

@@ -1,17 +1,22 @@
 import { useState } from 'react';
 import { useInstallPrompt } from '../hooks/useStorageSafety';
 import { loadDevice, isStandalone, markExported, patchDevice, snoozeOver } from '../lib/device';
-import { diffDays, todayISO } from '../lib/date';
+import { todayISO } from '../lib/date';
 import { exportJson } from '../lib/io';
 import { IS_DEMO } from '../lib/env';
 import type { AppData } from '../types';
 import ui from '../styles/ui.module.scss';
 import s from './SafetyNotices.module.scss';
 
-/** 記録がこの日数を超えたら、書き出しを促す対象にする */
+/**
+ * 書き出しを促しはじめる、**未書き出しの**記録日数。
+ *
+ * 前は「前回の書き出しから 60 日」で出していたが、それだと
+ * 書き出したあと 1 日も記録していなくても 60 日で出る一方、
+ * 毎日記録していても 59 日目までは出なかった。
+ * **失う量で決める**ほうが、言っていることと条件が一致する。
+ */
 const BACKUP_AFTER_DAYS = 30;
-/** 前に書き出してからこの日数が経っていなければ、まだ促さない */
-const BACKUP_INTERVAL_DAYS = 60;
 /** ホーム画面の案内を出しはじめる記録日数。使うと決めた人にだけ出す */
 const INSTALL_AFTER_DAYS = 3;
 
@@ -20,21 +25,33 @@ interface Props {
 }
 
 /**
- * 記録のある日数。**体組成とトレーニングの和集合**で数える。
+ * 記録のある日。**体組成とトレーニングの和集合**で数える。
  *
  * `Stats.recordedDays` は体組成だけを数えるので、筋トレしか付けていない人に
  * この案内が一生出なかった。守る対象はどちらの記録も同じなので、
  * 片方だけを閾値に使わない。
  */
-function recordedDays(data: AppData): number {
-  return new Set([...Object.keys(data.entries), ...Object.keys(data.workouts)]).size;
+function recordedDates(data: AppData): string[] {
+  return [...new Set([...Object.keys(data.entries), ...Object.keys(data.workouts)])];
+}
+
+/**
+ * まだ書き出していない記録の日数。
+ *
+ * 書き出した日の記録は書き出しに含まれているので、**その日より後**を数える。
+ * 一度も書き出していなければ全部が対象。
+ */
+function unsavedDays(dates: readonly string[], exportedAt: string | null): number {
+  return exportedAt == null ? dates.length : dates.filter((d) => d > exportedAt).length;
 }
 
 /**
  * 記録が消えないようにするための案内。
  *
- * **記録の話ではなく、記録の置き場所の話**なのでホームのいちばん下に置く。
- * 上に出すと、毎日見る数字の前に毎日同じ注意書きが挟まる。
+ * **ホームのいちばん上**（切り替えと現在地のあいだ）に置く。
+ * 毎日見る数字の下に置くと読まれない——言っているのは「この端末にしか無い」なので、
+ * 読まれなければ何も守れない。毎回目に入ることを引き受けたうえで、
+ * 閉じられるようにして間隔を持たせる。
  *
  * 出すのは **一度に 1 つだけ**。2 枚並ぶと、どちらも読み飛ばされる。
  * 閉じたら 30 日は出さない（`lib/device.ts`）。永久に消さないのは、
@@ -47,24 +64,23 @@ export function SafetyNotices({ data }: Props) {
   if (IS_DEMO) return null;
 
   const today = todayISO();
-  const days = recordedDays(data);
-  const staleBackup =
-    device.exportedAt == null || diffDays(today, device.exportedAt) >= BACKUP_INTERVAL_DAYS;
+  const dates = recordedDates(data);
+  const unsaved = unsavedDays(dates, device.exportedAt);
 
-  const showBackup = days >= BACKUP_AFTER_DAYS && staleBackup && snoozeOver(device.backupClosedAt);
+  const showBackup = unsaved >= BACKUP_AFTER_DAYS && snoozeOver(device.backupClosedAt);
 
+  // ホーム画面への追加は「使うと決めたか」なので、こちらは通算で見る
   const showInstall =
-    days >= INSTALL_AFTER_DAYS && !isStandalone() && snoozeOver(device.installClosedAt);
+    dates.length >= INSTALL_AFTER_DAYS && !isStandalone() && snoozeOver(device.installClosedAt);
 
   // 失うものが大きいほうを先に出す。同時には出さない
   if (showBackup) {
     return (
       <section className={`${ui.card} ${s.urgent}`}>
         <p className={s.body}>
-          {days}日ぶんの記録が、この端末のブラウザの中だけにあります。
           {device.exportedAt == null
-            ? 'まだ一度も書き出していません。'
-            : `前に書き出したのは ${device.exportedAt} です。`}
+            ? `${unsaved}日ぶんの記録が、この端末のブラウザの中だけにあります。まだ一度も書き出していません。`
+            : `前に書き出した ${device.exportedAt} から、${unsaved}日ぶん記録しています。この端末のブラウザの中だけにあります。`}
           ブラウザのデータを消すか機種を変えると、戻せません。
         </p>
         <div className={ui.btnRow}>
