@@ -22,9 +22,73 @@
     <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <title>BodyMake — ボディメイク進捗</title>
+    <style>
+      /*
+        起動の待ちだけに使う。バンドルの CSS より先に効く必要があるので、
+        トークン（--ink-muted など）は使えない。どちらの地色でも読める灰にする。
+      */
+      .boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-content: center;
+        gap: 10px;
+        padding: 24px;
+        text-align: center;
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          'Hiragino Sans',
+          'Noto Sans JP',
+          sans-serif;
+        color: #8a8a8a;
+        opacity: 0;
+        animation: boot-in 0.3s ease 400ms forwards;
+      }
+      .boot p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.7;
+      }
+      /* 明らかにおかしいときだけ、次の手を出す。10 秒は「もう待たなくていい」の目安 */
+      .boot-slow {
+        font-size: 12px;
+        opacity: 0;
+        animation: boot-in 0.3s ease 10s forwards;
+      }
+      @keyframes boot-in {
+        to {
+          opacity: 1;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot,
+        .boot-slow {
+          animation-duration: 0.01ms;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      起動の待ち。
+      **速く終わったときは何も出さない。** 表示を 400ms 遅らせてあるので、
+      それより前に React が載れば、この要素ごと置き換わって一度も見えない。
+      一瞬だけ出て消える表示は、待たされるより気になる。
+
+      ここに置くのは、待ちの大半が JS を読む前だから。読み込むデータ自体は
+      10 年ぶんでも 50ms 程度で、長いのはバンドルの取得と解析のほう。
+      スクリプトの中に置いたのでは、いちばん長い区間に間に合わない。
+    -->
+    <div id="root">
+      <div class="boot" role="status" aria-live="polite">
+        <p class="boot-msg">読み込み中…</p>
+        <p class="boot-slow">
+          時間がかかっています。<br />通信を確認して、開き直してみてください。
+        </p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
