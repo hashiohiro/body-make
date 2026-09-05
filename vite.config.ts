@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -15,7 +16,7 @@ export default defineConfig({
       includeAssets: ['icons/apple-touch-icon.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
-        // 記録データは localStorage にあるため、キャッシュはアプリシェルのみで足りる
+        // 記録データは IndexedDB にあるため、キャッシュはアプリシェルのみで足りる
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
       },
@@ -49,5 +50,9 @@ export default defineConfig({
   ],
   build: {
     target: 'es2022',
+  },
+  test: {
+    // 記録の保存先が IndexedDB になったので、jsdom に実装を持たせる
+    setupFiles: ['./src/test-setup.ts'],
   },
 });

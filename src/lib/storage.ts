@@ -28,6 +28,7 @@ import {
 import { THEME_IDS } from './themes';
 import { IS_DEMO } from './env';
 import { SEED_DATA } from './seed';
+import { readRecord, writeRecord } from './db';
 
 /** キー名はスキーマ版ではなく保存先のアドレス。v2 でも変えない（変えると既存データが見えなくなる） */
 const DATA_KEY = 'bodymake.data.v1';
@@ -561,22 +562,146 @@ export function sanitizeData(raw: unknown): AppData {
   };
 }
 
+/* ------------------------------------------------------------------ *
+ * 保存先
+ *
+ * **IndexedDB が主。localStorage は「一度も IndexedDB を使えていない端末」だけの落とし先。**
+ * どちらを使うかは起動時に一度だけ決めて、以後は変えない。
+ * 書き込みのたびに選び直すと、同じ記録が 2 か所に分かれて残る。
+ * ------------------------------------------------------------------ */
+
+type Backend =
+  | 'idb'
+  | 'local'
+  /**
+   * 移行済みなのに IndexedDB を開けなかった。**どこにも書かない。**
+   *
+   * ここで localStorage へ落ちてはいけない。落ちると、移行の時点で止まった
+   * 古いスナップショット（あるいは空）を本物として見せたうえ、
+   * そこへ打ち込んだ内容で上書きしてしまう。本物は IndexedDB に残ったまま見えなくなる。
+   * **空に見えるより、それらしく見えて違うほうが悪い。**
+   *
+   * 保存は失敗させて `StorageAlert` に出し、記録には一切触らない。
+   * 次に開けた起動で、そのまま元の記録に戻る。
+   */
+  | 'none';
+
+/** `loadData()` が確定させる。それまでは IndexedDB を前提に置く */
+let backend: Backend = 'idb';
+
+/** いまどこに書いているか（画面の文言と、テストの確認用） */
+export function currentBackend(): Backend {
+  return backend;
+}
+
+/**
+ * この端末が IndexedDB へ移行済みか。**localStorage に置く。**
+ *
+ * 記録そのものではなく端末の状態なので `AppData` には混ぜない。
+ * 同期で読めることが要件（IndexedDB が開けないときの判断に使うので、
+ * IndexedDB の中には置けない）。
+ */
+const STORE_KEY = 'bodymake.store.v1';
+
+function markerIsIdb(): boolean {
+  try {
+    return localStorage.getItem(STORE_KEY) === 'idb';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 移行が終わったことを記録し、**旧版のコピーを消す。**
+ *
+ * 残しておくと、そのコピーは日ごとに古くなる。古いだけならまだしも、
+ * IndexedDB を開けなかった起動でそれが本物として読まれると、
+ * 1 か月前の記録に打ち込むことになる（上の `'none'` の説明）。
+ *
+ * 消しても失うものは無い。古いビルドへ戻したときに空に見えるだけで、
+ * 記録は IndexedDB にあるので、ビルドを戻せばそのまま出てくる。
+ */
+function completeMigration(): void {
+  try {
+    localStorage.setItem(STORE_KEY, 'idb');
+    localStorage.removeItem(DATA_KEY);
+  } catch {
+    /* 書けない端末。次の起動でもう一度片付ける */
+  }
+}
+
+/** 旧版の保存先。読むのは移行のときと、`'local'` で動いている端末だけ */
+function readLocal(): AppData | null {
+  try {
+    const raw = localStorage.getItem(DATA_KEY);
+    return raw ? sanitizeData(JSON.parse(raw) as unknown) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * IndexedDB を開き、入っていれば読む。空なら旧版の記録を引き取る。
+ *
+ * **移行は読み出しのついでに 1 回だけ起きる。**専用の移行画面も確認も出さない。
+ * 利用者から見れば保存先が変わっただけで、記録は 1 件も変わらないため。
+ */
+async function readStored(): Promise<AppData | null> {
+  let record: unknown = null;
+  try {
+    record = await readRecord<unknown>();
+  } catch {
+    // 移行済みの端末で開けないのは異常。**旧版へは落ちない**（Backend の 'none' 参照）
+    if (markerIsIdb()) {
+      backend = 'none';
+      return null;
+    }
+    // 一度も IndexedDB を使えていない端末（古いブラウザ・一部のプライベートモード）。
+    // ここで落ちても記録を失わせない。従来どおり localStorage を使う
+    backend = 'local';
+    return readLocal();
+  }
+
+  backend = 'idb';
+
+  if (record != null) {
+    // 印を書く前に落ちた起動があると、旧版のコピーが残ったままになる。毎回片付ける
+    completeMigration();
+    return sanitizeData(record);
+  }
+
+  // IndexedDB は開けたが空。前の版の記録があれば、そのまま引き取る
+  const legacy = readLocal();
+  if (!legacy) {
+    completeMigration();
+    return null;
+  }
+
+  try {
+    // 移った先へ確実に入ってから、旧版を消す。順番を逆にすると移行中の事故で記録が消える
+    await writeRecord(legacy);
+    completeMigration();
+  } catch {
+    // 書けなかった。旧版はそのまま残っているので、こちらで動かして次の起動に賭ける
+    backend = 'local';
+  }
+  return legacy;
+}
+
 /**
  * 保存済みを読む。壊れていれば空から始める。
+ *
+ * **非同期になった。** 呼ぶのは `main.tsx` の 1 か所だけで、
+ * 読み終えてから React を載せる。画面の中に「まだ読んでいない」状態を作らないため
+ * （作ると、記録が無い状態と読み込み中が同じ見た目になる画面が増える）。
  *
  * **デモでは、ここで勝手に上書きしない。**
  * 初期データへ戻すのは起動時の確認（DemoNotice）を通ってからで、
  * 断りなく消すと、触った内容が理由の分からないまま消えたように見える。
  * 何も入っていない端末のときだけ、空の画面を見せないためにここで入れる。
  */
-export function loadData(): AppData {
-  let stored: AppData | null = null;
-  try {
-    const raw = localStorage.getItem(DATA_KEY);
-    if (raw) stored = sanitizeData(JSON.parse(raw) as unknown);
-  } catch {
-    stored = null;
-  }
+export async function loadData(): Promise<AppData> {
+  const stored = await readStored();
 
   // 以降どの分岐でも base を土台にする。再構築すると筋トレのキーが落ちる
   const base = stored ?? emptyData();
@@ -600,40 +725,78 @@ export function demoSeed(): AppData | null {
 }
 
 /**
- * 保存できたかを返す。**握りつぶさない。**
- *
- * 容量超過やプライベートモードでは `setItem` が投げる。ここで黙って戻ると、
- * 利用者は打ち続けて、次に開いたときに初めて消えているのを知る。
- * 記録アプリでいちばん重い失敗なので、**結果を呼び出し側へ上げて画面に出す**
- * （`useBodyData` の `saveFailed` → `components/StorageAlert.tsx`）。
- */
-/**
- * localStorage の上限の目安。おおむねどのブラウザも 5MB 前後で頭を打つ。
- *
- * 正確な値はブラウザと端末で違うので、**判定には使わない。**
- * 画面に並べて「どのくらい使っているか」を読ませるためだけの物差し。
- */
-export const STORAGE_BUDGET_BYTES = 5 * 1024 * 1024;
-
-/**
  * いま保存しているデータの大きさ（バイト）。
  *
- * **文字数ではなくバイトで数える。** 主要なブラウザは localStorage の残量を
- * UTF-16 のコード単位（1 文字 2 バイト）で見積もっている。
- * 文字数のまま出すと上限の半分に見えるので、`STORAGE_BUDGET_BYTES` と物差しをそろえる。
+ * JSON にしたときの長さで測る。IndexedDB は structured clone で持つので
+ * 実際の占有とは一致しないが、**増え方を読むための目盛り**としてはこれで足りる。
  *
- * 天井そのものより先に効くのは**書き込みの重さ**のほうで、いまは値を 1 つ打つたびに
- * この全体を組み立て直している。1MB を超えたあたりが、日単位のレコードへ割る合図。
+ * 見るべきなのは天井よりも入力の重さのほう。ただし重いのは書き込みではなく**導出**で、
+ * 10年ぶんの生成データでは書き込み 47ms に対して導出が 113ms かかる（`db.ts` 参照）。
+ * 保存先を割ってもそちらは軽くならない。
  */
 export function storedBytes(data: AppData): number {
-  return JSON.stringify(data).length * 2;
+  return JSON.stringify(data).length;
 }
 
-export function saveData(data: AppData): boolean {
+/* ------------------------------------------------------------------ *
+ * 書き込み
+ * ------------------------------------------------------------------ */
+
+async function writeOnce(data: AppData): Promise<boolean> {
+  // 移行済みなのに開けなかった端末。**どこにも書かない**（記録を上書きしない）
+  if (backend === 'none') return false;
+
+  if (backend === 'local') {
+    try {
+      localStorage.setItem(DATA_KEY, JSON.stringify(data));
+      return true;
+    } catch {
+      return false;
+    }
+  }
   try {
-    localStorage.setItem(DATA_KEY, JSON.stringify(data));
+    await writeRecord(data);
     return true;
   } catch {
     return false;
   }
+}
+
+/** 書き込み中のもの。null なら止まっている */
+let inflight: Promise<boolean> | null = null;
+/** 書き込み中に来た最新の内容。1 つだけ持つ（途中の版を書く意味がない） */
+let pending: AppData | null = null;
+
+async function drain(): Promise<boolean> {
+  let ok = true;
+  while (pending != null) {
+    const next = pending;
+    pending = null;
+    ok = await writeOnce(next);
+  }
+  inflight = null;
+  return ok;
+}
+
+/**
+ * 保存できたかを返す。**握りつぶさない。**
+ *
+ * 書けないとき（容量超過・プライベートモード）に黙って戻ると、利用者は打ち続けて、
+ * 次に開いたときに初めて消えているのを知る。記録アプリでいちばん重い失敗なので、
+ * 結果を呼び出し側へ上げて画面に出す
+ * （`useBodyData` の `saveFailed` → `components/StorageAlert.tsx`）。
+ *
+ * **書き込み中に来た変更は最新の 1 つにまとめる。** 連続して打っているあいだ、
+ * 途中の版をすべて書く意味はない。タイマーは持たない——遅らせるほど、
+ * 書き終わる前にタブが閉じられる窓が広がる。書けるようになり次第すぐ書く。
+ */
+export function saveData(data: AppData): Promise<boolean> {
+  pending = data;
+  inflight ??= drain();
+  return inflight;
+}
+
+/** 書き込み中のものが片付くまで待つ。テストと、画面を閉じるときに使う */
+export function flushSave(): Promise<boolean> {
+  return inflight ?? Promise.resolve(true);
 }

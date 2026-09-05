@@ -32,7 +32,7 @@ body {
   overscroll-behavior-y: none;
 
   // テキスト選択と長押しメニューを止める。
-  // 数値は設定画面から CSV / JSON で書き出せるので、選択できなくても取り出す手段は残る
+  // 数値は設定画面から JSON で書き出せるので、選択できなくても取り出す手段は残る
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;

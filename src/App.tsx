@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { DateNav } from './components/DateNav';
 import { TabBar } from './components/TabBar';
 import type { TabId } from './components/TabBar';
-import type { Domain } from './types';
+import type { AppData, Domain } from './types';
 import { DemoNotice } from './components/DemoNotice';
 import { StorageAlert } from './components/StorageAlert';
 import { Toast, useToast } from './components/Toast';
@@ -65,8 +65,13 @@ function toHash(route: Route): string {
   return `#${route.tab}/${route.section}${route.param ? `/${route.param}` : ''}`;
 }
 
-export function App() {
-  const body = useBodyData();
+interface AppProps {
+  /** 起動時に読み込んだ記録（main.tsx）。読み終えてから React を載せる */
+  initial: AppData;
+}
+
+export function App({ initial }: AppProps) {
+  const body = useBodyData(initial);
   const [route, setRoute] = useState<Route>(routeFromHash);
   const [date, setDate] = useState(todayISO);
   // ホーム・記録・目標・推移で共通。タブを移っても保つ

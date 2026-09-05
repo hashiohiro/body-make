@@ -46,11 +46,27 @@ export function buildBodyWeightLookup(daily: readonly DailyPoint[]): BodyWeightL
     .map((d) => ({ date: d.date, value: d.weight ?? d.maWeight }))
     .filter((p): p is { date: string; value: number } => p.value != null);
 
+  /*
+   * 二分探索で「その日以前で最後に記録された体重」を引く。
+   *
+   * 素直に前から走らせると、1 回の引き当てが全期間の走査になる。
+   * これはセッションごとに呼ばれるので、記録が伸びるほど
+   * 日数 × セッション数で効いてくる（10年ぶんで約570万回の比較になっていた）。
+   * points は日付順に作ってあるので、探索の前提は満たしている。
+   */
   return (date) => {
+    let lo = 0;
+    let hi = points.length - 1;
     let found: number | null = null;
-    for (const p of points) {
-      if (p.date > date) break;
-      found = p.value;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const p = points[mid]!;
+      if (p.date <= date) {
+        found = p.value;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
     }
     return found;
   };
@@ -675,12 +691,34 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
     if (week.days > bestWeekDays) bestWeekDays = week.days;
   }
 
-  // 部位ごとの最終実施日。偏りは「合計」ではなく「触ったかどうか」でしか見えない
   const today = todayISO();
+
+  /*
+   * 種目ごとの履歴を **1 回の走査で作る。**
+   *
+   * 以前はこの下の種目ループの中で `exerciseHistory(sessions, id)` を呼んでいた。
+   * あれは毎回セッション全体を走査するので、種目数 × セッション数で効いてくる。
+   * 引くものは同じなので、先にまとめて作れば走査は 1 回で済む。
+   *
+   * 並びはセッション順のまま（`exerciseHistory` と同じ）。順序に依存する
+   * `plateau` と開始値の判定が変わらないようにする。
+   */
+  const historyById = new Map<string, ExerciseHistoryPoint[]>();
+  // 部位ごとの最終実施日。偏りは「合計」ではなく「触ったかどうか」でしか見えない
   const lastByGroup = new Map<MuscleGroup, string>();
+  let lastCardio: string | null = null;
+
   for (const session of sessions) {
     for (const group of sessionGroups(session)) lastByGroup.set(group, session.date);
+    for (const point of session.exercises) {
+      if (isCardio(point.group)) lastCardio = session.date;
+      const item: ExerciseHistoryPoint = { date: session.date, time: session.time, point };
+      const list = historyById.get(point.exerciseId);
+      if (list) list.push(item);
+      else historyById.set(point.exerciseId, [item]);
+    }
   }
+
   const daysSinceGroup = Object.fromEntries(
     ALL_GROUPS.map((g) => {
       const last = lastByGroup.get(g);
@@ -688,24 +726,27 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
     }),
   ) as Record<MuscleGroup, number | null>;
 
-  let lastCardio: string | null = null;
-  for (const session of sessions) {
-    if (session.exercises.some((p) => isCardio(p.group))) lastCardio = session.date;
-  }
   const daysSinceCardio = lastCardio == null ? null : diffDays(today, lastCardio);
+
+  /*
+   * 窓の境目を日付で 1 回だけ出す。
+   *
+   * `diffDays` は呼ぶたびに Date を 2 つ作るので、履歴の各点で呼ぶと積み上がる。
+   * 'YYYY-MM-DD' は辞書順が日付順なので、境目の日付と直接比べれば同じことが言える。
+   * `diffDays(today, d) >= RECENT_DAYS` は `d <= recentCutoff` と同値。
+   */
+  const recentCutoff = addDays(today, -RECENT_DAYS);
 
   // 種目ごとに「最近伸びたか」「止まっているか」を数える。
   // 数えるのはイベントの件数なので、種目をまたいでも合計が壊れない（量を足すのとは違う）
   let recentBests = 0;
   let stalled = 0;
-  const exerciseIds = new Set(sessions.flatMap((s) => s.exercises.map((e) => e.exerciseId)));
 
-  for (const id of exerciseIds) {
-    const history = exerciseHistory(sessions, id);
+  for (const history of historyById.values()) {
     // 1 回しかやっていない種目は必ず「自己最高」になるので数えない
     if (history.length < 2) continue;
     // やめた種目は「止まっている」でも「伸びた」でもないので、直近の記録があるものだけ見る
-    if (diffDays(today, history[history.length - 1]!.date) >= RECENT_DAYS) continue;
+    if (history[history.length - 1]!.date <= recentCutoff) continue;
 
     const values = history
       .map((h) => ({ date: h.date, value: strengthOf(h.point) }))
@@ -713,13 +754,14 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
 
     // 「更新」は窓の外の自己最高を超えたときだけ。
     // 単に「最高を出した日が最近」だと、始めたばかりの種目や横ばいの種目まで数えてしまう
-    const before = values.filter((x) => diffDays(today, x.date) >= RECENT_DAYS);
-    const within = values.filter((x) => diffDays(today, x.date) < RECENT_DAYS);
-    if (before.length > 0 && within.length > 0) {
-      const bestBefore = Math.max(...before.map((x) => x.value));
-      const bestWithin = Math.max(...within.map((x) => x.value));
-      if (bestWithin > bestBefore) recentBests++;
+    let bestBefore: number | null = null;
+    let bestWithin: number | null = null;
+    for (const x of values) {
+      if (x.date <= recentCutoff) {
+        if (bestBefore == null || x.value > bestBefore) bestBefore = x.value;
+      } else if (bestWithin == null || x.value > bestWithin) bestWithin = x.value;
     }
+    if (bestBefore != null && bestWithin != null && bestWithin > bestBefore) recentBests++;
 
     const stall = plateau(history);
     if (stall && stall.weeks >= STALE_WEEKS) stalled++;
@@ -739,7 +781,7 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
     weeks3Plus,
     bestWeekDays,
     // 種目の種類は「何を試したか」の事実。挙げた量ではないので種目をまたいでも数えられる
-    exerciseKinds: exerciseIds.size,
+    exerciseKinds: historyById.size,
     spanDays: diffDays(today, firstDate) + 1,
     daysSinceGroup,
     daysSinceCardio,

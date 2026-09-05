@@ -24,19 +24,30 @@ import { useBodyData } from '../hooks/useBodyData';
 import { useTheme } from '../hooks/useTheme';
 import { todayISO } from '../lib/date';
 import { CATALOG, fromCatalog } from '../lib/exerciseCatalog';
-import type { Domain, ThemePref } from '../types';
+import type { AppData, Domain, ThemePref } from '../types';
+import { emptyData, flushSave, sanitizeData } from '../lib/storage';
+import { deleteRecord, readRecord, resetDbForTests } from '../lib/db';
+
+/**
+ * 起動時に読み込んだことにする記録。
+ *
+ * 記録の読み出しは `main.tsx` が 1 回だけ行い、結果を `App` へ渡す形になった
+ * （保存先が IndexedDB で非同期のため）。テストでも同じ経路にそろえて、
+ * seed は保存先ではなく **読み終えた値** として持つ。
+ */
+let seeded: AppData = emptyData();
 
 /**
  * 導出の正しさは training.test.ts が見ている。ここで見るのは結線
  * （種目を足す → セットを打つ → 集計が出る → 消える）が繋がっているか。
  */
 function Harness() {
-  const body = useBodyData();
+  const body = useBodyData(seeded);
   const [date] = useState(todayISO);
   return <TrainingView body={body} date={date} />;
 }
 
-/** 種目マスタは設定タブにあるので、画面を触らず localStorage に用意する */
+/** 種目マスタは設定タブにあるので、画面を触らず用意する */
 function seedExercises(...ids: string[]) {
   seedData(ids, {});
 }
@@ -53,17 +64,39 @@ function seedData(
       i,
     ),
   );
-  localStorage.setItem(
-    'bodymake.data.v1',
-    JSON.stringify({
-      version: 2,
-      settings: {},
-      entries,
-      exercises,
-      workouts,
-      ...(checks ? { checks } : {}),
-    }),
-  );
+  seedRaw({
+    version: 2,
+    settings: {},
+    entries,
+    exercises,
+    workouts,
+    ...(checks ? { checks } : {}),
+  });
+}
+
+/** 生の形から seed する（移行や不正値の扱いを見るテスト用） */
+function seedRaw(raw: unknown) {
+  seeded = sanitizeData(raw);
+}
+
+/**
+ * 保存されたものを読む。**書き込みは非同期**なので、片付くまで待ってから読む。
+ * 読む先は保存先そのもの（IndexedDB）で、画面の state ではない。
+ */
+async function storedData(): Promise<AppData> {
+  await flushSave();
+  return (await readRecord<AppData>()) ?? emptyData();
+}
+
+/**
+ * 画面を捨てて、**保存された内容から載せ直す**。起動し直しに相当する。
+ *
+ * 記録の読み出しが起動時の 1 回だけになったので、
+ * 「保存されたか」は再描画ではなく載せ直しでしか確かめられない。
+ */
+async function remount(): Promise<void> {
+  cleanup();
+  seeded = await storedData();
 }
 
 /** i 番目のセット行の重量・回数を入れる */
@@ -95,8 +128,11 @@ function setRows(): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>('[data-set-row]')];
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   localStorage.clear();
+  seeded = emptyData();
+  resetDbForTests();
+  await deleteRecord();
 });
 
 afterEach(cleanup);
@@ -364,7 +400,7 @@ describe('トレ画面', () => {
     expect(screen.queryByText(/この日 \d+種目/)).toBeNull();
   });
 
-  it('記録しながら、その種目の目標を決め直せる', () => {
+  it('記録しながら、その種目の目標を決め直せる', async () => {
     seedExercises('ex_bench');
     render(<Harness />);
     openPicker();
@@ -378,8 +414,8 @@ describe('トレ画面', () => {
 
     // 決めた立て方は、そのままカードのバッジに出る
     expect(screen.getByText('維持')).toBeTruthy();
-    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
-    expect(stored.exercises[0].goal).toEqual({ type: 'maintain', value: null });
+    const stored = await storedData();
+    expect(stored.exercises[0]!.goal).toEqual({ type: 'maintain', value: null });
   });
 
   it('自重種目では重量を聞かない。加重した日だけ開く', () => {
@@ -489,7 +525,7 @@ describe('記録として数える範囲', () => {
 
 describe('種目管理（設定タブ）', () => {
   function ManagerHarness({ usage = new Map<string, number>() }: { usage?: Map<string, number> }) {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     return (
       <ExerciseManager
         exercises={body.data.exercises}
@@ -539,10 +575,7 @@ describe('種目管理（設定タブ）', () => {
       0,
     );
     bench.goal = { type: 'weight', value: 100 };
-    localStorage.setItem(
-      'bodymake.data.v1',
-      JSON.stringify({ version: 2, settings: {}, entries: {}, exercises: [bench], workouts: {} }),
-    );
+    seedRaw({ version: 2, settings: {}, entries: {}, exercises: [bench], workouts: {} });
     render(<ManagerHarness />);
 
     // 目標画面は「大きい数字＝いま」なので、数字だけ置くと何の数字か読めなくなる。
@@ -558,10 +591,7 @@ describe('種目管理（設定タブ）', () => {
       0,
     );
     bench.goal = { type: 'maintain', value: null };
-    localStorage.setItem(
-      'bodymake.data.v1',
-      JSON.stringify({ version: 2, settings: {}, entries: {}, exercises: [bench], workouts: {} }),
-    );
+    seedRaw({ version: 2, settings: {}, entries: {}, exercises: [bench], workouts: {} });
     render(<ManagerHarness />);
 
     // 維持は数値を持たないので、値のバッジは出ない
@@ -675,7 +705,7 @@ describe('設定（カテゴリ別の画面遷移）', () => {
     section: string | null;
     page?: string | null;
   }) {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     const [route, setRoute] = useState({ section, page });
     return (
       <SettingsView
@@ -765,7 +795,7 @@ describe('設定（カテゴリ別の画面遷移）', () => {
 
 describe('記録タブ', () => {
   function RecordsHarness({ domain = 'body' as Domain }) {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     const [date, setDate] = useState(todayISO);
     return <RecordsView body={body} date={date} onDateChange={setDate} domain={domain} />;
   }
@@ -785,7 +815,7 @@ describe('記録タブ', () => {
 
 describe('推移（ホームの下位画面）', () => {
   function ChartsHarness({ domain = 'training' as Domain }) {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     return <ChartsView body={body} domain={domain} />;
   }
 
@@ -1155,48 +1185,6 @@ describe('秒で数える種目', () => {
   });
 });
 
-describe('CSV 書き出し', () => {
-  it('筋トレはセット単位の明細と週次の部位別セット数を出す', async () => {
-    const { buildCsvRows } = await import('../lib/io');
-    const { buildSessions } = await import('../lib/training');
-    const bench = fromCatalog(
-      CATALOG.find((c) => c.id === 'ex_bench')!,
-      0,
-    );
-    const sessions = buildSessions(
-      {
-        '2026-03-10': [
-          {
-            exerciseId: 'ex_bench',
-            sets: [
-              { weight: 60, reps: 10 },
-              { weight: 60, reps: 8 },
-            ],
-          },
-        ],
-      },
-      [bench],
-      [],
-    );
-
-    const csv = buildCsvRows([], [], sessions).map((r) => r.join(','));
-    expect(csv).toContain('# 筋トレログ（セット単位）');
-    // 主部位と補助部位は別の列に出す（ピボットの軸を壊さないため）。
-    // 係数は種目ごとに違うので、部位名だけだと Excel 側で挙上量を割り戻せない
-    expect(
-      csv.some((r) => r.includes('ベンチプレス（バーベル）,胸,肩×0.5・腕×0.5,1,60.0,10,回')),
-    ).toBe(true);
-    expect(
-      csv.some((r) => r.includes('ベンチプレス（バーベル）,胸,肩×0.5・腕×0.5,2,60.0,8,回')),
-    ).toBe(true);
-    expect(csv).toContain('# 週次の部位別セット数');
-
-    // 部位別セット数は係数ぶんの端数が出る。胸 2 / 肩 1 / 腕 1、合計 4
-    const header = csv.indexOf('# 週次の部位別セット数');
-    expect(csv[header + 2]!.endsWith(',2,0,0,1,1,0,4')).toBe(true);
-  });
-});
-
 describe('全体状況の指標', () => {
   it('今週の部位別セット数を出し、やっていない部位は空き日数で示す', async () => {
     const { buildSessions, computeTrainingStats } = await import('../lib/training');
@@ -1494,7 +1482,7 @@ describe('テーマ', () => {
 
 describe('バックアップの読み込み', () => {
   function SettingsHarness() {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     return <SettingsView body={body} section="general" onOpen={() => {}} onToast={() => {}} />;
   }
 
@@ -1527,16 +1515,17 @@ describe('バックアップの読み込み', () => {
   it('取り込んでも、いまのプリセットと部位別の目標を消さない', async () => {
     // 取り込み側でキーを書き忘れると、sanitizeData が渡されなかったキーを空にしてしまう
     seedData(['ex_bench'], {});
-    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
-    stored.presets = [{ id: 'p1', name: '押す日', exerciseIds: ['ex_bench'] }];
-    stored.groupGoals = { chest: 12 };
-    localStorage.setItem('bodymake.data.v1', JSON.stringify(stored));
+    seedRaw({
+      ...seeded,
+      presets: [{ id: 'p1', name: '押す日', exerciseIds: ['ex_bench'] }],
+      groupGoals: { chest: 12 },
+    });
 
     render(<SettingsHarness />);
     await choose(backup);
     fireEvent.click(screen.getByRole('button', { name: 'いまの記録に足す' }));
 
-    const after = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    const after = await storedData();
     expect(after.presets).toHaveLength(1);
     expect(after.groupGoals.chest).toBe(12);
     expect(after.entries['2026-03-01']).toBeDefined();
@@ -1555,8 +1544,8 @@ describe('バックアップの読み込み', () => {
     expect(screen.getByText(/プリセット 1件/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'いまの記録に足す' }));
-    const after = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
-    expect(after.presets[0].name).toBe('押す日');
+    const after = await storedData();
+    expect(after.presets[0]!.name).toBe('押す日');
     expect(after.groupGoals.chest).toBe(15);
   });
 
@@ -1567,7 +1556,7 @@ describe('バックアップの読み込み', () => {
     fireEvent.click(screen.getByRole('button', { name: 'やめる' }));
     expect(screen.queryByText('バックアップから読み込む')).toBeNull();
 
-    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1') ?? '{"entries":{}}');
+    const stored = await storedData();
     expect(Object.keys(stored.entries ?? {})).toHaveLength(0);
   });
 
@@ -1576,7 +1565,7 @@ describe('バックアップの読み込み', () => {
     await choose(backup);
 
     fireEvent.click(screen.getByRole('button', { name: 'いまの記録に足す' }));
-    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    const stored = await storedData();
     expect(stored.entries['2026-03-01']).toBeDefined();
   });
 });
@@ -1644,7 +1633,7 @@ describe('ダイアログの戻り方', () => {
     seedExercises('ex_bench');
 
     function Harness() {
-      const body = useBodyData();
+      const body = useBodyData(seeded);
       const [date] = useState(todayISO);
       return <TrainingView body={body} date={date} />;
     }
@@ -1671,7 +1660,7 @@ describe('初期データ（シード）', () => {
 
     // 投入済みフラグごと消して、初回起動と同じ状態にする
     localStorage.clear();
-    expect(Object.keys(loadData().entries)).toHaveLength(0);
+    expect(Object.keys((await loadData()).entries)).toHaveLength(0);
 
     // 自分の記録として使う側に他人の数字を入れない。フラグも立てない
     expect(localStorage.getItem('bodymake.seeded.v1')).toBeNull();
@@ -1847,7 +1836,7 @@ describe('種目の削除', () => {
 
 describe('ホームの部位別の配分', () => {
   function HomeHarness() {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     return (
       <HomeView body={body} domain="training" onOpenRecords={() => {}} onOpenTrend={() => {}} />
     );
@@ -1908,7 +1897,7 @@ describe('ホームの部位別の配分', () => {
 
 describe('目標画面', () => {
   function GoalsHarness({ domain = 'body' as Domain }) {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     return <GoalsView body={body} domain={domain} />;
   }
 
@@ -1970,7 +1959,7 @@ describe('目標画面', () => {
     });
 
     function Harness() {
-      const body = useBodyData();
+      const body = useBodyData(seeded);
       return <GoalsView body={body} domain="training" />;
     }
 
@@ -2032,7 +2021,7 @@ describe('目標画面', () => {
     });
 
     function Harness() {
-      const body = useBodyData();
+      const body = useBodyData(seeded);
       return <GoalsView body={body} domain="training" />;
     }
     render(<Harness />);
@@ -2080,7 +2069,7 @@ describe('目標画面', () => {
     });
 
     function Harness() {
-      const body = useBodyData();
+      const body = useBodyData(seeded);
       return <GoalsView body={body} domain="training" />;
     }
     render(<Harness />);
@@ -2094,7 +2083,7 @@ describe('目標画面', () => {
 describe('プリセット（種目の組み合わせ）', () => {
   /** 日を指定して記録画面を出す。プリセットは日をまたいで使うもの */
   function DayHarness({ day }: { day: string }) {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     const [date] = useState(day);
     return <TrainingView body={body} date={date} />;
   }
@@ -2131,7 +2120,7 @@ describe('プリセット（種目の組み合わせ）', () => {
     expect(screen.queryByRole('heading', { name: 'プリセット' })).toBeNull();
   });
 
-  it('カードで保存し、別の日にカードから呼び出せる', () => {
+  it('カードで保存し、別の日にカードから呼び出せる', async () => {
     seedExercises('ex_bench', 'ex_pullup', 'ex_squat');
     render(<Harness />);
     addTwo();
@@ -2143,7 +2132,7 @@ describe('プリセット（種目の組み合わせ）', () => {
     );
     fireEvent.change(screen.getByLabelText('プリセットの名前'), { target: { value: '押す日' } });
     fireEvent.click(screen.getByRole('button', { name: 'この名前で保存' }));
-    cleanup();
+    await remount();
 
     // 別の日に、同じ組み合わせを呼び出す
     render(<DayHarness day={isoAdd(todayISO(), -1)} />);
@@ -2153,12 +2142,12 @@ describe('プリセット（種目の組み合わせ）', () => {
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(2);
   });
 
-  it('同じ名前で保存すると、確認してから中身を上書きする', () => {
+  it('同じ名前で保存すると、確認してから中身を上書きする', async () => {
     seedExercises('ex_bench', 'ex_pullup', 'ex_squat');
     render(<Harness />);
     addTwo();
     save('押す日');
-    cleanup();
+    await remount();
 
     // 別の日に、違う組み合わせを同じ名前で保存しようとする
     render(<DayHarness day={isoAdd(todayISO(), -1)} />);
@@ -2173,27 +2162,27 @@ describe('プリセット（種目の組み合わせ）', () => {
 
     // 消えるのは前の中身なので、先に伝える。断ったら何も変わらない
     expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('上書き'));
-    let stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    let stored = await storedData();
     expect(stored.presets).toHaveLength(1);
-    expect(stored.presets[0].exerciseIds).toEqual(['ex_bench', 'ex_pullup']);
+    expect(stored.presets[0]!.exerciseIds).toEqual(['ex_bench', 'ex_pullup']);
 
     confirmSpy.mockReturnValue(true);
     fireEvent.click(screen.getByRole('button', { name: 'この名前で保存' }));
 
     // 同じ名前が 2 つ並ばず、中身だけが入れ替わる
-    stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    stored = await storedData();
     expect(stored.presets).toHaveLength(1);
-    expect(stored.presets[0].name).toBe('押す日');
-    expect(stored.presets[0].exerciseIds).toEqual(['ex_squat']);
+    expect(stored.presets[0]!.name).toBe('押す日');
+    expect(stored.presets[0]!.exerciseIds).toEqual(['ex_squat']);
     confirmSpy.mockRestore();
   });
 
-  it('削除は確認してから消す', () => {
+  it('削除は確認してから消す', async () => {
     seedExercises('ex_bench', 'ex_pullup');
     render(<Harness />);
     addTwo();
     save('押す日');
-    cleanup();
+    await remount();
 
     render(<DayHarness day={isoAdd(todayISO(), -1)} />);
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
@@ -2209,7 +2198,7 @@ describe('プリセット（種目の組み合わせ）', () => {
     confirmSpy.mockRestore();
   });
 
-  it('入るのは種目だけ。重量と回数は持たない', () => {
+  it('入るのは種目だけ。重量と回数は持たない', async () => {
     seedExercises('ex_bench');
     render(<Harness />);
 
@@ -2221,10 +2210,10 @@ describe('プリセット（種目の組み合わせ）', () => {
     // 値を打ってから保存しても、持つのは種目だけ
     save('押す日');
 
-    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    const stored = await storedData();
     expect(stored.presets).toHaveLength(1);
     // ID は UUID なので中身を見ない（"60" を含むことがある）。持ち物そのものを見る
-    const { id, ...preset } = stored.presets[0];
+    const { id, ...preset } = stored.presets[0]!;
     expect(typeof id).toBe('string');
     expect(preset).toEqual({ name: '押す日', exerciseIds: ['ex_bench'] });
   });
@@ -2353,7 +2342,7 @@ describe('レビュー（記録画面）', () => {
 
 describe('プリセット（設定から見る・編集する）', () => {
   function PresetHarness() {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     return (
       <PresetManager
         presets={body.data.presets}
@@ -2375,20 +2364,17 @@ describe('プリセット（設定から見る・編集する）', () => {
         i,
       ),
     );
-    localStorage.setItem(
-      'bodymake.data.v1',
-      JSON.stringify({
-        version: 2,
-        settings: {},
-        entries: {},
-        exercises,
-        workouts: {},
-        presets,
-      }),
-    );
+    seedRaw({
+      version: 2,
+      settings: {},
+      entries: {},
+      exercises,
+      workouts: {},
+      presets,
+    });
   }
 
-  it('空から新しいプリセットを作れる', () => {
+  it('空から新しいプリセットを作れる', async () => {
     seedPresets();
     render(<PresetHarness />);
     expect(screen.getByText(/まだプリセットがありません/)).toBeTruthy();
@@ -2407,14 +2393,14 @@ describe('プリセット（設定から見る・編集する）', () => {
     fireEvent.click(screen.getByText('＋ スクワット'));
     fireEvent.click(screen.getByRole('button', { name: 'このプリセットを作る' }));
 
-    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    const stored = await storedData();
     expect(stored.presets).toHaveLength(1);
-    expect(stored.presets[0].name).toBe('押す日');
+    expect(stored.presets[0]!.name).toBe('押す日');
     // 足した順がそのまま並び（＝呼び出したときのカードの順）になる
-    expect(stored.presets[0].exerciseIds).toEqual(['ex_bench', 'ex_squat']);
+    expect(stored.presets[0]!.exerciseIds).toEqual(['ex_bench', 'ex_squat']);
   });
 
-  it('すでにある名前では作れない（この画面では上書きしない）', () => {
+  it('すでにある名前では作れない（この画面では上書きしない）', async () => {
     seedPresets({ id: 'p1', name: '押す日', exerciseIds: ['ex_bench'] });
     render(<PresetHarness />);
 
@@ -2432,7 +2418,7 @@ describe('プリセット（設定から見る・編集する）', () => {
     fireEvent.change(field, { target: { value: '脚の日' } });
     fireEvent.click(screen.getByRole('button', { name: 'このプリセットを作る' }));
 
-    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
+    const stored = await storedData();
     expect(stored.presets.map((p: { name: string }) => p.name)).toEqual(['押す日', '脚の日']);
   });
 
@@ -2462,7 +2448,7 @@ describe('プリセット（設定から見る・編集する）', () => {
     ).toBe(false);
   });
 
-  it('作りながら、カタログからマイ種目を増やせる', () => {
+  it('作りながら、カタログからマイ種目を増やせる', async () => {
     seedPresets();
     render(<PresetHarness />);
 
@@ -2484,12 +2470,12 @@ describe('プリセット（設定から見る・編集する）', () => {
     fireEvent.click(screen.getByText('＋ ディップス'));
     fireEvent.click(screen.getByRole('button', { name: 'このプリセットを作る' }));
 
-    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
-    expect(stored.presets[0].exerciseIds).toEqual(['ex_dips']);
+    const stored = await storedData();
+    expect(stored.presets[0]!.exerciseIds).toEqual(['ex_dips']);
     expect(stored.exercises.map((e: { id: string }) => e.id)).toContain('ex_dips');
   });
 
-  it('作りかけでも並びを入れ替えられる（作ったあとと同じ操作）', () => {
+  it('作りかけでも並びを入れ替えられる（作ったあとと同じ操作）', async () => {
     seedPresets();
     render(<PresetHarness />);
 
@@ -2505,8 +2491,8 @@ describe('プリセット（設定から見る・編集する）', () => {
     fireEvent.click(screen.getByRole('button', { name: 'スクワットを先頭へ' }));
     fireEvent.click(screen.getByRole('button', { name: 'このプリセットを作る' }));
 
-    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
-    expect(stored.presets[0].exerciseIds).toEqual(['ex_squat', 'ex_bench']);
+    const stored = await storedData();
+    expect(stored.presets[0]!.exerciseIds).toEqual(['ex_squat', 'ex_bench']);
   });
 
   it('一覧と中身の種目まで見られる', () => {
@@ -2558,7 +2544,7 @@ describe('プリセット（設定から見る・編集する）', () => {
     expect(screen.queryByText('スクワット')).toBeNull();
   });
 
-  it('中の並びを、掴んで置き場所をタップで変えられる', () => {
+  it('中の並びを、掴んで置き場所をタップで変えられる', async () => {
     seedPresets({ id: 'p1', name: '押す日', exerciseIds: ['ex_bench', 'ex_pullup', 'ex_squat'] });
     render(<PresetHarness />);
 
@@ -2575,13 +2561,13 @@ describe('プリセット（設定から見る・編集する）', () => {
     fireEvent.click(screen.getByRole('button', { name: 'スクワットを先頭へ' }));
 
     // 呼び出したときのカードの順になるので、並びはそのまま保存する
-    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
-    expect(stored.presets[0].exerciseIds).toEqual(['ex_squat', 'ex_bench', 'ex_pullup']);
+    const stored = await storedData();
+    expect(stored.presets[0]!.exerciseIds).toEqual(['ex_squat', 'ex_bench', 'ex_pullup']);
     // 置いたら掴んだ状態は解ける
     expect(screen.queryByText('ここへ')).toBeNull();
   });
 
-  it('移動中は置き場所を選ぶこと以外を出さず、やめれば元のまま', () => {
+  it('移動中は置き場所を選ぶこと以外を出さず、やめれば元のまま', async () => {
     seedPresets({ id: 'p1', name: '押す日', exerciseIds: ['ex_bench', 'ex_pullup', 'ex_squat'] });
     render(<PresetHarness />);
 
@@ -2595,8 +2581,8 @@ describe('プリセット（設定から見る・編集する）', () => {
     fireEvent.click(screen.getByRole('button', { name: '移動をやめる' }));
     expect(screen.queryByText('ここへ')).toBeNull();
     expect(screen.getByRole('button', { name: '押す日に種目を足す' })).toBeTruthy();
-    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
-    expect(stored.presets[0].exerciseIds).toEqual(['ex_bench', 'ex_pullup', 'ex_squat']);
+    const stored = await storedData();
+    expect(stored.presets[0]!.exerciseIds).toEqual(['ex_bench', 'ex_pullup', 'ex_squat']);
   });
 
   it('最後の 1 種目を外すのは、プリセットごとの削除として確認する', () => {
@@ -2646,7 +2632,7 @@ describe('画面の位置（タブと下位画面）', () => {
   });
 
   it('タブは ホーム / 目標 / 記録 / 設定 の 4 つ', () => {
-    render(<App />);
+    render(<App initial={seeded} />);
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
       'ホーム',
       '目標',
@@ -2657,7 +2643,7 @@ describe('画面の位置（タブと下位画面）', () => {
 
   it('グラフの古い URL は推移へ寄せる', () => {
     window.location.hash = '#charts';
-    render(<App />);
+    render(<App initial={seeded} />);
 
     expect(screen.getByRole('heading', { name: '体組成の推移' })).toBeTruthy();
     // 履歴は積まない。戻るで #charts に戻らないようにする
@@ -2666,7 +2652,7 @@ describe('画面の位置（タブと下位画面）', () => {
 
   it('推移の見出しは体組成／トレーニングの切り替えに従う', () => {
     window.location.hash = '#home/trend';
-    render(<App />);
+    render(<App initial={seeded} />);
     expect(screen.getByRole('heading', { name: '体組成の推移' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'トレーニング' }));
@@ -2675,7 +2661,7 @@ describe('画面の位置（タブと下位画面）', () => {
 
   it('ホームの入口から推移へ入り、遷移元へ戻る', () => {
     seedData([], {}, { '2026-03-07': { am: { weight: 70, bodyFat: 20 } } });
-    render(<App />);
+    render(<App initial={seeded} />);
     fireEvent.click(screen.getByRole('button', { name: /体重・体脂肪率の推移/ }));
 
     expect(window.location.hash).toBe('#home/trend');
@@ -2683,7 +2669,7 @@ describe('画面の位置（タブと下位画面）', () => {
   });
 
   it('記録タブのヘッダが日付ナビになる', () => {
-    render(<App />);
+    render(<App initial={seeded} />);
     expect(screen.queryByLabelText('記録する日付')).toBeNull();
 
     fireEvent.click(screen.getByRole('tab', { name: '記録' }));
@@ -2693,7 +2679,7 @@ describe('画面の位置（タブと下位画面）', () => {
 
   it('マイ種目の目標は、マイ種目のまま決められる', () => {
     seedExercises('ex_bench');
-    render(<App />);
+    render(<App initial={seeded} />);
 
     fireEvent.click(screen.getByRole('tab', { name: '設定' }));
     fireEvent.click(screen.getByText('トレーニング'));
@@ -2715,7 +2701,7 @@ describe('画面の位置（タブと下位画面）', () => {
   });
 
   it('目標タブも体組成／トレーニングの切り替えに従う', () => {
-    render(<App />);
+    render(<App initial={seeded} />);
     fireEvent.click(screen.getByRole('tab', { name: '目標' }));
     expect(window.location.hash).toBe('#goals');
     expect(screen.getByText(/目標体重を決めると/)).toBeTruthy();
@@ -2755,7 +2741,7 @@ describe('モーダル', () => {
 
 describe('種目の目標を決める', () => {
   function GoalsHarness() {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     return <GoalsView body={body} domain="training" />;
   }
 
@@ -2794,7 +2780,7 @@ describe('種目の目標を決める', () => {
     expect((screen.getByLabelText(/ベンチプレス.*の目標$/) as HTMLInputElement).value).toBe('');
   });
 
-  it('立て方を選べる（維持 / 重量 / 挙上量 / 回数）', () => {
+  it('立て方を選べる（維持 / 重量 / 挙上量 / 回数）', async () => {
     seedExercises('ex_bench');
     render(<GoalsHarness />);
     openEditor();
@@ -2811,8 +2797,8 @@ describe('種目の目標を決める', () => {
       screen.getByLabelText(/ベンチプレス.*の目標$/).closest('[aria-hidden="true"]'),
     ).not.toBeNull();
 
-    const stored = JSON.parse(localStorage.getItem('bodymake.data.v1')!);
-    expect(stored.exercises[0].goal).toEqual({ type: 'maintain', value: null });
+    const stored = await storedData();
+    expect(stored.exercises[0]!.goal).toEqual({ type: 'maintain', value: null });
 
     // 挙上量に切り替えると、また数値を決める形に戻る
     fireEvent.click(types.getByRole('button', { name: '挙上量' }));
@@ -2867,7 +2853,7 @@ describe('種目の目標を決める', () => {
 
 describe('種目の表示 / 非表示', () => {
   function ManagerHarness({ usage = new Map<string, number>() }: { usage?: Map<string, number> }) {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     return (
       <ExerciseManager
         exercises={body.data.exercises}
@@ -2881,7 +2867,7 @@ describe('種目の表示 / 非表示', () => {
   }
 
   function PresetHarness() {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     return (
       <PresetManager
         presets={body.data.presets}
@@ -2903,10 +2889,7 @@ describe('種目の表示 / 非表示', () => {
       ),
       hidden: hiddenIds.includes(id),
     }));
-    localStorage.setItem(
-      'bodymake.data.v1',
-      JSON.stringify({ version: 5, settings: {}, entries: {}, exercises, workouts: {} }),
-    );
+    seedRaw({ version: 5, settings: {}, entries: {}, exercises, workouts: {} });
   }
 
   it('非表示にすると候補から外れ、記録は残る', () => {
@@ -2996,15 +2979,12 @@ describe('種目の表示 / 非表示', () => {
     expect(screen.queryByText('＋ スクワット')).toBeNull();
   });
 
-  it('すでに入っている種目は、非表示でも候補に残す（外せなくなるため）', () => {
+  it('すでに入っている種目は、非表示でも候補に残す（外せなくなるため）', async () => {
     seedHidden(['ex_squat'], 'ex_lat_pulldown', 'ex_squat');
-    localStorage.setItem(
-      'bodymake.data.v1',
-      JSON.stringify({
-        ...JSON.parse(localStorage.getItem('bodymake.data.v1')!),
-        workouts: { [todayISO()]: [{ exerciseId: 'ex_squat', sets: [] }] },
-      }),
-    );
+    seedRaw({
+      ...seeded,
+      workouts: { [todayISO()]: [{ exerciseId: 'ex_squat', sets: [] }] },
+    });
     render(<Harness />);
     openPicker();
 
@@ -3015,7 +2995,7 @@ describe('種目の表示 / 非表示', () => {
 
 describe('有酸素', () => {
   function GoalsHarness() {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     return <GoalsView body={body} domain="training" />;
   }
 
@@ -3027,10 +3007,7 @@ describe('有酸素', () => {
         i,
       ),
     );
-    localStorage.setItem(
-      'bodymake.data.v1',
-      JSON.stringify({ version: 5, settings: {}, entries: {}, exercises, workouts }),
-    );
+    seedRaw({ version: 5, settings: {}, entries: {}, exercises, workouts });
   }
 
   it('記録の欄が 時間(分) と 距離(km) になる', () => {
@@ -3197,7 +3174,7 @@ describe('有酸素', () => {
 
 describe('種目の絞り込み（検索と部位）', () => {
   function ManagerHarness() {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     return (
       <ExerciseManager
         exercises={body.data.exercises}
@@ -3230,10 +3207,7 @@ describe('種目の絞り込み（検索と部位）', () => {
         i,
       ),
     );
-    localStorage.setItem(
-      'bodymake.data.v1',
-      JSON.stringify({ version: 5, settings: {}, entries: {}, exercises, workouts: {} }),
-    );
+    seedRaw({ version: 5, settings: {}, entries: {}, exercises, workouts: {} });
   }
 
   /** フィルターは畳んであるので、開いてから触る */
@@ -3468,7 +3442,7 @@ describe('消えるものがあるときだけ聞く', () => {
 
 describe('元データの一覧', () => {
   function DetailHarness({ id }: { id: string }) {
-    const body = useBodyData();
+    const body = useBodyData(seeded);
     return (
       <ExerciseDetailDialog
         open

@@ -5,7 +5,7 @@ import {
   PRESET_NAME_MAX,
   demoSeed,
   emptyData,
-  loadData,
+  flushSave,
   sanitizeData,
   saveData,
 } from '../lib/storage';
@@ -61,7 +61,7 @@ export interface BodyData {
   /**
    * 直近の保存に失敗しているか。
    *
-   * 容量超過やプライベートモードでは localStorage が書けない。
+   * 書けない環境がある（容量超過・プライベートモード・IndexedDB を開けない端末）。
    * **打った値が画面には出るのに保存されていない**のがこの状態で、
    * 気づかせないまま進むと、次に開いたときにまとめて消えている。
    * 画面に出す責任は `components/StorageAlert.tsx` が持つ。
@@ -124,13 +124,42 @@ export interface BodyData {
   removeExercise: (id: string) => void;
 }
 
-export function useBodyData(): BodyData {
-  const [data, setData] = useState<AppData>(loadData);
+/**
+ * 読み込み済みの記録を受け取って、そこから始める。
+ *
+ * **自分では読まない。** 保存先が IndexedDB になって読み出しが非同期になったので、
+ * 読むのは `main.tsx` の 1 か所だけにして、読み終えてから React を載せている。
+ * ここで読むと、どの画面にも「まだ読んでいない」状態が要るようになり、
+ * 記録が無い状態と見分けがつかなくなる。
+ */
+export function useBodyData(initial: AppData): BodyData {
+  const [data, setData] = useState<AppData>(initial);
   const [saveFailed, setSaveFailed] = useState(false);
 
   useEffect(() => {
-    setSaveFailed(!saveData(data));
+    let alive = true;
+    void saveData(data).then((ok) => {
+      if (alive) setSaveFailed(!ok);
+    });
+    return () => {
+      alive = false;
+    };
   }, [data]);
+
+  /*
+   * 画面が閉じられる前に、書き込み中のものを片付ける。
+   * 書き込みにタイマーを持たせていないので窓は 1 トランザクションぶんしかないが、
+   * それでも「打った直後にホーム画面へ戻る」は普通に起きる。
+   */
+  useEffect(() => {
+    const onHide = () => void flushSave();
+    window.addEventListener('pagehide', onHide);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('pagehide', onHide);
+      document.removeEventListener('visibilitychange', onHide);
+    };
+  }, []);
 
   const daily = useMemo(() => buildDaily(data.entries), [data.entries]);
   const weeks = useMemo(() => buildWeeks(daily), [daily]);

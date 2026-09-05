@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 /**
  * ブラウザに「この記録を勝手に消さないでほしい」と申請する。
  *
- * localStorage は容量が逼迫したときや、しばらく開いていないサイトの整理対象になる。
+ * 端末の容量が逼迫したときや、しばらく開いていないサイトは整理の対象になる。
+ * 対象になるのは**このオリジンの保存領域まるごと**で、IndexedDB も localStorage も一緒に消える。
  * `navigator.storage.persist()` はその整理から外してもらう申請で、
  * **通るかどうかはブラウザが決める**（Chrome は利用実績から自動で判断し、
  * Safari はホーム画面に追加した状態を持続として扱う）。
@@ -69,4 +70,33 @@ export function useInstallPrompt(): { prompt: (() => void) | null } {
         }
       : null,
   };
+}
+
+/**
+ * このオリジンが使える容量の目安。
+ *
+ * localStorage の 5MB という決め打ちの代わりに、**ブラウザが答える値**を出す。
+ * IndexedDB の上限は端末の空き容量から決まるので、こちらでは決め打てない。
+ * 返ってくるのはオリジン全体（Service Worker のキャッシュを含む）の見積もりで、
+ * 記録だけの量ではない。答えない環境では null のままにして、何も出さない。
+ */
+export function useStorageQuota(): number | null {
+  const [quota, setQuota] = useState<number | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void navigator.storage
+      ?.estimate?.()
+      .then((e) => {
+        if (alive && e.quota != null) setQuota(e.quota);
+      })
+      .catch(() => {
+        /* 答えない環境。目安を出さないだけ */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return quota;
 }

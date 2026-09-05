@@ -3,9 +3,10 @@ import { Modal } from '../components/Modal';
 import { CheckSettingsForm } from '../components/training/CheckSettingsForm';
 import { ExerciseManager } from '../components/training/ExerciseManager';
 import { PresetManager } from '../components/training/PresetManager';
-import { exportCsv, exportJson, readImportFile } from '../lib/io';
+import { exportJson, readImportFile } from '../lib/io';
 import { markExported } from '../lib/device';
-import { STORAGE_BUDGET_BYTES, storedBytes } from '../lib/storage';
+import { storedBytes } from '../lib/storage';
+import { useStorageQuota } from '../hooks/useStorageSafety';
 import { fmtBytes } from '../lib/format';
 import type { ImportResult } from '../lib/io';
 import { DEMO_TODAY, formatMD } from '../lib/date';
@@ -79,10 +80,9 @@ interface Props {
 }
 
 export function SettingsView({ body, section, page = null, onOpen, onToast }: Props) {
+  const quota = useStorageQuota();
   const {
     data,
-    daily,
-    weeks,
     sessions,
     updateSettings,
     importData,
@@ -331,14 +331,18 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
         </header>
 
         {/*
-          いま何バイト使っているかを出す。上限は端末とブラウザで違うので**判定には使わない**が、
-          天井を理論値のままにしておくと、近づいていることに気づける日が来ない。
+          いま何バイト使っているかを出す。上限は端末の空き容量から決まるので**決め打たない**。
+          ブラウザが答えるときだけ、その値を横に添える。
           （記録は 1 日 100 バイト前後で増える。1MB を超えたら保存の作りを見直す合図）
         */}
         <div className={ui.formRow}>
           <label>
             保存サイズ
-            <small>ブラウザが持てる量の目安は {fmtBytes(STORAGE_BUDGET_BYTES)}</small>
+            <small>
+              {quota == null
+                ? 'この端末のブラウザ内'
+                : `この端末で使える見積もりは ${fmtBytes(quota)}`}
+            </small>
           </label>
           <span className={s.size}>{fmtBytes(storedBytes(data))}</span>
         </div>
@@ -363,19 +367,6 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
           </button>
           <button type="button" className={ui.btn} onClick={() => fileRef.current?.click()}>
             JSONから読み込み
-          </button>
-        </div>
-
-        <div className={s.groupLabel}>
-          Excel 用に書き出す<small>読み込みには使えません</small>
-        </div>
-        <div className={ui.btnRow}>
-          <button
-            type="button"
-            className={ui.btn}
-            onClick={() => exportCsv(daily, weeks, sessions)}
-          >
-            CSVで書き出し
           </button>
         </div>
 

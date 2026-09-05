@@ -76,12 +76,33 @@ export function buildDaily(entries: Entries): DailyPoint[] {
     });
   }
 
-  // 後方 7 日窓の移動平均。窓は暦日で切り、欠測日は分母に数えない
+  /*
+   * 後方 7 日窓の移動平均。窓は暦日で切り、欠測日は分母に数えない。
+   *
+   * 窓の中はその場で足す。以前は日ごとに `slice` して `map` していたが、
+   * 1 日あたり配列を 3 つ作ることになり、記録が伸びるほど効いてくる
+   * （値を 1 つ打つたびに全期間ぶん走り直すため）。
+   * **足す順序は変えていない**ので、出る値は 1 ビットも変わらない。
+   */
   for (let i = 0; i < points.length; i++) {
     const from = Math.max(0, i - (MA_WINDOW - 1));
-    const window = points.slice(from, i + 1);
-    points[i]!.maWeight = mean(window.map((p) => p.weight));
-    points[i]!.maBodyFat = mean(window.map((p) => p.bodyFat));
+    let sumWeight = 0;
+    let countWeight = 0;
+    let sumBodyFat = 0;
+    let countBodyFat = 0;
+    for (let j = from; j <= i; j++) {
+      const p = points[j]!;
+      if (p.weight != null && Number.isFinite(p.weight)) {
+        sumWeight += p.weight;
+        countWeight++;
+      }
+      if (p.bodyFat != null && Number.isFinite(p.bodyFat)) {
+        sumBodyFat += p.bodyFat;
+        countBodyFat++;
+      }
+    }
+    points[i]!.maWeight = countWeight === 0 ? null : sumWeight / countWeight;
+    points[i]!.maBodyFat = countBodyFat === 0 ? null : sumBodyFat / countBodyFat;
   }
 
   return points;

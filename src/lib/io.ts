@@ -1,18 +1,13 @@
 import type {
   AppData,
   CheckSettings,
-  DailyPoint,
   Entries,
   Exercise,
   GroupGoals,
   Preset,
-  SessionPoint,
-  WeekPoint,
   Workouts,
 } from '../types';
-import { GROUP_LABELS, GROUP_ORDER } from './exerciseCatalog';
-import { buildWeeklySets, formatSets } from './training';
-import { addDays, todayISO, weekdayJa } from './date';
+import { todayISO } from './date';
 import { fmt } from './format';
 import { sanitizeData, sanitizeEntries } from './storage';
 
@@ -33,158 +28,6 @@ export function exportJson(data: AppData): void {
     type: 'application/json;charset=utf-8',
   });
   download(`bodymake-${todayISO()}.json`, blob);
-}
-
-const DAILY_HEADER = [
-  '日付',
-  '曜日',
-  '朝 体重',
-  '朝 体脂肪率',
-  '夜 体重',
-  '夜 体脂肪率',
-  '日平均 体重',
-  '日平均 体脂肪率',
-];
-
-const TRAINING_HEADER = [
-  '日付',
-  '曜日',
-  '種目',
-  '部位',
-  '補助部位（×係数）',
-  'セット',
-  '重量',
-  '回数',
-  '単位',
-  '有効重量',
-  '挙上量',
-  // 有酸素だけ埋まる。保存している値（m と 秒）をそのまま出す
-  '距離m',
-  '時間秒',
-];
-
-const WEEKLY_HEADER = [
-  '週開始',
-  '週終了',
-  '週',
-  '平均体重',
-  '前週差',
-  '平均体脂肪率',
-  '前週差',
-  '体脂肪量',
-  '除脂肪体重',
-  '記録日数',
-];
-
-function cell(value: number | null, digits = 1): string {
-  return value == null ? '' : value.toFixed(digits);
-}
-
-function toCsv(rows: readonly (readonly string[])[]): string {
-  const body = rows
-    .map((row) => row.map((v) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join(','))
-    .join('\r\n');
-  // BOM を付けないと Excel が UTF-8 と判定せず日本語が化ける
-  return `﻿${body}`;
-}
-
-/**
- * エクセルの「日次記録」「週次分析」と同じ列構成で出す。
- * 読み戻しはしない一方向の書き出しで、Excel でレポートを作るための出口。
- *
- * 筋トレはセット 1 行ずつの明細で出す。集計済みの数字を並べるより、
- * ピボットテーブルで好きに切れるほうがレポートの材料として使える。
- */
-export function exportCsv(
-  daily: DailyPoint[],
-  weeks: WeekPoint[],
-  sessions: readonly SessionPoint[] = [],
-): void {
-  const rows = buildCsvRows(daily, weeks, sessions);
-  download(
-    `bodymake-${todayISO()}.csv`,
-    new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }),
-  );
-}
-
-/** 行の組み立てだけ分けておく（テストから中身を確かめられるように） */
-export function buildCsvRows(
-  daily: readonly DailyPoint[],
-  weeks: readonly WeekPoint[],
-  sessions: readonly SessionPoint[] = [],
-): string[][] {
-  const weeklySets = sessions.length > 0 ? buildWeeklySets(sessions, sessions[0]!.date) : [];
-
-  const trainingRows = sessions.flatMap((session) =>
-    session.exercises.flatMap((point) =>
-      point.sets.map((set, i) => [
-        session.date,
-        weekdayJa(session.date),
-        point.name,
-        GROUP_LABELS[point.group],
-        point.subGroups.map((sub) => `${GROUP_LABELS[sub.group]}×${sub.weight}`).join('・'),
-        String(i + 1),
-        cell(set.weight),
-        set.reps == null ? '' : String(set.reps),
-        point.repUnit === 'seconds' ? '秒' : '回',
-        cell(set.effectiveWeight),
-        cell(set.volume, 0),
-        set.meters == null ? '' : String(set.meters),
-        set.seconds == null ? '' : String(set.seconds),
-      ]),
-    ),
-  );
-
-  const rows: string[][] = [
-    ['# 日次記録'],
-    [...DAILY_HEADER],
-    ...daily.map((d) => [
-      d.date,
-      weekdayJa(d.date),
-      cell(d.am.weight),
-      cell(d.am.bodyFat),
-      cell(d.pm.weight),
-      cell(d.pm.bodyFat),
-      cell(d.weight),
-      cell(d.bodyFat),
-    ]),
-    [],
-    ['# 週次分析（週=日曜〜土曜）'],
-    [...WEEKLY_HEADER],
-    ...weeks.map((w) => [
-      w.start,
-      w.end,
-      w.label,
-      cell(w.weight),
-      cell(w.weightDelta),
-      cell(w.bodyFat),
-      cell(w.bodyFatDelta),
-      cell(w.fatMass),
-      cell(w.leanMass),
-      String(w.days),
-    ]),
-  ];
-
-  if (trainingRows.length > 0) {
-    rows.push(
-      [],
-      ['# 筋トレログ（セット単位）'],
-      [...TRAINING_HEADER],
-      ...trainingRows,
-      [],
-      ['# 週次の部位別セット数'],
-      ['週開始', '週終了', '実施日数', ...GROUP_ORDER.map((g) => GROUP_LABELS[g]), '合計'],
-      ...weeklySets.map((w) => [
-        w.start,
-        addDays(w.start, 6),
-        String(w.days),
-        ...GROUP_ORDER.map((g) => formatSets(w.setsByGroup[g])),
-        formatSets(w.totalSets),
-      ]),
-    );
-  }
-
-  return rows;
 }
 
 /** state へ流し込む中身。null は「このファイルには含まれていない＝現状維持」 */
@@ -212,9 +55,12 @@ export interface ImportResult extends ImportPayload {
 }
 
 /**
- * 復元できるのは JSON だけ。
- * CSV は Excel で開くための一方向の書き出しで、読み戻しには使わない
- * （体組成しか運べないので、CSV で復元できると思われると筋トレと設定が失われる）。
+ * 取り込めるのは JSON だけ。**書き出す形式も JSON だけ。**
+ *
+ * 以前は Excel 用に CSV も書き出していたが、廃止した。
+ * 書き出し口が 2 つあると、片方が「バックアップ」として使われる。
+ * CSV は体組成と明細しか運べないので、それで復元できると思われた時点で
+ * 種目・目標・設定が失われる。**戻せる形式だけを出す。**
  */
 export async function readImportFile(file: File): Promise<ImportResult> {
   const raw = JSON.parse((await file.text()).trim()) as Record<string, unknown>;

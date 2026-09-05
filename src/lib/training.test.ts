@@ -424,8 +424,12 @@ describe('サニタイズと移行', () => {
 });
 
 describe('loadData の seed 分岐', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     (globalThis as { localStorage?: unknown }).localStorage = new MemStorage();
+    // IndexedDB は resetModules をまたいで残る。前のテストの記録を持ち越さない
+    const { deleteRecord, resetDbForTests } = await import('./db');
+    resetDbForTests();
+    await deleteRecord();
   });
 
   afterEach(() => {
@@ -435,7 +439,7 @@ describe('loadData の seed 分岐', () => {
 
   it('デモ向けビルドでなければ投入しない', async () => {
     const { loadData: load } = await import('./storage');
-    expect(Object.keys(load().entries)).toHaveLength(0);
+    expect(Object.keys((await load()).entries)).toHaveLength(0);
   });
 
   it('保存済みがあれば、読み込みでは上書きしない（戻すのは確認を通ってから）', async () => {
@@ -459,7 +463,8 @@ describe('loadData の seed 分岐', () => {
      * デモは開くたびに初期データへ戻すが、戻すのは断り書き（DemoNotice）を通ってから。
      * 読み込みの時点で消すと、触った内容が理由の分からないまま消えたように見える。
      */
-    const data = load();
+    // 保存先が IndexedDB になったので、旧版の localStorage からはここで引き取られる
+    const data = await load();
     expect(Object.keys(data.entries)).toHaveLength(0);
     expect(data.exercises).toHaveLength(1);
     expect(data.workouts['2026-03-01']).toBeDefined();
@@ -486,7 +491,7 @@ describe('loadData の seed 分岐', () => {
     vi.resetModules();
     const { loadData: load } = await import('./storage');
 
-    const data = load();
+    const data = await load();
     expect(Object.keys(data.entries).length).toBeGreaterThan(0);
     expect(data.exercises.length).toBeGreaterThan(0);
     expect(Object.keys(data.workouts).length).toBeGreaterThan(0);
