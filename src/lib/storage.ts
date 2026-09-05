@@ -599,10 +599,41 @@ export function demoSeed(): AppData | null {
   return IS_DEMO ? sanitizeData(SEED_DATA) : null;
 }
 
-export function saveData(data: AppData): void {
+/**
+ * 保存できたかを返す。**握りつぶさない。**
+ *
+ * 容量超過やプライベートモードでは `setItem` が投げる。ここで黙って戻ると、
+ * 利用者は打ち続けて、次に開いたときに初めて消えているのを知る。
+ * 記録アプリでいちばん重い失敗なので、**結果を呼び出し側へ上げて画面に出す**
+ * （`useBodyData` の `saveFailed` → `components/StorageAlert.tsx`）。
+ */
+/**
+ * localStorage の上限の目安。おおむねどのブラウザも 5MB 前後で頭を打つ。
+ *
+ * 正確な値はブラウザと端末で違うので、**判定には使わない。**
+ * 画面に並べて「どのくらい使っているか」を読ませるためだけの物差し。
+ */
+export const STORAGE_BUDGET_BYTES = 5 * 1024 * 1024;
+
+/**
+ * いま保存しているデータの大きさ（バイト）。
+ *
+ * **文字数ではなくバイトで数える。** 主要なブラウザは localStorage の残量を
+ * UTF-16 のコード単位（1 文字 2 バイト）で見積もっている。
+ * 文字数のまま出すと上限の半分に見えるので、`STORAGE_BUDGET_BYTES` と物差しをそろえる。
+ *
+ * 天井そのものより先に効くのは**書き込みの重さ**のほうで、いまは値を 1 つ打つたびに
+ * この全体を組み立て直している。1MB を超えたあたりが、日単位のレコードへ割る合図。
+ */
+export function storedBytes(data: AppData): number {
+  return JSON.stringify(data).length * 2;
+}
+
+export function saveData(data: AppData): boolean {
   try {
     localStorage.setItem(DATA_KEY, JSON.stringify(data));
+    return true;
   } catch {
-    /* 容量超過などは保存失敗として黙って握る（UI 側でエクスポートを促す） */
+    return false;
   }
 }

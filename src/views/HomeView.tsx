@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { BadgeGrid } from '../components/BadgeGrid';
 import { Hero } from '../components/Hero';
+import { SafetyNotices } from '../components/SafetyNotices';
 import { StatTiles } from '../components/StatTiles';
 import { StreakStrip } from '../components/StreakStrip';
 import { GroupSetsHeatmap } from '../components/training/GroupSetsHeatmap';
@@ -142,6 +143,12 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
           <BadgeGrid badges={badges} />
         </>
       )}
+
+      {/*
+        記録の置き場所の話は、毎日見る数字のあとに置く。
+        切り替えのどちら側でも同じことを言うので、出し分けない
+      */}
+      <SafetyNotices data={body.data} />
     </>
   );
 }

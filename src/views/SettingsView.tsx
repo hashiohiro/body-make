@@ -4,6 +4,9 @@ import { CheckSettingsForm } from '../components/training/CheckSettingsForm';
 import { ExerciseManager } from '../components/training/ExerciseManager';
 import { PresetManager } from '../components/training/PresetManager';
 import { exportCsv, exportJson, readImportFile } from '../lib/io';
+import { markExported } from '../lib/device';
+import { STORAGE_BUDGET_BYTES, storedBytes } from '../lib/storage';
+import { fmtBytes } from '../lib/format';
 import type { ImportResult } from '../lib/io';
 import { DEMO_TODAY, formatMD } from '../lib/date';
 import { IS_DEMO } from '../lib/env';
@@ -327,6 +330,19 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
           </span>
         </header>
 
+        {/*
+          いま何バイト使っているかを出す。上限は端末とブラウザで違うので**判定には使わない**が、
+          天井を理論値のままにしておくと、近づいていることに気づける日が来ない。
+          （記録は 1 日 100 バイト前後で増える。1MB を超えたら保存の作りを見直す合図）
+        */}
+        <div className={ui.formRow}>
+          <label>
+            保存サイズ
+            <small>ブラウザが持てる量の目安は {fmtBytes(STORAGE_BUDGET_BYTES)}</small>
+          </label>
+          <span className={s.size}>{fmtBytes(storedBytes(data))}</span>
+        </div>
+
         <p className={ui.note}>
           記録はこの端末のブラウザ内にだけ保存されます。機種変更やブラウザのデータ消去に備えて、
           ときどき JSON を書き出しておくと安全です。
@@ -334,7 +350,15 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
 
         <div className={s.groupLabel}>バックアップ</div>
         <div className={ui.btnRow}>
-          <button type="button" className={ui.btn} onClick={() => exportJson(data)}>
+          <button
+            type="button"
+            className={ui.btn}
+            onClick={() => {
+              exportJson(data);
+              // ホームの促し（components/SafetyNotices.tsx）は、この日付を起点にする
+              markExported();
+            }}
+          >
             JSONで書き出し
           </button>
           <button type="button" className={ui.btn} onClick={() => fileRef.current?.click()}>

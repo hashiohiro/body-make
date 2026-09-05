@@ -1,3 +1,5 @@
+@use '../styles/mixins' as *;
+
 .menu {
   display: grid;
 }
@@ -58,4 +60,11 @@
   font-size: 17px;
   line-height: 1;
   color: var(--ink-muted);
+}
+
+/* 保存サイズ。桁の増え方を読ませるので等幅で並べる */
+.size {
+  flex: none;
+  font-size: 13px;
+  @include tabular;
 }

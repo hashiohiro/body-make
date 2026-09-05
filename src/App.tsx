@@ -4,8 +4,10 @@ import { TabBar } from './components/TabBar';
 import type { TabId } from './components/TabBar';
 import type { Domain } from './types';
 import { DemoNotice } from './components/DemoNotice';
+import { StorageAlert } from './components/StorageAlert';
 import { Toast, useToast } from './components/Toast';
 import { useBodyData } from './hooks/useBodyData';
+import { usePersistentStorage } from './hooks/useStorageSafety';
 import { useTheme } from './hooks/useTheme';
 import { formatMDW, todayISO } from './lib/date';
 import { IS_DEMO } from './lib/env';
@@ -91,6 +93,11 @@ export function App() {
   const toast = useToast();
 
   useTheme(body.data.settings.theme);
+  /*
+   * 記録が 1 件でも入ったら、ブラウザに「消さないでほしい」と申請する。
+   * 断られても実害はないので、入力の前に確認を挟まない（申請自体は画面に出ない）。
+   */
+  usePersistentStorage(body.stats.recordedDays > 0 || body.trainingStats.sessions > 0);
 
   // 推移は体組成とトレーニングで中身が入れ替わるので、見出しも切り替えの側に従う
   const trendTitle = domain === 'body' ? '体組成の推移' : 'トレーニングの推移';
@@ -202,6 +209,9 @@ export function App() {
       </header>
 
       <main id={`panel-${route.tab}`} role="tabpanel">
+        {/* 保存できていないことだけは全画面に出す。どの画面で打っていても同じように失われる */}
+        <StorageAlert data={body.data} failed={body.saveFailed} />
+
         {route.tab === 'home' && route.section === 'trend' && (
           <ChartsView body={body} domain={domain} exerciseId={route.param} />
         )}

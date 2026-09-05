@@ -58,6 +58,15 @@ function mapDayExercise(
 
 export interface BodyData {
   data: AppData;
+  /**
+   * 直近の保存に失敗しているか。
+   *
+   * 容量超過やプライベートモードでは localStorage が書けない。
+   * **打った値が画面には出るのに保存されていない**のがこの状態で、
+   * 気づかせないまま進むと、次に開いたときにまとめて消えている。
+   * 画面に出す責任は `components/StorageAlert.tsx` が持つ。
+   */
+  saveFailed: boolean;
   daily: ReturnType<typeof buildDaily>;
   weeks: ReturnType<typeof buildWeeks>;
   stats: ReturnType<typeof computeStats>;
@@ -117,9 +126,10 @@ export interface BodyData {
 
 export function useBodyData(): BodyData {
   const [data, setData] = useState<AppData>(loadData);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   useEffect(() => {
-    saveData(data);
+    setSaveFailed(!saveData(data));
   }, [data]);
 
   const daily = useMemo(() => buildDaily(data.entries), [data.entries]);
@@ -539,6 +549,7 @@ export function useBodyData(): BodyData {
 
   return {
     data,
+    saveFailed,
     daily,
     weeks,
     stats,

@@ -1,0 +1,18 @@
+.alert {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--critical);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.message {
+  margin: 0 0 4px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink);
+
+  b {
+    color: var(--critical);
+  }
+}

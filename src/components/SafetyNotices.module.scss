@@ -1,0 +1,11 @@
+/* 失うものが実際にある側だけ縁の色を変える。案内をすべて色付きにすると差がなくなる */
+.urgent.urgent {
+  border-color: var(--warning);
+}
+
+.body {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--ink-2);
+}

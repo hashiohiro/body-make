@@ -31,3 +31,14 @@ export function fmtPercent(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—';
   return `${Math.round(value * 100)}%`;
 }
+
+/**
+ * バイト数を読める単位にする。
+ *
+ * 1MB 未満は KB のままにする。記録は 1 日 100 バイト前後で増えるので、
+ * 早々に「0.2 MB」に丸めると、増えていることが桁に出なくなる。
+ */
+export function fmtBytes(bytes: number): string {
+  const kb = bytes / 1024;
+  return kb < 1024 ? `${Math.round(kb)} KB` : `${(kb / 1024).toFixed(1)} MB`;
+}
