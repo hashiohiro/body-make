@@ -137,6 +137,7 @@ npm run dev      # http://localhost:5173
 | `npm run preview` | ビルド結果をローカル配信 |
 | `npm run typecheck` | 型チェックのみ |
 | `npm run test` | 導出ロジックと画面の結線をテスト |
+| `npm run bench` | 入力 1 回ぶんの重さを測る（1 / 5 / 10 年ぶんの生成データ） |
 | `npm run build:demo` | デモ向けビルド。作者の実測値を初期データに入れる |
 | `npm run licenses` | 配布物に含まれる第三者コードを一覧 |
 | `npm run licenses:check` | 未申告があれば異常終了。CI用 |
