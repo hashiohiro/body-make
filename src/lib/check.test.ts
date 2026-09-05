@@ -202,14 +202,30 @@ describe('部位の空き（今日やってよいか）', () => {
   const history = (workouts: Workouts) =>
     buildCheckHistory(buildSessions(workouts, exercises, []), exercises);
 
-  it('部位別セット数をそのまま使う（種目ごとの記入は要らない）', () => {
+  /*
+   * **回復は主部位のセット数だけで数える。**種目ごとの記入は要らないままだが、
+   * 補助部位は入れない。週の配分（buildWeeklySets）は係数込みで数えるので、
+   * ここだけ数え方が違う——疲労と配分は別の話だから（lib/check.ts）。
+   */
+  it('主部位のセット数だけを使う（補助は入れない）', () => {
     const h = history({ '2026-03-01': entries([bench.id, 4]) });
     const sets = h.groupSets.get('2026-03-01')!;
     expect(sets.chest).toBe(4);
-    // 補助部位は係数ぶん。buildWeeklySets と同じ数え方
-    expect(sets.shoulders).toBe(2);
-    expect(sets.arms).toBe(2);
+    // ベンチの肩と腕は補助。実際に働いてはいるが、直接やった疲労と同じには数えない
+    expect(sets.shoulders).toBe(0);
+    expect(sets.arms).toBe(0);
     expect(sets.back).toBe(0);
+  });
+
+  /*
+   * 補助でしか入っていない部位は、翌日やってよい。
+   * ベンチの翌日にショルダープレスを止めない（実データでもそう動いている）。
+   */
+  it('補助でしか入っていない部位は空けない', () => {
+    const h = history({ '2026-03-01': entries([bench.id, 12]) });
+    expect(groupReadiness(h, '2026-03-02').chest.daysLeft).toBe(2);
+    expect(groupReadiness(h, '2026-03-02').shoulders.daysLeft).toBe(0);
+    expect(groupReadiness(h, '2026-03-02').arms.daysLeft).toBe(0);
   });
 
   it('空ける日数はセッションの大きさで決まり、3日を超えない', () => {

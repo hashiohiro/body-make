@@ -182,14 +182,24 @@ export function buildCheckHistory(
       .filter((e): e is Exercise => e != null);
     exercisesAt.set(session.date, list);
 
-    // 部位別セット数の数え方は buildWeeklySets と同じ。2 通りの数え方を持たない
+    /*
+     * **回復は主部位のセット数だけで数える。補助部位は入れない。**
+     *
+     * 週の配分（`buildWeeklySets`）は係数込みで数える。数え方が 2 つあるのは
+     * **疲労と配分が別の話**だから。配分は「どこをどれだけやったか」の話なので、
+     * ベンチで肩が半セットぶん働いたことを計上する意味がある。
+     * 回復は「明日その部位をやってよいか」で、補助で入ったぶんを直接やった疲労と
+     * 同じ重みで数えると、実際にはやれる日に空けろと言うことになる。
+     *
+     * 実際、記録22セッションで突き合わせると、警告が出ていたのにその部位を
+     * やっていた件数が 10 → 3 に減った（胸の日の翌日に腕、など）。
+     */
     const sets = emptyGroupSets();
     for (const point of session.exercises) {
       // 有酸素は部位ではない。回復（筋肥大の回復モデル）にも乗せない
       const muscle = muscleOf(point.group);
       if (muscle == null) continue;
       sets[muscle] += point.workSets;
-      for (const sub of point.subGroups) sets[sub.group] += point.workSets * sub.weight;
     }
     groupSets.set(session.date, sets);
 

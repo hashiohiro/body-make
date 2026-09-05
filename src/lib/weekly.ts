@@ -409,11 +409,12 @@ export function deriveTrainingWeek(
       // 有酸素は部位ではないので、部位別の数にも回復にも入れない
       const muscle = muscleOf(point.group);
       if (muscle == null) continue;
+      // 回復は主部位だけ。補助で入ったぶんは数えない（lib/check.ts の buildCheckHistory）
       daySets[muscle] += point.workSets;
       setsByGroup[muscle] += point.workSets;
       volumeByGroup[muscle] += point.volume;
+      // 週の配分は係数込み。疲労と配分は別の話なので、数え方が違ってよい
       for (const sub of point.subGroups) {
-        daySets[sub.group] += point.workSets * sub.weight;
         setsByGroup[sub.group] += point.workSets * sub.weight;
         volumeByGroup[sub.group] += point.volume * sub.weight;
       }
