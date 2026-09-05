@@ -1,20 +1,21 @@
 /**
  * IndexedDB の最小ラッパ。**依存は足さない**（ランタイムの依存は React だけ、を崩さない）。
  *
- * 持つのは 1 レコードだけ。`AppData` を丸ごと入れる。
+ * 入れるのは**生データだけ**で、計算した値は入れない（`docs/design-storage.md` §1）。
  *
- * **日単位のレコードには割っていない。** 割る値打ちは書き込みのほうにあって
- * （変わった日だけ書ける）、読み出しは結局その場で組み直すことになる。
- * 割らない理由は大きさではなく、**測ったら支配的でなかった**から。
- * 10年ぶん（1,337KB）の生成データで、書き込み 47ms に対して
- * 導出（日平均・移動平均・週次集計・種目別集計）が 113ms かかる。
- * 打鍵のたびに走るのは両方だが、割って軽くなるのは前者だけ。
- * 先に詰めるべきなのは確定の頻度と導出の依存（`useBodyData`）のほう。
+ * レコードは週ごと（`w:YYYY-MM-DD`）と、週に属さないもの（`meta`）に分けてある。
+ * **分ける目的は書き込みの局所化**で、読み込みは起動時に全部読む。
+ * 値を 1 つ打ったときに書き直すのが全期間ではなくその週だけになるので、
+ * 1 回の保存が記録の量によらず一定になる（10 年ぶんで 35.8ms → 0.04ms）。
+ *
+ * 読み込みは局所化しない。開始値・最長連続記録・通算といった全期間の数字を出す以上、
+ * 古い週を読まずに済ませるには結果を保存するしかなく、それは §1 に反する。
  */
 const DB_NAME = 'bodymake';
 const DB_VERSION = 1;
 const STORE = 'app';
-const RECORD_KEY = 'data';
+/** 週に割る前の、丸ごと 1 レコードだった頃のキー。引き取りのためだけに残す */
+export const LEGACY_RECORD_KEY = 'data';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -65,7 +66,9 @@ function tx<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBReque
 
 /** 入っていなければ null。壊れていても投げるのは呼び出し側で受ける */
 export function readRecord<T>(): Promise<T | null> {
-  return tx<T | undefined>('readonly', (store) => store.get(RECORD_KEY)).then((v) => v ?? null);
+  return tx<T | undefined>('readonly', (store) => store.get(LEGACY_RECORD_KEY)).then(
+    (v) => v ?? null,
+  );
 }
 
 /**
@@ -73,12 +76,59 @@ export function readRecord<T>(): Promise<T | null> {
  * IndexedDB は structured clone で持つので、文字列化の往復が要らない。
  */
 export function writeRecord(value: unknown): Promise<void> {
-  return tx('readwrite', (store) => store.put(value, RECORD_KEY)).then(() => undefined);
+  return tx('readwrite', (store) => store.put(value, LEGACY_RECORD_KEY)).then(() => undefined);
 }
 
-/** テストと「すべて削除」用 */
+/** テストと、旧版レコードの後片付け用 */
 export function deleteRecord(): Promise<void> {
-  return tx('readwrite', (store) => store.delete(RECORD_KEY)).then(() => undefined);
+  return tx('readwrite', (store) => store.delete(LEGACY_RECORD_KEY)).then(() => undefined);
+}
+
+/** 入っているものを全部読む。起動時の 1 回だけ呼ぶ */
+export function readAll(): Promise<[string, unknown][]> {
+  return openDb().then(
+    (db) =>
+      new Promise<[string, unknown][]>((resolve, reject) => {
+        const transaction = db.transaction(STORE, 'readonly');
+        const store = transaction.objectStore(STORE);
+        const keys = store.getAllKeys();
+        const values = store.getAll();
+        transaction.oncomplete = () =>
+          resolve((keys.result as string[]).map((k, i) => [k, values.result[i]]));
+        transaction.onabort = () => reject(transaction.error ?? new Error('中断'));
+        transaction.onerror = () => reject(transaction.error ?? new Error('失敗'));
+      }),
+  );
+}
+
+/**
+ * まとめて書き換える。**1 つのトランザクションで行う。**
+ *
+ * 週をまたぐ編集で複数のレコードが変わることがある。別々に書くと、
+ * 途中で落ちたときに週どうしの辻褄が合わなくなる。
+ */
+export function writeMany(
+  puts: readonly [string, unknown][],
+  deletes: readonly string[] = [],
+): Promise<void> {
+  if (puts.length === 0 && deletes.length === 0) return Promise.resolve();
+  return openDb().then(
+    (db) =>
+      new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction(STORE, 'readwrite');
+        const store = transaction.objectStore(STORE);
+        for (const [key, value] of puts) store.put(value, key);
+        for (const key of deletes) store.delete(key);
+        transaction.oncomplete = () => resolve();
+        transaction.onabort = () => reject(transaction.error ?? new Error('中断'));
+        transaction.onerror = () => reject(transaction.error ?? new Error('失敗'));
+      }),
+  );
+}
+
+/** 入っているものを全部消す。テストと「すべて削除」用 */
+export function clearAllRecords(): Promise<void> {
+  return tx('readwrite', (store) => store.clear()).then(() => undefined);
 }
 
 /** テストから状態を捨てるための入口。開き直せるように promise も落とす */

@@ -26,9 +26,10 @@ import {
   isCardio,
 } from './exerciseCatalog';
 import { THEME_IDS } from './themes';
+import { startOfWeek } from './date';
 import { IS_DEMO } from './env';
 import { SEED_DATA } from './seed';
-import { readRecord, writeRecord } from './db';
+import { LEGACY_RECORD_KEY, deleteRecord, readAll, writeMany } from './db';
 
 /** キー名はスキーマ版ではなく保存先のアドレス。v2 でも変えない（変えると既存データが見えなくなる） */
 const DATA_KEY = 'bodymake.data.v1';
@@ -640,16 +641,145 @@ function readLocal(): AppData | null {
   }
 }
 
-/**
- * IndexedDB を開き、入っていれば読む。空なら旧版の記録を引き取る。
+/* ------------------------------------------------------------------ *
+ * レコードの割り方
  *
- * **移行は読み出しのついでに 1 回だけ起きる。**専用の移行画面も確認も出さない。
- * 利用者から見れば保存先が変わっただけで、記録は 1 件も変わらないため。
+ * **週ごとの生データ（`w:YYYY-MM-DD`）＋ 週に属さないもの（`meta`）。**
+ * 分ける目的は書き込みの局所化で、読み込みは起動時に全部読む
+ * （`docs/design-storage.md` §3）。導出値は 1 つも入れない。
+ * ------------------------------------------------------------------ */
+
+const META_KEY = 'meta';
+const WEEK_PREFIX = 'w:';
+
+/** 週に属さないもの。種目を 1 つ直すとここだけが書き変わる */
+interface MetaRecord {
+  version: number;
+  settings: Settings;
+  exercises: Exercise[];
+  presets: Preset[];
+  groupGoals: GroupGoals;
+  checks: CheckSettings;
+  suppressed: string[];
+}
+
+interface WeekRecord {
+  entries: Entries;
+  workouts: Workouts;
+}
+
+function splitByWeek(data: AppData): { meta: MetaRecord; weeks: Map<string, WeekRecord> } {
+  const weeks = new Map<string, WeekRecord>();
+  const bucket = (date: string): WeekRecord => {
+    const key = startOfWeek(date);
+    let record = weeks.get(key);
+    if (!record) {
+      record = { entries: {}, workouts: {} };
+      weeks.set(key, record);
+    }
+    return record;
+  };
+  for (const [date, entry] of Object.entries(data.entries)) bucket(date).entries[date] = entry;
+  for (const [date, day] of Object.entries(data.workouts)) bucket(date).workouts[date] = day;
+
+  return {
+    meta: {
+      version: data.version,
+      settings: data.settings,
+      exercises: data.exercises,
+      presets: data.presets,
+      groupGoals: data.groupGoals,
+      checks: data.checks,
+      suppressed: data.suppressed,
+    },
+    weeks,
+  };
+}
+
+/**
+ * 中身が同じか。**参照で比べる。**
+ *
+ * 値を 1 つ打つと `entries` そのものは新しい object になるが、
+ * 触っていない日の中身は同じ object のまま。だから日単位の参照比較で
+ * 「この週は書かなくていい」が判定できる。深く比べる必要はない。
+ */
+function sameRecord<T>(a: Record<string, T> | undefined, b: Record<string, T>): boolean {
+  if (!a) return false;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  for (const key of keys) if (a[key] !== b[key]) return false;
+  return true;
+}
+
+function sameWeek(a: WeekRecord | undefined, b: WeekRecord): boolean {
+  return a != null && sameRecord(a.entries, b.entries) && sameRecord(a.workouts, b.workouts);
+}
+
+function sameMeta(a: MetaRecord | null, b: MetaRecord): boolean {
+  return (
+    a != null &&
+    a.version === b.version &&
+    a.settings === b.settings &&
+    a.exercises === b.exercises &&
+    a.presets === b.presets &&
+    a.groupGoals === b.groupGoals &&
+    a.checks === b.checks &&
+    a.suppressed === b.suppressed
+  );
+}
+
+/** 最後に書いた内容。次の書き込みで「変わった週だけ」を選ぶために持つ */
+let writtenMeta: MetaRecord | null = null;
+let writtenWeeks = new Map<string, WeekRecord>();
+
+function rememberWritten(data: AppData): void {
+  const split = splitByWeek(data);
+  writtenMeta = split.meta;
+  writtenWeeks = split.weeks;
+}
+
+function forgetWritten(): void {
+  writtenMeta = null;
+  writtenWeeks = new Map();
+}
+
+/**
+ * テストから状態を捨てるための入口。
+ *
+ * 「最後に書いた内容」はモジュールに持っているので、消さないとテストをまたいで
+ * 「もう書いてある」と誤って判断する。保存先の選択も初期値へ戻す。
+ */
+export function resetStorageForTests(): void {
+  forgetWritten();
+  backend = 'idb';
+}
+
+/** 週ごとのレコードから `AppData` を組み直す */
+function assemble(records: readonly [string, unknown][]): AppData | null {
+  const meta = records.find(([key]) => key === META_KEY)?.[1];
+  if (meta == null) return null;
+
+  const entries: Record<string, unknown> = {};
+  const workouts: Record<string, unknown> = {};
+  for (const [key, value] of records) {
+    if (!key.startsWith(WEEK_PREFIX) || value == null) continue;
+    const week = value as Partial<WeekRecord>;
+    Object.assign(entries, week.entries ?? {});
+    Object.assign(workouts, week.workouts ?? {});
+  }
+  return sanitizeData({ ...(meta as object), entries, workouts });
+}
+
+/**
+ * IndexedDB を開き、入っていれば読む。無ければ前の版から引き取る。
+ *
+ * 引き取る相手は 2 つある——**週に割る前の 1 レコード**と、**さらに前の localStorage**。
+ * どちらも運ぶのは生データだけなので、途中で古い計算結果が残ることが起こらない。
  */
 async function readStored(): Promise<AppData | null> {
-  let record: unknown = null;
+  let records: [string, unknown][] = [];
   try {
-    record = await readRecord<unknown>();
+    records = await readAll();
   } catch {
     // 移行済みの端末で開けないのは異常。**旧版へは落ちない**（Backend の 'none' 参照）
     if (markerIsIdb()) {
@@ -664,25 +794,29 @@ async function readStored(): Promise<AppData | null> {
 
   backend = 'idb';
 
-  if (record != null) {
-    // 印を書く前に落ちた起動があると、旧版のコピーが残ったままになる。毎回片付ける
+  const assembled = assemble(records);
+  if (assembled) {
     completeMigration();
-    return sanitizeData(record);
+    rememberWritten(assembled);
+    return assembled;
   }
 
-  // IndexedDB は開けたが空。前の版の記録があれば、そのまま引き取る
-  const legacy = readLocal();
+  // 週に割る前の 1 レコード、それも無ければ localStorage
+  const single = records.find(([key]) => key === LEGACY_RECORD_KEY)?.[1];
+  const legacy = single != null ? sanitizeData(single) : readLocal();
   if (!legacy) {
     completeMigration();
+    forgetWritten();
     return null;
   }
 
   try {
-    // 移った先へ確実に入ってから、旧版を消す。順番を逆にすると移行中の事故で記録が消える
-    await writeRecord(legacy);
+    // 割り直して書き終えてから、前の形を消す。順番を逆にすると移行中の事故で記録が消える
+    forgetWritten();
+    await writeSplit(legacy);
+    await deleteRecord();
     completeMigration();
   } catch {
-    // 書けなかった。旧版はそのまま残っているので、こちらで動かして次の起動に賭ける
     backend = 'local';
   }
   return legacy;
@@ -742,6 +876,31 @@ export function storedBytes(data: AppData): number {
  * 書き込み
  * ------------------------------------------------------------------ */
 
+/**
+ * 変わったレコードだけを書く。
+ *
+ * 打鍵ごとに全期間を書き直していたのをやめるのがここ。
+ * 変わるのはたいてい 1 週ぶん（数 KB）で、全体（10 年で 1.3MB）ではない。
+ */
+async function writeSplit(data: AppData): Promise<void> {
+  const { meta, weeks } = splitByWeek(data);
+
+  const puts: [string, unknown][] = [];
+  if (!sameMeta(writtenMeta, meta)) puts.push([META_KEY, meta]);
+  for (const [start, record] of weeks) {
+    if (!sameWeek(writtenWeeks.get(start), record)) puts.push([`${WEEK_PREFIX}${start}`, record]);
+  }
+  // 記録を消して空になった週は、レコードごと落とす
+  const deletes: string[] = [];
+  for (const start of writtenWeeks.keys()) {
+    if (!weeks.has(start)) deletes.push(`${WEEK_PREFIX}${start}`);
+  }
+
+  await writeMany(puts, deletes);
+  writtenMeta = meta;
+  writtenWeeks = weeks;
+}
+
 async function writeOnce(data: AppData): Promise<boolean> {
   // 移行済みなのに開けなかった端末。**どこにも書かない**（記録を上書きしない）
   if (backend === 'none') return false;
@@ -755,9 +914,11 @@ async function writeOnce(data: AppData): Promise<boolean> {
     }
   }
   try {
-    await writeRecord(data);
+    await writeSplit(data);
     return true;
   } catch {
+    // 書けなかったぶんは覚えない。次の書き込みでもう一度対象になる
+    forgetWritten();
     return false;
   }
 }

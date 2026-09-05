@@ -297,7 +297,7 @@ export function buildExercisePoint(
  * 打つ前から記録一覧にその日が並び、通算回数もストリークも増えてしまう。
  * 「書いたものはすべて数える」（設計 §4.2）の裏側で、書いていないものは数えない。
  */
-function hasAnySet(entry: SessionExercise): boolean {
+export function hasAnySet(entry: SessionExercise): boolean {
   return entry.sets.some((set) =>
     isCardioSet(set)
       ? set.meters != null || set.seconds != null
@@ -499,10 +499,23 @@ export function buildWeeklySets(sessions: readonly SessionPoint[], from: string)
   const first = startOfWeek(target[0]!.date);
   const last = startOfWeek(target[target.length - 1]!.date);
 
+  /*
+   * セッションを週ごとに **1 回の走査で** 振り分ける。
+   *
+   * 以前は週ごとに全セッションを絞り込んでいた。週数 × セッション数で効いてくるので、
+   * 記録が伸びるほど重くなる（10 年ぶんで約 81 万回の比較になっていた）。
+   * 週は連続しているので、開始日からの日数を 7 で割れば置き場所が決まる。
+   */
+  const buckets: SessionPoint[][] = [];
+  for (let start = first; start <= last; start = addDays(start, 7)) buckets.push([]);
+  for (const session of target) {
+    const index = Math.floor(diffDays(startOfWeek(session.date), first) / 7);
+    buckets[index]?.push(session);
+  }
+
   const weeks: WeekSetCount[] = [];
-  for (let start = first; start <= last; start = addDays(start, 7)) {
-    const end = addDays(start, 6);
-    const inWeek = target.filter((s) => s.date >= start && s.date <= end);
+  let start = first;
+  for (const inWeek of buckets) {
     const setsByGroup = { ...EMPTY_GROUPS };
     const volumeByGroup = { ...EMPTY_GROUPS };
     for (const session of inWeek) {
@@ -533,6 +546,7 @@ export function buildWeeklySets(sessions: readonly SessionPoint[], from: string)
       totalSets: Math.round(Object.values(setsByGroup).reduce((a, b) => a + b, 0) * 100) / 100,
       days: inWeek.length,
     });
+    start = addDays(start, 7);
   }
   return weeks;
 }
@@ -649,7 +663,50 @@ export function sessionGroups(session: SessionPoint): MuscleGroup[] {
  * 数えるのは「行為の事実」だけで、成果は数えない。
  * 成果を閾値表示すると褒めることになり、それは種目ごとの推移が担当する（設計 §6.3）。
  */
-export function computeTrainingStats(sessions: readonly SessionPoint[]): TrainingStats {
+/**
+ * 全期間を走って作る索引。**増分側は週ごとに作ったものを合成して渡す。**
+ *
+ * 渡されなければここで作る（テストと、単独で呼ぶ場所のため）。
+ */
+export interface TrainingIndex {
+  /** 種目ごとの履歴。並びはセッション順 */
+  historyById: Map<string, ExerciseHistoryPoint[]>;
+  /** 部位ごとの最終実施日 */
+  lastByGroup: Map<MuscleGroup, string>;
+  lastCardio: string | null;
+}
+
+export function buildTrainingIndex(sessions: readonly SessionPoint[]): TrainingIndex {
+  const historyById = new Map<string, ExerciseHistoryPoint[]>();
+  const lastByGroup = new Map<MuscleGroup, string>();
+  let lastCardio: string | null = null;
+
+  for (const session of sessions) {
+    for (const group of sessionGroups(session)) lastByGroup.set(group, session.date);
+    for (const point of session.exercises) {
+      if (isCardio(point.group)) lastCardio = session.date;
+      const item: ExerciseHistoryPoint = { date: session.date, time: session.time, point };
+      const list = historyById.get(point.exerciseId);
+      if (list) list.push(item);
+      else historyById.set(point.exerciseId, [item]);
+    }
+  }
+  return { historyById, lastByGroup, lastCardio };
+}
+
+export function computeTrainingStats(
+  sessions: readonly SessionPoint[],
+  /**
+   * 週次の配分。**呼び出し側が持っていれば渡す。**
+   *
+   * ホームでも同じものを使うので、渡さないと同じ計算が 2 回走る
+   * （記録が伸びるほど効いてくる。10 年ぶんで約 9ms ずつ）。
+   * 省略時は自分で作る——テストと、単独で呼ぶ場所のため。
+   */
+  weeklySets?: readonly WeekSetCount[],
+  /** 種目ごとの履歴などの索引。増分側が週ごとに作ったものを渡す */
+  index?: TrainingIndex,
+): TrainingStats {
   const noGroups = Object.fromEntries(ALL_GROUPS.map((g) => [g, null])) as Record<
     MuscleGroup,
     number | null
@@ -676,7 +733,7 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
   };
   if (sessions.length === 0) return empty;
 
-  const weeks = buildWeeklySets(sessions, sessions[0]!.date);
+  const weeks = weeklySets ?? buildWeeklySets(sessions, sessions[0]!.date);
 
   let best = 0;
   let run = 0;
@@ -694,7 +751,7 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
   const today = todayISO();
 
   /*
-   * 種目ごとの履歴を **1 回の走査で作る。**
+   * 種目ごとの履歴と、部位ごとの最終実施日。
    *
    * 以前はこの下の種目ループの中で `exerciseHistory(sessions, id)` を呼んでいた。
    * あれは毎回セッション全体を走査するので、種目数 × セッション数で効いてくる。
@@ -703,21 +760,7 @@ export function computeTrainingStats(sessions: readonly SessionPoint[]): Trainin
    * 並びはセッション順のまま（`exerciseHistory` と同じ）。順序に依存する
    * `plateau` と開始値の判定が変わらないようにする。
    */
-  const historyById = new Map<string, ExerciseHistoryPoint[]>();
-  // 部位ごとの最終実施日。偏りは「合計」ではなく「触ったかどうか」でしか見えない
-  const lastByGroup = new Map<MuscleGroup, string>();
-  let lastCardio: string | null = null;
-
-  for (const session of sessions) {
-    for (const group of sessionGroups(session)) lastByGroup.set(group, session.date);
-    for (const point of session.exercises) {
-      if (isCardio(point.group)) lastCardio = session.date;
-      const item: ExerciseHistoryPoint = { date: session.date, time: session.time, point };
-      const list = historyById.get(point.exerciseId);
-      if (list) list.push(item);
-      else historyById.set(point.exerciseId, [item]);
-    }
-  }
+  const { historyById, lastByGroup, lastCardio } = index ?? buildTrainingIndex(sessions);
 
   const daysSinceGroup = Object.fromEntries(
     ALL_GROUPS.map((g) => {

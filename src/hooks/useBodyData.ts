@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { buildDaily, buildWeeks, computeProjection, computeStats, emptyDay } from '../lib/derive';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { emptyDay } from '../lib/derive';
+import { createDeriveCache, deriveAll } from '../lib/incremental';
 import { isCardio } from '../lib/exerciseCatalog';
 import {
   PRESET_NAME_MAX,
@@ -9,12 +10,21 @@ import {
   sanitizeData,
   saveData,
 } from '../lib/storage';
-import { buildSessions, computeTrainingStats, exerciseGoals } from '../lib/training';
+import {
+  buildSessions,
+  buildWeeklySets,
+  computeTrainingStats,
+  exerciseGoals,
+} from '../lib/training';
 import { buildCheckHistory } from '../lib/check';
 import type { ImportPayload } from '../lib/io';
 import type {
   AppData,
   CardioSet,
+  DailyPoint,
+  Projection,
+  Stats,
+  WeekPoint,
   CheckSettings,
   Entries,
   Exercise,
@@ -67,11 +77,13 @@ export interface BodyData {
    * 画面に出す責任は `components/StorageAlert.tsx` が持つ。
    */
   saveFailed: boolean;
-  daily: ReturnType<typeof buildDaily>;
-  weeks: ReturnType<typeof buildWeeks>;
-  stats: ReturnType<typeof computeStats>;
-  projection: ReturnType<typeof computeProjection>;
+  daily: DailyPoint[];
+  weeks: WeekPoint[];
+  stats: Stats;
+  projection: Projection;
   sessions: ReturnType<typeof buildSessions>;
+  /** 週ごとの部位別セット数。ホームのヒートマップと全体状況の指標で共有する */
+  weeklySets: ReturnType<typeof buildWeeklySets>;
   trainingStats: ReturnType<typeof computeTrainingStats>;
   trainingGoals: ReturnType<typeof exerciseGoals>;
   /** 過去の日の資源消費。構成チェックが読む（lib/check.ts） */
@@ -161,40 +173,25 @@ export function useBodyData(initial: AppData): BodyData {
     };
   }, []);
 
-  const daily = useMemo(() => buildDaily(data.entries), [data.entries]);
-  const weeks = useMemo(() => buildWeeks(daily), [daily]);
-  const stats = useMemo(
-    () => computeStats(daily, weeks, data.settings),
-    [daily, weeks, data.settings],
-  );
-  const projection = useMemo(
-    () => computeProjection(daily, stats, data.settings),
-    [daily, stats, data.settings],
-  );
-  // 自重換算に体重が要るので daily → sessions の順で導出する
-  const sessions = useMemo(
-    () => buildSessions(data.workouts, data.exercises, daily),
-    [data.workouts, data.exercises, daily],
-  );
-  const trainingStats = useMemo(() => computeTrainingStats(sessions), [sessions]);
-  // 過去の消費は「やった事実」から作る。並べただけの日を数えないため sessions を読む
-  const checkHistory = useMemo(
-    () => buildCheckHistory(sessions, data.exercises),
-    [sessions, data.exercises],
-  );
   /*
-   * 目標一覧は表示中の種目だけ。非表示にした種目の目標は消さずに持ったままにして、
-   * 表示に戻したときにそのまま復活させる（消すのは「目標を外す」を押したときだけ）。
+   * 導出の途中結果を週ごとに持つ。**保存はしない**（`docs/design-storage.md` §1）。
+   * 起動のたびに空から始まるので、ずれた状態が残ることが起こらない。
+   *
+   * 中身は内容で引き当てるので、React が memo を捨てて計算し直しても答えは変わらない。
    */
-  const trainingGoals = useMemo(
-    () =>
-      exerciseGoals(
-        sessions,
-        data.exercises.filter((e) => !e.hidden),
-      ),
-    [sessions, data.exercises],
-  );
-
+  const cache = useRef(createDeriveCache());
+  const derived = useMemo(() => deriveAll(data, cache.current), [data]);
+  const {
+    daily,
+    weeks,
+    stats,
+    projection,
+    sessions,
+    weeklySets,
+    trainingStats,
+    checkHistory,
+    trainingGoals,
+  } = derived;
   const setValue = useCallback(
     (date: string, slot: SlotId, field: MeasurementField, value: number | null) => {
       setData((prev) => {
@@ -584,6 +581,7 @@ export function useBodyData(initial: AppData): BodyData {
     stats,
     projection,
     sessions,
+    weeklySets,
     trainingStats,
     trainingGoals,
     checkHistory,

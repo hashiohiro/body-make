@@ -25,8 +25,8 @@ import { useTheme } from '../hooks/useTheme';
 import { todayISO } from '../lib/date';
 import { CATALOG, fromCatalog } from '../lib/exerciseCatalog';
 import type { AppData, Domain, ThemePref } from '../types';
-import { emptyData, flushSave, sanitizeData } from '../lib/storage';
-import { deleteRecord, readRecord, resetDbForTests } from '../lib/db';
+import { emptyData, flushSave, loadData, resetStorageForTests, sanitizeData } from '../lib/storage';
+import { clearAllRecords, resetDbForTests } from '../lib/db';
 
 /**
  * 起動時に読み込んだことにする記録。
@@ -85,7 +85,8 @@ function seedRaw(raw: unknown) {
  */
 async function storedData(): Promise<AppData> {
   await flushSave();
-  return (await readRecord<AppData>()) ?? emptyData();
+  // 保存先はアプリと同じ経路で読む（週ごとのレコードから組み直す）
+  return loadData();
 }
 
 /**
@@ -132,7 +133,8 @@ beforeEach(async () => {
   localStorage.clear();
   seeded = emptyData();
   resetDbForTests();
-  await deleteRecord();
+  resetStorageForTests();
+  await clearAllRecords();
 });
 
 afterEach(cleanup);
@@ -799,6 +801,49 @@ describe('記録タブ', () => {
     const [date, setDate] = useState(todayISO);
     return <RecordsView body={body} date={date} onDateChange={setDate} domain={domain} />;
   }
+
+  /**
+   * 記録一覧に出す行数を、記録の長さから切り離す。
+   *
+   * 以前は記録のある日をすべて DOM に出していたので、値を 1 つ打つたびに
+   * 全期間ぶんの差分を取っていた（10 年ぶんで 3,650 行・約 200ms）。
+   * 枠は 60vh でスクロールするので、実際に見えているのは 10 行前後。
+   */
+  it('一覧は最近ぶんだけ出し、押して伸ばせる', () => {
+    const entries: Record<string, unknown> = {};
+    for (let i = 0; i < 200; i++) {
+      entries[isoAdd(todayISO(), -i)] = {
+        am: { weight: 70, bodyFat: 20 },
+        pm: { weight: null, bodyFat: null },
+      };
+    }
+    seedRaw({ version: 7, settings: {}, entries, exercises: [], workouts: {} });
+    render(<RecordsHarness />);
+
+    const rows = () => screen.getAllByRole('button').filter((b) => /記録回数/.test(b.innerHTML));
+    const before = rows().length;
+    expect(before).toBeGreaterThan(0);
+    expect(before).toBeLessThan(200);
+
+    // 残りが何日あるかを添える。押すと増える
+    const more = screen.getByRole('button', { name: /さらに.*日ぶん見る/ });
+    expect(more.textContent).toContain('残り');
+    fireEvent.click(more);
+    expect(rows().length).toBeGreaterThan(before);
+  });
+
+  it('全部出しきったら「もっと見る」は消える', () => {
+    const entries: Record<string, unknown> = {};
+    for (let i = 0; i < 10; i++) {
+      entries[isoAdd(todayISO(), -i)] = {
+        am: { weight: 70, bodyFat: 20 },
+        pm: { weight: null, bodyFat: null },
+      };
+    }
+    seedRaw({ version: 7, settings: {}, entries, exercises: [], workouts: {} });
+    render(<RecordsHarness />);
+    expect(screen.queryByRole('button', { name: /さらに.*日ぶん見る/ })).toBeNull();
+  });
 
   it('ヘッダの切り替えに従って体組成とトレーニングを出し分ける', () => {
     // どちらの側にも記録一覧があるので、入力カードの見出しと種目の＋で区別する

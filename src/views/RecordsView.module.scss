@@ -66,3 +66,15 @@
   max-height: 60vh;
   overflow-y: auto;
 }
+
+/* 一覧の末尾に置く「もっと見る」。行と同じ幅で、行そのものには見せない */
+.more {
+  width: 100%;
+  margin-top: 6px;
+
+  small {
+    margin-left: 8px;
+    font-size: 11px;
+    color: var(--ink-muted);
+  }
+}

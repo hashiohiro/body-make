@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { formatMD, formatMDW } from '../lib/date';
 import type { EnergyPoint } from '../lib/energy';
 import { fmtDelta } from '../lib/format';
@@ -99,8 +100,20 @@ export function EnergyTable({ points }: { points: readonly EnergyPoint[] }) {
   );
 }
 
+/**
+ * 日次の元データ。
+ *
+ * 期間の既定が「全期間」なので、以前は記録のある日をすべて表の行にしていた。
+ * `<details>` が閉じていても要素は作られるため、10 年ぶんでは開く前から
+ * 3,000 行以上を抱えることになる。**出す量を記録の長さから切り離す。**
+ */
+const INITIAL_ROWS = 60;
+const MORE_ROWS = 180;
+
 export function DailyTable({ daily }: { daily: readonly DailyPoint[] }) {
-  const rows = [...daily].reverse();
+  const [limit, setLimit] = useState(INITIAL_ROWS);
+  const rows = useMemo(() => daily.slice(-limit).reverse(), [daily, limit]);
+  const rest = daily.length - rows.length;
 
   return (
     <details className={ui.tableView}>
@@ -133,6 +146,19 @@ export function DailyTable({ daily }: { daily: readonly DailyPoint[] }) {
           </tbody>
         </table>
       </div>
+
+      {/* 古い日は押して伸ばす。全部が最初から要る場面は無い */}
+      {rest > 0 && (
+        <div className={ui.btnRow}>
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.btnGhost}`}
+            onClick={() => setLimit((n) => n + MORE_ROWS)}
+          >
+            さらに{Math.min(rest, MORE_ROWS)}日ぶん見る（残り {rest}日）
+          </button>
+        </div>
+      )}
     </details>
   );
 }

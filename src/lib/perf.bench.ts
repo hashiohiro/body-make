@@ -5,6 +5,8 @@ import { CATALOG, fromCatalog } from './exerciseCatalog';
 import { addDays } from './date';
 import { emptyData } from './storage';
 import { buildSessions, buildWeeklySets, computeTrainingStats, exerciseGoals } from './training';
+import { createDeriveCache, deriveAll } from './incremental';
+import { startOfWeek, todayISO } from './date';
 import type { AppData, Entries, Workouts } from '../types';
 
 /*
@@ -58,6 +60,21 @@ interface Fixture {
   sessions: ReturnType<typeof buildSessions>;
 }
 
+/** 直近 1 週ぶんの生データを切り出す。保存で実際に変換される単位 */
+function weekOf(data: AppData): { entries: Entries; workouts: Workouts } {
+  const start = startOfWeek(todayISO());
+  const entries: Entries = {};
+  const workouts: Workouts = {};
+  for (let i = 0; i < 7; i++) {
+    const iso = addDays(start, i);
+    const entry = data.entries[iso];
+    if (entry) entries[iso] = entry;
+    const day = data.workouts[iso];
+    if (day) workouts[iso] = day;
+  }
+  return { entries, workouts };
+}
+
 function fixture(years: number): Fixture {
   const data = makeData(years);
   const daily = buildDaily(data.entries);
@@ -65,8 +82,13 @@ function fixture(years: number): Fixture {
   return { data, daily, weeks, sessions: buildSessions(data.workouts, data.exercises, daily) };
 }
 
-/** 体組成側の導出。体重を打つと必ず走る */
-function deriveBody({ data, daily, weeks }: Fixture) {
+/** 打ち替えに使う空の夜スロット。毎回作ると測っているものがぶれる */
+const EMPTY_PM = { weight: null, bodyFat: null };
+const today = todayISO();
+let tick = 0;
+
+/** 体組成側の導出（全計算）。体重を打つと必ず走る */
+function deriveBodyFull({ data, daily, weeks }: Fixture) {
   const d = buildDaily(data.entries);
   const w = buildWeeks(d);
   const stats = computeStats(d, w, data.settings);
@@ -74,19 +96,28 @@ function deriveBody({ data, daily, weeks }: Fixture) {
   return [daily, weeks];
 }
 
-/** 筋トレ側の導出。セットを打つと走る（いまは体重を打っても走る＝下の「体重入力」） */
+/**
+ * 筋トレ側の導出。セットを打つと走る（いまは体重を打っても走る＝下の「体重入力」）。
+ *
+ * 週次の配分は `useBodyData` で 1 回だけ作って共有するので、ここでも 1 回にする。
+ * 2 回作っていた頃を測ると、実際より悪い数字が出る。
+ */
 function deriveTraining({ data, daily, sessions }: Fixture) {
   const s = buildSessions(data.workouts, data.exercises, daily);
-  computeTrainingStats(s);
+  const weekly = s.length > 0 ? buildWeeklySets(s, s[0]!.date) : [];
+  computeTrainingStats(s, weekly);
   buildCheckHistory(s, data.exercises);
   exerciseGoals(s, data.exercises);
-  if (s.length > 0) buildWeeklySets(s, s[0]!.date);
   return sessions;
 }
 
 for (const years of [1, 5, 10]) {
   describe(`${years}年ぶん`, () => {
     const f = fixture(years);
+    const cache = createDeriveCache();
+    deriveAll(f.data, cache);
+    // 1 週ぶんの生データ。保存で実際に変換される単位
+    const oneWeek = weekOf(f.data);
 
     /*
      * いまはこれが 1 打鍵ぶん。`buildSessions` が `daily` に依存しているので、
@@ -94,7 +125,7 @@ for (const years of [1, 5, 10]) {
      * ここが「トレ入力」と同じ水準まで下がれば、依存を切った効果が出たことになる。
      */
     bench('体重入力（体組成 + トレの両方が走る）', () => {
-      deriveBody(f);
+      deriveBodyFull(f);
       deriveTraining(f);
     });
 
@@ -102,13 +133,32 @@ for (const years of [1, 5, 10]) {
       deriveTraining(f);
     });
 
-    bench('体組成のみ（依存を切れたときの目標値）', () => {
-      deriveBody(f);
+    bench('体組成のみ（全計算）', () => {
+      deriveBodyFull(f);
     });
 
-    // 保存の側。IndexedDB の put はこの変換をメインスレッドで同期に行う
-    bench('保存: structuredClone', () => {
+    /*
+     * 増分の経路。直近の日を打ち替えながら測る。
+     * 変わらない週は作り直さないので、全計算との差がそのまま増分の効き。
+     * **体組成もトレも、この 1 回に入っている**（実際のアプリと同じ経路）。
+     */
+    bench('体重入力（増分・体組成 + トレ）', () => {
+      const entries = { ...f.data.entries };
+      entries[today] = { am: { weight: 70 + (tick++ % 50) / 100, bodyFat: 20 }, pm: EMPTY_PM };
+      deriveAll({ ...f.data, entries }, cache);
+    });
+
+    /*
+     * 保存の側。IndexedDB の put はこの変換をメインスレッドで同期に行う。
+     * 週ごとのレコードに割ったので、実際に変換されるのは**変わった週だけ**。
+     * 全体を割らずに書いていた頃との差を並べて出す。
+     */
+    bench('保存: 全体を書く（週に割る前）', () => {
       structuredClone(f.data);
+    });
+
+    bench('保存: 変わった週だけ書く', () => {
+      structuredClone(oneWeek);
     });
   });
 }

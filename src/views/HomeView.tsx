@@ -8,7 +8,6 @@ import { GroupSetsHeatmap } from '../components/training/GroupSetsHeatmap';
 import { TrainingSummary } from '../components/training/TrainingSummary';
 import type { GroupValueId } from '../components/training/groupValues';
 import { computeBadges } from '../lib/badges';
-import { buildWeeklySets } from '../lib/training';
 import { formatMD } from '../lib/date';
 import type { BodyData } from '../hooks/useBodyData';
 import type { Domain } from '../types';
@@ -31,13 +30,8 @@ const SPARK_DAYS = 30;
  * 推移は独立した機能ではなく、いま見ている数字の続きなので、タブにはしない。
  */
 export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
-  const { daily, stats, sessions, trainingStats } = body;
-
-  // 部位別の配分は全期間ぶん作る（表側が直近 12 週に切る）
-  const weeklySets = useMemo(
-    () => (sessions.length > 0 ? buildWeeklySets(sessions, sessions[0]!.date) : []),
-    [sessions],
-  );
+  // 部位別の配分は全期間ぶん（表側が直近 12 週に切る）。作るのは useBodyData で 1 回だけ
+  const { daily, stats, sessions, weeklySets, trainingStats } = body;
   // 表とダイアログのグラフで同じ値を見る
   const [groupValueId, setGroupValueId] = useState<GroupValueId>('sets');
 

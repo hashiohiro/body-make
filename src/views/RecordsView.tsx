@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { QuickEntry } from '../components/QuickEntry';
 import { TrainingView } from './TrainingView';
 import { formatMD, weekdayJa } from '../lib/date';
@@ -15,9 +16,24 @@ interface Props {
   domain: Domain;
 }
 
+/**
+ * 一覧に最初から出す日数。
+ *
+ * 枠の高さは 60vh で、実際に見えているのは 10 行前後。それでも以前は
+ * **記録のある日をすべて DOM に出していた**ので、値を 1 つ打つたびに
+ * 全期間ぶんの差分を取っていた（10 年ぶんで 3,650 行・29,000 ノード・約 200ms）。
+ * 打鍵ごとに払う量を、記録の長さから切り離す。
+ */
+const INITIAL_ROWS = 60;
+/** 「もっと見る」1 回ぶん */
+const MORE_ROWS = 180;
+
 export function RecordsView({ body, date, onDateChange, domain }: Props) {
   const { daily, data, setValue, removeDay } = body;
-  const rows = [...daily].reverse();
+  const [limit, setLimit] = useState(INITIAL_ROWS);
+  // 新しい順に出すので、後ろから切ってから반転する
+  const rows = useMemo(() => daily.slice(-limit).reverse(), [daily, limit]);
+  const rest = daily.length - rows.length;
   const selected = data.entries[date];
 
   if (domain === 'training') {
@@ -87,6 +103,20 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
                 </span>
               </button>
             ))}
+
+            {/*
+              古い日は「もっと見る」で伸ばす。任意の日へはヘッダの日付ナビから直接跳べるので、
+              一覧は最近を眺めるためのものとして扱う。
+            */}
+            {rest > 0 && (
+              <button
+                type="button"
+                className={`${ui.btn} ${ui.btnGhost} ${s.more}`}
+                onClick={() => setLimit((n) => n + MORE_ROWS)}
+              >
+                さらに{Math.min(rest, MORE_ROWS)}日ぶん見る<small>残り {rest}日</small>
+              </button>
+            )}
           </div>
         )}
       </section>

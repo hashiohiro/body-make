@@ -9,7 +9,8 @@ import type {
 } from '../types';
 import { addDays, diffDays, isoToTime, startOfWeek, todayISO } from './date';
 
-const MA_WINDOW = 7;
+/** 移動平均の窓。増分側（lib/weekly.ts）も同じ値を読む */
+export const MA_WINDOW = 7;
 /** ペース推定に使う直近日数。短すぎると水分変動を拾い、長すぎると直近の変化に追随しない */
 const PACE_WINDOW = 28;
 
@@ -20,7 +21,7 @@ export function emptyDay(): { am: Measurement; pm: Measurement } {
 }
 
 /** 朝夕の平均。片方しか無ければある方をそのまま採用（エクセルの AVERAGE(C,E) と同じ挙動） */
-function mean(values: readonly (number | null)[]): number | null {
+export function mean(values: readonly (number | null)[]): number | null {
   const nums = values.filter((v): v is number => v != null && Number.isFinite(v));
   if (nums.length === 0) return null;
   return nums.reduce((a, b) => a + b, 0) / nums.length;
@@ -34,7 +35,7 @@ export function dayAverageBodyFat(day: { am: Measurement; pm: Measurement }): nu
   return mean([day.am.bodyFat, day.pm.bodyFat]);
 }
 
-function slotCount(day: { am: Measurement; pm: Measurement }): 0 | 1 | 2 {
+export function slotCount(day: { am: Measurement; pm: Measurement }): 0 | 1 | 2 {
   let n = 0;
   if (day.am.weight != null || day.am.bodyFat != null) n++;
   if (day.pm.weight != null || day.pm.bodyFat != null) n++;
@@ -148,7 +149,7 @@ export function buildWeeks(daily: DailyPoint[]): WeekPoint[] {
 }
 
 /** 最初の n 個の実測値の平均を基準値とする。初日 1 点だけを基準にすると当日の変動に引きずられるため */
-function baseline(values: readonly (number | null)[], n = MA_WINDOW): number | null {
+export function baseline(values: readonly (number | null)[], n = MA_WINDOW): number | null {
   const nums: number[] = [];
   for (const v of values) {
     if (v != null && Number.isFinite(v)) nums.push(v);

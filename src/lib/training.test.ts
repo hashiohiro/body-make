@@ -427,9 +427,11 @@ describe('loadData の seed 分岐', () => {
   beforeEach(async () => {
     (globalThis as { localStorage?: unknown }).localStorage = new MemStorage();
     // IndexedDB は resetModules をまたいで残る。前のテストの記録を持ち越さない
-    const { deleteRecord, resetDbForTests } = await import('./db');
+    const { clearAllRecords, resetDbForTests } = await import('./db');
+    const { resetStorageForTests } = await import('./storage');
     resetDbForTests();
-    await deleteRecord();
+    resetStorageForTests();
+    await clearAllRecords();
   });
 
   afterEach(() => {

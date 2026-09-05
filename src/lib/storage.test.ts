@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { currentBackend, emptyData, flushSave, loadData, saveData, storedBytes } from './storage';
-import { deleteRecord, readRecord, resetDbForTests } from './db';
+import {
+  currentBackend,
+  emptyData,
+  flushSave,
+  loadData,
+  resetStorageForTests,
+  saveData,
+  storedBytes,
+} from './storage';
+import { clearAllRecords, readAll, resetDbForTests, writeMany } from './db';
+import { startOfWeek } from './date';
 import type { AppData } from '../types';
 
 const DATA_KEY = 'bodymake.data.v1';
@@ -61,12 +70,14 @@ beforeEach(async () => {
   useStorage(new MemStorage());
   Object.defineProperty(globalThis, 'indexedDB', { value: realIndexedDB, configurable: true });
   resetDbForTests();
-  await deleteRecord();
+  resetStorageForTests();
+  await clearAllRecords();
 });
 
 afterEach(() => {
   Object.defineProperty(globalThis, 'indexedDB', { value: realIndexedDB, configurable: true });
   resetDbForTests();
+  resetStorageForTests();
 });
 
 describe('保存先', () => {
@@ -75,10 +86,15 @@ describe('保存先', () => {
     expect(currentBackend()).toBe('idb');
 
     expect(await saveData(withWeight(68.4))).toBe(true);
-    const record = await readRecord<AppData>();
-    expect(record?.entries['2026-03-01']?.am.weight).toBe(68.4);
+    expect((await loadData()).entries['2026-03-01']?.am.weight).toBe(68.4);
     // 旧版の保存先は使わない
     expect(localStorage.getItem(DATA_KEY)).toBeNull();
+
+    // 週ごとのレコードに割れている（丸ごと 1 レコードではない）
+    const keys = (await readAll()).map(([k]) => k);
+    expect(keys).toContain('meta');
+    expect(keys.some((k) => k.startsWith('w:'))).toBe(true);
+    expect(keys).not.toContain('data');
   });
 
   /*
@@ -116,8 +132,7 @@ describe('旧版からの引き取り', () => {
     expect(data.entries['2026-03-01']?.am.weight).toBe(68.4);
 
     // 移った先にも入っている
-    const record = await readRecord<AppData>();
-    expect(record?.entries['2026-03-01']?.am.weight).toBe(68.4);
+    expect((await loadData()).entries['2026-03-01']?.am.weight).toBe(68.4);
   });
 
   /*
@@ -198,20 +213,20 @@ describe('書き込みのまとめ', () => {
    */
   it('書き込み中に来た変更は、最新の 1 つにまとまる', async () => {
     await loadData();
-    void saveData(withWeight(1));
-    void saveData(withWeight(2));
-    await saveData(withWeight(3));
+    // 値域（20〜300kg）の中で動かす。外れる値は読み戻しで落ちる
+    void saveData(withWeight(61));
+    void saveData(withWeight(62));
+    await saveData(withWeight(63));
     await flushSave();
 
-    const record = await readRecord<AppData>();
-    expect(record?.entries['2026-03-01']?.am.weight).toBe(3);
+    expect((await loadData()).entries['2026-03-01']?.am.weight).toBe(63);
   });
 
   it('flushSave は書き込み中のものが片付くまで待つ', async () => {
     await loadData();
     void saveData(withWeight(42));
     await flushSave();
-    expect((await readRecord<AppData>())?.entries['2026-03-01']?.am.weight).toBe(42);
+    expect((await loadData()).entries['2026-03-01']?.am.weight).toBe(42);
   });
 });
 
@@ -223,5 +238,91 @@ describe('保存サイズ', () => {
   it('JSON の長さで測る（増え方を読むための目盛り）', () => {
     const data = emptyData();
     expect(storedBytes(data)).toBe(JSON.stringify(data).length);
+  });
+});
+
+describe('週ごとのレコード', () => {
+  const DAY_A = '2026-03-02';
+  const DAY_B = '2026-03-20';
+
+  function twoWeeks(a: number, b: number): AppData {
+    return {
+      ...emptyData(),
+      entries: {
+        [DAY_A]: { am: { weight: a, bodyFat: null }, pm: { weight: null, bodyFat: null } },
+        [DAY_B]: { am: { weight: b, bodyFat: null }, pm: { weight: null, bodyFat: null } },
+      },
+    };
+  }
+
+  const keyOf = (iso: string) => `w:${startOfWeek(iso)}`;
+  const keys = async () => (await readAll()).map(([k]) => k);
+
+  it('週に割る前の 1 レコードから引き取る', async () => {
+    await loadData();
+    // 旧レイアウト（丸ごと 1 レコード）を直に置く
+    await writeMany([['data', { version: 7, entries: twoWeeks(70, 71).entries }]]);
+    resetStorageForTests();
+    resetDbForTests();
+
+    const data = await loadData();
+    expect(data.entries[DAY_A]?.am.weight).toBe(70);
+    expect(data.entries[DAY_B]?.am.weight).toBe(71);
+
+    const after = await keys();
+    expect(after).toContain(keyOf(DAY_A));
+    expect(after).toContain(keyOf(DAY_B));
+    // 引き取ったら前の形は消す（古いほうを読む経路を残さない）
+    expect(after).not.toContain('data');
+  });
+
+  /*
+   * 打鍵ごとに全期間を書き直していたのをやめたことの確認。
+   *
+   * 片方の週のレコードを外から消してから、中身の変わっていない同じ内容を保存する。
+   * 書き直されなければ「変わっていない週は書いていない」と言える。
+   */
+  it('変わっていない週は書き直さない', async () => {
+    await loadData();
+    const data = twoWeeks(70, 71);
+    await saveData(data);
+    expect(await keys()).toContain(keyOf(DAY_A));
+
+    await writeMany([], [keyOf(DAY_A)]);
+    await saveData(data);
+    expect(await keys()).not.toContain(keyOf(DAY_A));
+  });
+
+  it('日を 1 つ直せば、その週は書き直される', async () => {
+    await loadData();
+    const data = twoWeeks(70, 71);
+    await saveData(data);
+    await writeMany([], [keyOf(DAY_A), keyOf(DAY_B)]);
+
+    const edited: AppData = {
+      ...data,
+      entries: {
+        ...data.entries,
+        [DAY_A]: { am: { weight: 72, bodyFat: null }, pm: { weight: null, bodyFat: null } },
+      },
+    };
+    await saveData(edited);
+
+    const after = await keys();
+    expect(after).toContain(keyOf(DAY_A));
+    // 触っていない週は書き直されない
+    expect(after).not.toContain(keyOf(DAY_B));
+  });
+
+  it('記録を消して空になった週は、レコードごと落とす', async () => {
+    await loadData();
+    await saveData(twoWeeks(70, 71));
+
+    const { [DAY_A]: _removed, ...rest } = twoWeeks(70, 71).entries;
+    await saveData({ ...emptyData(), entries: rest });
+
+    const after = await keys();
+    expect(after).not.toContain(keyOf(DAY_A));
+    expect(after).toContain(keyOf(DAY_B));
   });
 });
