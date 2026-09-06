@@ -4,15 +4,13 @@ import { ExerciseSettingsForm } from './ExerciseSettingsForm';
 import { GoalEditor } from './GoalEditor';
 import { Modal } from '../Modal';
 import { EXERCISE_GROUP_ORDER, GROUP_LABELS, goalTypeLabel } from '../../lib/exerciseCatalog';
-import { deltaTone, fmt, fmtDelta, fmtPercent } from '../../lib/format';
+import { fmt, fmtPercent } from '../../lib/format';
 import { todayISO } from '../../lib/date';
 import { RECENT_DAYS, STALE_WEEKS } from '../../lib/training';
 import type { ExerciseGoal, TrainingStats } from '../../lib/training';
 import type { Exercise, SessionPoint } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
-
-const TONE_CLASS = { good: ui.good, bad: ui.bad, flat: ui.flat } as const;
 
 interface Props {
   goals: readonly ExerciseGoal[];
@@ -122,15 +120,14 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
                   維持は数値を決めないので、目標もバーも出さない（割る相手がない）
                 */}
                 <span className={s.goalRowBody}>
+                  {/*
+                    前回からの増減はここに足さない。**1 行で動く数字は 1 つにする。**
+                    足すと「いま → 目標」の右に別の軸の数字が並び、
+                    そのぶん列を広げるとバーが痩せる。伸びの中身は推移が持っている。
+                  */}
                   <span className={s.goalRowValue}>
                     {fmt(goal.current, goal.digits)}
                     {goal.target != null && ` → ${fmt(goal.target, goal.digits)}`} {goal.unit}
-                    {goal.delta != null && (
-                      <span className={TONE_CLASS[deltaTone(goal.delta, false, 0)]}>
-                        {' '}
-                        {fmtDelta(goal.delta, goal.digits)}
-                      </span>
-                    )}
                   </span>
 
                   {goal.target == null ? (
@@ -144,9 +141,10 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
                     </span>
                   )}
 
+                  {/* 維持は数値を決めないので割合も出ない。それは上の「維持」が言っている */}
                   <span className={s.goalRowPct}>
                     {goal.target == null
-                      ? '数値は決めない'
+                      ? '—'
                       : goal.reached
                         ? '到達'
                         : goal.progress == null

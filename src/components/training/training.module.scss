@@ -808,12 +808,18 @@
 .volRow {
   display: grid;
   /*
-   * **バーの幅は固定。**流動の列に置くと、隣の文字数（「記録なし」と「今日」、
+   * **バーが伸びる列。ほかの列は幅を決める。**
+   *
+   * 数字のほうを流動にすると、隣の文字数（「記録なし」と「今日」、
    * 「12.5 / 12」と「0 / —」）でバーの長さが行ごとに変わり、
    * 埋まり具合ではなく文字数を見比べることになる。
-   * 数える対象が同じなら、目盛りの長さも同じでなければ比べられない。
+   * 数字の幅を決めてしまえば、バーは行いっぱいに伸ばしても長さがそろう。
+   *
+   * 幅は px で書く。**列の em は行（15px）を基準に解く**ので、
+   * 中の文字（12px / 11px）に合わせたつもりが 1 文字ぶん以上広くなる。
+   * 数字はいちばん長い中身に合わせる——セット数「12.5 / 50」、前回「記録なし」。
    */
-  grid-template-columns: 3.2em 88px minmax(0, 1fr) 4.4em auto;
+  grid-template-columns: 44px minmax(0, 1fr) 52px 46px auto;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -902,8 +908,8 @@
 
 .goalRowBody {
   display: grid;
-  /* 量の行と同じく、バーの幅は固定。値の長さでバーが伸び縮みしないようにする */
-  grid-template-columns: minmax(0, 1fr) 88px 3.6em;
+  /* 量の行と同じ組み方。数字の列幅を決めて、余りをぜんぶバーに回す（幅は px で） */
+  grid-template-columns: 112px minmax(0, 1fr) 32px;
   align-items: center;
   gap: 8px;
 
@@ -913,12 +919,14 @@
 }
 
 .goalRowValue {
+  overflow: hidden;
   font-size: 12px;
   color: var(--ink-2);
   white-space: nowrap;
   @include tabular;
 }
 
+/* 出るのは「到達」「84%」「—」まで。それ以上の桁は出ない（到達率は 100% で頭打ち） */
 .goalRowPct {
   text-align: right;
   font-size: 11px;
