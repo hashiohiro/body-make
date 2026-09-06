@@ -510,7 +510,8 @@
 /* 今週どの曜日にやったか。日数だけでは分からない */
 .week {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  /* マス（.weekCell は aspect-ratio: 1）に列幅を決めさせない。RecordCalendar と同じ */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
   margin-top: 10px;
 }
@@ -525,6 +526,7 @@
 
 .weekCell {
   width: 100%;
+  min-width: 0;
   aspect-ratio: 1;
   border-radius: 3px;
   border: 1px solid var(--border);

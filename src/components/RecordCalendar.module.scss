@@ -30,10 +30,19 @@
   @include tabular;
 }
 
+/*
+ * 7 列を **minmax(0, 1fr)** で組む。
+ *
+ * `1fr` は `minmax(auto, 1fr)` なので、マス（`.day` は `aspect-ratio: 1`）の
+ * 自動最小サイズが列を押し広げられる。画面を横にして戻したときに、
+ * 高さが横向きのまま残ったマスが列幅を決めてしまい、7 列が入りきらずに
+ * 右のほうが画面の外へはみ出す（曜日の行はマスを持たないので 7 つ並んだまま）。
+ * 下限を 0 にしておけば、器の幅が縮んだぶんはマスのほうが縮む。
+ */
 .week,
 .grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 2px;
 }
 
@@ -55,6 +64,9 @@
  */
 .day {
   position: relative;
+  /* 列を押し広げないように、自動最小サイズを切る（上の .grid と組みで効く） */
+  min-width: 0;
+  min-height: 0;
   aspect-ratio: 1;
   display: grid;
   place-content: center;
