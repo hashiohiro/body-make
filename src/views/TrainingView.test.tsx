@@ -23,7 +23,7 @@ import { HomeView } from './HomeView';
 import { TrainingView } from './TrainingView';
 import { useBodyData } from '../hooks/useBodyData';
 import { useTheme } from '../hooks/useTheme';
-import { todayISO } from '../lib/date';
+import { formatMD, startOfWeek, todayISO } from '../lib/date';
 import { CATALOG, fromCatalog } from '../lib/exerciseCatalog';
 import type { AppData, Domain, ThemePref } from '../types';
 import { emptyData, flushSave, loadData, resetStorageForTests, sanitizeData } from '../lib/storage';
@@ -2661,6 +2661,29 @@ describe('ホームの部位別の配分', () => {
     expect(card.getAllByText('520').length).toBe(1);
     expect(card.getAllByText('260').length).toBe(1);
     expect(card.getAllByText('560').length).toBe(1);
+  });
+
+  /*
+   * 12 週ぶん並べていた頃は、表が画面幅に収まらず横スクロールの中に隠れていた。
+   * 隠れるのは端の週で、そこにいちばん見たい直近が入る。
+   */
+  it('直近5週だけを、左が最新で出す', () => {
+    // 8 週ぶん打つ（今週から 7 週前まで）
+    const days = [0, 1, 2, 3, 4, 5, 6, 7].map((n) => isoAdd(todayISO(), -7 * n));
+    seedData(
+      ['ex_bench'],
+      Object.fromEntries(
+        days.map((d) => [d, [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }]]),
+      ),
+    );
+    render(<HomeHarness />);
+
+    const card = within(screen.getByText('部位別の配分').closest('section')!);
+    const heads = card.getAllByRole('columnheader').map((h) => h.textContent);
+    expect(heads).toEqual([
+      '部位',
+      ...[0, 1, 2, 3, 4].map((n) => formatMD(startOfWeek(isoAdd(todayISO(), -7 * n)))),
+    ]);
   });
 
   it('推移はダイアログで開き、値の選択は表と連動する', () => {

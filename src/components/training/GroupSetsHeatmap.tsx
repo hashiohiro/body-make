@@ -9,8 +9,14 @@ import type { WeekSetCount } from '../../lib/training';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
-/** 週が多いと横に潰れるので、直近ぶんだけ出す */
-const MAX_WEEKS = 12;
+/**
+ * 出す週の数。**画面に収まる数まで絞る。**
+ *
+ * 12 週ぶん並べていた頃は表が画面幅に収まらず、横スクロールの中に隠れていた。
+ * 隠れるのは端の週で、そこにいちばん見たい直近が入る。
+ * 増減の向きは「推移をグラフで見る」が持っているので、表は直近の数字に絞る。
+ */
+const MAX_WEEKS = 5;
 
 interface Props {
   weeks: readonly WeekSetCount[];
@@ -22,7 +28,11 @@ interface Props {
 export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
   const [openTrend, setOpenTrend] = useState(false);
   const value = GROUP_VALUES.find((v) => v.id === valueId)!;
-  const visible = weeks.slice(-MAX_WEEKS);
+  /*
+   * **左が最新。**横に流れるものではなく、いま何をやったかを読む表なので、
+   * 目が最初に入る側に直近を置く（新しい順に並べる）。
+   */
+  const visible = weeks.slice(-MAX_WEEKS).reverse();
 
   if (visible.length === 0) {
     return (
@@ -37,7 +47,7 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
       <section className={ui.card}>
         <header className={ui.cardHeader}>
           <h2 className={ui.cardTitle}>部位別の配分</h2>
-          <span className={ui.hint}>週あたり</span>
+          <span className={ui.hint}>週あたり / 左が最新</span>
         </header>
 
         <div className={ui.chipRow} role="group" aria-label="表示する値">

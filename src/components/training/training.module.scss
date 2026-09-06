@@ -401,11 +401,31 @@
   background: var(--surface-sunken);
 }
 
+/*
+ * 部位 × 週の表。**横スクロールの中に隠さず、幅に収める。**
+ *
+ * 列を等分するので、週の数（GroupSetsHeatmap の MAX_WEEKS）を増やすと
+ * そのぶん 1 列が細くなる。数字が入る幅は 5 週までを見て決めてある。
+ */
 .heatmap {
+  table-layout: fixed;
+  font-size: 11px;
+
+  th,
+  td {
+    padding: 6px 2px;
+  }
+
   th[scope='col'],
   td {
     text-align: center;
     white-space: nowrap;
+  }
+
+  /* 部位名の列だけ幅を決める（いちばん長い「実施日数」が折り返さない幅）。残りは週で等分 */
+  th:first-child,
+  td:first-child {
+    width: 5em;
   }
 }
 
