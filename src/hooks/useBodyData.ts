@@ -90,7 +90,6 @@ export interface BodyData {
   checkHistory: ReturnType<typeof buildCheckHistory>;
 
   setValue: (date: string, slot: SlotId, field: MeasurementField, value: number | null) => void;
-  removeDay: (date: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   importData: (payload: ImportPayload, mode: 'merge' | 'replace') => void;
 
@@ -219,13 +218,6 @@ export function useBodyData(initial: AppData): BodyData {
     },
     [],
   );
-
-  const removeDay = useCallback((date: string) => {
-    setData((prev) => {
-      const { [date]: _removed, ...rest } = prev.entries;
-      return { ...prev, entries: rest };
-    });
-  }, []);
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     setData((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }));
@@ -540,17 +532,22 @@ export function useBodyData(initial: AppData): BodyData {
    * **非表示にしてあった種目を選んだら、表示に戻す。**
    * ID は同じなので新しく足すことはできず、何も起きないボタンになってしまう。
    * 「もう一度これを使う」と言われたのだから、記録も設定も目標も付いたまま戻す。
+   *
+   * ただし **hidden を立てて渡されたときは、非表示のまま持つ。**
+   * 記録画面から「マイ種目には入れない」と言われて足す種目のための道で、
+   * 種目そのものは実体が要る（その日の記録が種目を参照している）。
    */
   const addExercises = useCallback((exercises: readonly Exercise[]) => {
     setData((prev) => {
-      const incoming = new Set(exercises.map((e) => e.id));
+      const incoming = new Map(exercises.map((e) => [e.id, e]));
       const known = new Set(prev.exercises.map((e) => e.id));
       const added = exercises
         .filter((e) => !known.has(e.id))
         .map((e, i) => ({ ...e, order: prev.exercises.length + i }));
-      const shown = prev.exercises.map((e) =>
-        e.hidden && incoming.has(e.id) ? { ...e, hidden: false } : e,
-      );
+      const shown = prev.exercises.map((e) => {
+        const arrived = incoming.get(e.id);
+        return e.hidden && arrived && !arrived.hidden ? { ...e, hidden: false } : e;
+      });
       if (added.length === 0 && shown.every((e, i) => e === prev.exercises[i])) return prev;
       return { ...prev, exercises: [...shown, ...added] };
     });
@@ -586,7 +583,6 @@ export function useBodyData(initial: AppData): BodyData {
     trainingGoals,
     checkHistory,
     setValue,
-    removeDay,
     updateSettings,
     importData,
     clearRecords,

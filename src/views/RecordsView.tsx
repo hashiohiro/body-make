@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
+import { BodyTrendDialog } from '../components/BodyTrendDialog';
 import { QuickEntry } from '../components/QuickEntry';
+import { RecordCalendar } from '../components/RecordCalendar';
 import { TrainingView } from './TrainingView';
 import { formatMD, weekdayJa } from '../lib/date';
 import { fmt } from '../lib/format';
@@ -29,34 +31,77 @@ const INITIAL_ROWS = 60;
 const MORE_ROWS = 180;
 
 export function RecordsView({ body, date, onDateChange, domain }: Props) {
-  const { daily, data, setValue, removeDay } = body;
+  const { daily, data, sessions, stats, trainingStats, setValue } = body;
   const [limit, setLimit] = useState(INITIAL_ROWS);
+  const [trendOpen, setTrendOpen] = useState(false);
+
+  // カレンダーに出す印。切り替えに従って片方だけを使う
+  const bodyDates = useMemo(
+    () => new Set(daily.filter((d) => d.slots > 0).map((d) => d.date)),
+    [daily],
+  );
+  const bodyFullDates = useMemo(
+    () => new Set(daily.filter((d) => d.slots === 2).map((d) => d.date)),
+    [daily],
+  );
+  const trainingDates = useMemo(() => new Set(sessions.map((x) => x.date)), [sessions]);
   // 新しい順に出すので、後ろから切ってから반転する
   const rows = useMemo(() => daily.slice(-limit).reverse(), [daily, limit]);
   const rest = daily.length - rows.length;
-  const selected = data.entries[date];
+
+  /*
+   * カレンダーは**記録画面の先頭**。打つ前に「前はいつ付けたか」を見て、
+   * そのまま日付を選べる。切り替えに従って、体組成とトレーニングを別々に出す。
+   */
+  const calendar =
+    domain === 'body' ? (
+      <RecordCalendar
+        marked={bodyDates}
+        filled={bodyFullDates}
+        selected={date}
+        summary={`最長 ${stats.bestStreak}日 · 通算 ${stats.recordedDays}日`}
+        firstDate={stats.first?.date ?? null}
+        onSelect={onDateChange}
+      />
+    ) : (
+      <RecordCalendar
+        marked={trainingDates}
+        filled={trainingDates}
+        selected={date}
+        summary={`今週 ${trainingStats.thisWeekDays}日 · 通算 ${trainingStats.sessions}回`}
+        firstDate={trainingStats.firstDate}
+        onSelect={onDateChange}
+      />
+    );
 
   if (domain === 'training') {
-    return <TrainingView body={body} date={date} />;
+    return (
+      <>
+        {calendar}
+        <TrainingView body={body} date={date} />
+      </>
+    );
   }
 
   return (
     <>
-      <QuickEntry date={date} entries={data.entries} daily={daily} onValue={setValue} />
+      {calendar}
 
-      {selected && (
-        <div className={ui.btnRow} style={{ marginTop: 0, marginBottom: 12 }}>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
-            onClick={() => {
-              if (confirm(`${formatMD(date)} の記録を削除しますか？`)) removeDay(date);
-            }}
-          >
-            この日の記録を削除
-          </button>
-        </div>
-      )}
+      <QuickEntry
+        date={date}
+        entries={data.entries}
+        daily={daily}
+        onValue={setValue}
+        onOpenTrend={() => setTrendOpen(true)}
+      />
+
+      <BodyTrendDialog
+        open={trendOpen}
+        onClose={() => setTrendOpen(false)}
+        daily={daily}
+        settings={data.settings}
+        date={date}
+      />
 
       <section className={ui.card}>
         <header className={ui.cardHeader}>

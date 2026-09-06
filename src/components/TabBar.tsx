@@ -50,7 +50,9 @@ interface Props {
 
 export function TabBar({ active, onChange }: Props) {
   return (
-    <nav className={s.tabs} role="tablist" aria-label="画面切り替え">
+    // data-tabbar は高さを測るための目印。＋ボタンをこのバーの上に留めるのに使う
+    // （useFabPosition。--tab-h だけだと safe-area のぶんを見落とす）
+    <nav data-tabbar="" className={s.tabs} role="tablist" aria-label="画面切り替え">
       {ORDER.map((id) => (
         <button
           key={id}

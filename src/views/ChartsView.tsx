@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
-import { TimeSeriesChart } from '../components/charts/TimeSeriesChart';
-import type { ChartSeries } from '../components/charts/TimeSeriesChart';
+import { BodyTrendCharts } from '../components/charts/BodyTrendCharts';
 import { EnergyBalanceChart } from '../components/charts/EnergyBalanceChart';
 import { WeeklyCompositionChart } from '../components/charts/WeeklyCompositionChart';
 import { DailyTable, EnergyTable, WeeklyTable } from '../components/DataTables';
@@ -38,6 +37,8 @@ export function ChartsView({ body, domain: mode, exerciseId }: Props) {
   const [energyWindow, setEnergyWindow] = useState<EnergyWindow>(1);
 
   const today = todayISO();
+  // 折れ線の上で「いま」がどこかを出す。x は日付から作る（lib/date の isoToTime）
+  const todayTime = isoToTime(today);
   // 体重より先にトレーニングを記録し始めた場合も期間の起点に含める
   const firstDate = [daily[0]?.date, sessions[0]?.date].filter(Boolean).sort()[0] ?? today;
 
@@ -55,49 +56,6 @@ export function ChartsView({ body, domain: mode, exerciseId }: Props) {
     [visibleWeeks, energyWindow],
   );
   const shortBy = weeksShort(visibleWeeks, energyWindow);
-
-  const domain: [number, number] = [
-    isoToTime(visible[0]?.date ?? from),
-    isoToTime(visible[visible.length - 1]?.date ?? today),
-  ];
-
-  const weightSeries: ChartSeries[] = [
-    {
-      id: 'weight-raw',
-      label: '日平均（実測）',
-      color: 'var(--s-weight)',
-      kind: 'dots',
-      points: visible.filter((p) => p.weight != null).map((p) => ({ t: p.time, v: p.weight! })),
-    },
-    {
-      id: 'weight-ma',
-      label: '7日移動平均',
-      color: 'var(--s-weight)',
-      kind: 'line',
-      emphasis: true,
-      points: visible.filter((p) => p.maWeight != null).map((p) => ({ t: p.time, v: p.maWeight! })),
-    },
-  ];
-
-  const bodyFatSeries: ChartSeries[] = [
-    {
-      id: 'bf-raw',
-      label: '日平均（実測）',
-      color: 'var(--s-fat)',
-      kind: 'dots',
-      points: visible.filter((p) => p.bodyFat != null).map((p) => ({ t: p.time, v: p.bodyFat! })),
-    },
-    {
-      id: 'bf-ma',
-      label: '7日移動平均',
-      color: 'var(--s-fat)',
-      kind: 'line',
-      emphasis: true,
-      points: visible
-        .filter((p) => p.maBodyFat != null)
-        .map((p) => ({ t: p.time, v: p.maBodyFat! })),
-    },
-  ];
 
   return (
     <>
@@ -127,50 +85,7 @@ export function ChartsView({ body, domain: mode, exerciseId }: Props) {
 
       {mode === 'body' && (
         <>
-          <section className={ui.card}>
-            <header className={ui.cardHeader}>
-              <h2 className={ui.cardTitle}>体重の推移</h2>
-              <span className={ui.hint}>kg</span>
-            </header>
-            <TimeSeriesChart
-              series={weightSeries}
-              domain={domain}
-              unit="kg"
-              ariaLabel="日平均体重と7日移動平均の推移"
-              reference={
-                data.settings.targetWeight != null
-                  ? {
-                      value: data.settings.targetWeight,
-                      label: `目標 ${data.settings.targetWeight.toFixed(1)}kg`,
-                    }
-                  : null
-              }
-            />
-            <p className={ui.note}>
-              体重は水分や食事で1日のうちに1〜2kg動きます。判断は移動平均の線のほうで。
-            </p>
-          </section>
-
-          <section className={ui.card}>
-            <header className={ui.cardHeader}>
-              <h2 className={ui.cardTitle}>体脂肪率の推移</h2>
-              <span className={ui.hint}>%</span>
-            </header>
-            <TimeSeriesChart
-              series={bodyFatSeries}
-              domain={domain}
-              unit="%"
-              ariaLabel="日平均体脂肪率と7日移動平均の推移"
-              reference={
-                data.settings.targetBodyFat != null
-                  ? {
-                      value: data.settings.targetBodyFat,
-                      label: `目標 ${data.settings.targetBodyFat.toFixed(1)}%`,
-                    }
-                  : null
-              }
-            />
-          </section>
+          <BodyTrendCharts daily={visible} settings={data.settings} highlight={todayTime} note />
 
           <section className={ui.card}>
             <header className={ui.cardHeader}>

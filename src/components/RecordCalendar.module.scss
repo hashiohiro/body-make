@@ -1,0 +1,156 @@
+@use '../styles/mixins' as *;
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.navBtn {
+  min-width: 40px;
+  min-height: 36px;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-size: 18px;
+  line-height: 1;
+
+  &:disabled {
+    opacity: 0.25;
+  }
+}
+
+.month {
+  min-width: 8em;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 620;
+  @include tabular;
+}
+
+.week,
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.weekday {
+  padding-bottom: 4px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+/*
+ * 押せる範囲はセルいっぱい、**印はその中に小さく**描く。
+ * 指で狙う的と、目で読む印は別物。的を小さくすると押し外すし、
+ * 印を的の大きさで描くと、隣と詰まって暦に見えなくなる。
+ *
+ * **今日・選択中と、記録の有無は別の印にする。**まるが日そのもの、
+ * 数字の下の小さな印が記録。同じ形の濃さ違いにすると、
+ * 「今日はまだ付けていない」が読み取れない。
+ */
+.day {
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-content: center;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  color: var(--ink);
+  @include tabular;
+
+  /* 数字の下に印が入るぶん、数字とまるを同じだけ上へ寄せる量 */
+  --lift: 2px;
+  /*
+   * 今日と選択中で共有するまるの直径。
+   * 割合だけで描くと、画面の広い端末でセルが伸びたときに
+   * 12px の数字に対してまるだけが大きくなるので、上限を付ける
+   */
+  --ring: min(62%, 28px);
+
+  &:disabled {
+    opacity: 0.3;
+  }
+}
+
+.num {
+  position: relative;
+  transform: translateY(calc(-1 * var(--lift)));
+}
+
+/*
+ * 今日と選択中は、**同じ大きさ・同じ位置のまる**で描き分ける。
+ * 大きさが違うと同じ語彙に見えず、どちらが「いま見ている日」で
+ * どちらが「今日」なのか、読むたびに対応を取り直すことになる。
+ * 違いは線か塗りかだけにする——今日は線、選択中は塗り。
+ */
+.today::before,
+.selected::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--ring);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  /* 数字と同じだけ上げて、まるの中心を数字の中心に合わせる */
+  transform: translate(-50%, calc(-50% - var(--lift)));
+}
+
+.today::before {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.selected::before {
+  background: var(--accent);
+}
+
+/* 塗りの上に載るので、数字は地の色へ返す（ボタンの塗りつぶしと同じ扱い） */
+.selected .num {
+  color: #fff;
+  font-weight: 700;
+}
+
+/*
+ * 今日を選んでいるとき。塗りの中に線を引いても同じ色で消えるので、
+ * 間を空けて外側へ回す。**塗りの大きさは変えない**——
+ * 大きさで意味を分けると、他の日と比べる手がかりが揺れる
+ */
+.today.selected::before {
+  box-shadow:
+    0 0 0 1.5px var(--surface),
+    0 0 0 3px var(--accent);
+}
+
+/*
+ * 記録した日の印。中抜き（○）が既定で、塗り（●）は体組成の朝夜そろった日。
+ * 塗りだけに頼らないのは、色が見分けにくい環境で有無が消えないようにするため。
+ *
+ * 位置はセルの下端ではなく**まるの真下**に取る。セル基準だと、
+ * 端末が広くなるほどまるから離れて、どの日の印か読めなくなる。
+ */
+.mark {
+  position: absolute;
+  top: calc(50% - var(--lift) + var(--ring) / 2 + 2px);
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.markFull {
+  background: var(--accent);
+}
+
+/* 隣の月の日。並びを崩さないために出すが、当月と混ぜない */
+.outside {
+  color: var(--ink-muted);
+  opacity: 0.45;
+}

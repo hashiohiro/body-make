@@ -12,6 +12,18 @@ interface Props {
   entries: Entries;
   daily: readonly DailyPoint[];
   onValue: (date: string, slot: SlotId, field: MeasurementField, value: number | null) => void;
+  /**
+   * 読むだけ。**カレンダーから過去の日を開いたときに使う。**
+   * その場で直せると、見るつもりで開いて触ってしまう。直すのは記録タブの仕事。
+   */
+  readOnly?: boolean | undefined;
+  /**
+   * 推移を開く。**渡されたときだけ入口を出す。**
+   *
+   * 種目カードが「推移を見る」を持っているのと同じ。打ちながら
+   * 「いまどこにいるか」を見たくなるのは、体組成でも同じだった。
+   */
+  onOpenTrend?: (() => void) | undefined;
 }
 
 const SLOTS: { id: SlotId; label: string; icon: string }[] = [
@@ -41,7 +53,7 @@ function lastKnown(
  * 日付ナビは持たない。日付は記録タブ全体の状態（体組成とトレーニングで同じ日を見続ける）で、
  * 置き場所はヘッダに 1 つ。カードには入力欄だけを残す。
  */
-export function QuickEntry({ date, entries, daily, onValue }: Props) {
+export function QuickEntry({ date, entries, daily, onValue, readOnly, onOpenTrend }: Props) {
   const entry = entries[date] ?? emptyDay();
   const avgWeight = dayAverageWeight(entry);
   const avgBodyFat = dayAverageBodyFat(entry);
@@ -57,7 +69,7 @@ export function QuickEntry({ date, entries, daily, onValue }: Props) {
           const measurement = entry[slot.id];
           const prevWeight = lastKnown(daily, date, slot.id, 'weight');
           const prevBodyFat = lastKnown(daily, date, slot.id, 'bodyFat');
-          const canCopy = measurement.weight == null && prevWeight != null;
+          const canCopy = !readOnly && measurement.weight == null && prevWeight != null;
 
           return (
             <div key={slot.id} className={s.slot}>
@@ -86,6 +98,7 @@ export function QuickEntry({ date, entries, daily, onValue }: Props) {
                 min={WEIGHT_RANGE[0]}
                 max={WEIGHT_RANGE[1]}
                 onCommit={(v) => onValue(date, slot.id, 'weight', v)}
+                readOnly={readOnly}
               />
               <NumberField
                 label="体脂肪率 %"
@@ -95,6 +108,7 @@ export function QuickEntry({ date, entries, daily, onValue }: Props) {
                 min={BODYFAT_RANGE[0]}
                 max={BODYFAT_RANGE[1]}
                 onCommit={(v) => onValue(date, slot.id, 'bodyFat', v)}
+                readOnly={readOnly}
               />
             </div>
           );
@@ -107,6 +121,14 @@ export function QuickEntry({ date, entries, daily, onValue }: Props) {
           {fmt(avgWeight)} kg / {fmt(avgBodyFat)} %
         </b>
       </div>
+
+      {onOpenTrend && (
+        <div className={ui.detailRow}>
+          <button type="button" className={ui.detailBtn} onClick={onOpenTrend}>
+            推移を見る
+          </button>
+        </div>
+      )}
     </section>
   );
 }

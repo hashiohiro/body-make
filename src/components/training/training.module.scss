@@ -30,22 +30,6 @@
 }
 
 /* 通算の数字の下。そこから詳細へ掘り下げる動線 */
-.exDetailRow {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 8px;
-}
-
-.exDetail {
-  padding: 5px 11px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
-  font-size: 10px;
-  color: var(--ink-2);
-  min-height: 0;
-}
-
 /* カード右上の操作（順番を変える・この日から外す）。まとめて右に寄せる */
 .exHeadBtns {
   display: flex;
@@ -314,6 +298,95 @@
   }
 }
 
+/*
+ * ＋ を押して最初に出る面。**どこから足すか**を 3 つから選ぶ。
+ *
+ * マイ種目・プリセット・カタログは、どれも「その日に種目を入れる」ための道で、
+ * 入口がばらけていると、いま欲しいものがどこにあるのか毎回探すことになる。
+ * 行は縦に積む。横に並べると、それぞれが何なのかを書く場所が無くなる。
+ */
+.menu {
+  display: grid;
+  gap: 8px;
+}
+
+.menuItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 10px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  text-align: left;
+}
+
+.menuName {
+  grid-column: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.menuHint {
+  grid-column: 1;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+/* 先があることの印。押した先で戻れることは、ダイアログの「‹ 戻る」が示す */
+.menuChevron {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: 16px;
+  color: var(--ink-muted);
+}
+
+/* 何について聞かれているか。問いは見出しにあるので、ここは種目の名前だけ */
+.keepName {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/*
+ * プリセットを「入れる」ためだけの行。行ぜんたいが押せる。
+ * プリセットのカード（PresetCard）を使い回さないのは、あちらが
+ * **種目を入れた日には保存の面に変わる**ため——ここで欲しいのはいつでも一覧。
+ */
+.presetPick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 8px;
+  width: 100%;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  font-size: 11px;
+  color: var(--ink-2);
+  @include tabular;
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
+
+  /* 文字づかいはプリセットの一覧と同じ。並びだけ 2 列に組み直す */
+  .presetName {
+    grid-column: 1;
+  }
+
+  .presetCount {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
 /* 係数は部位の従属なので、ピルを一段小さくして階層を付ける */
 .stepBtn {
   padding: 4px 9px;
@@ -366,40 +439,32 @@
 }
 
 /* チップが横に溢れると、スクロールに気づかず選択肢を見落とす。折り返して全部見せる */
+/*
+ * 絞り込みのチップ行。**出しっぱなしにするぶん、一段小さくする。**
+ *
+ * ここのチップは読むためではなく押し分けるためのもので、語も短い（胸・背中・脚…）。
+ * 一覧のチップ（ui.chip）と同じ大きさで 2 段並べると、種目がそのぶん下へ流れる。
+ */
 .filterRow {
-  margin-top: 14px;
+  margin-top: 10px;
+  gap: 4px;
   flex-wrap: wrap;
   overflow-x: visible;
+
+  > button {
+    min-height: 0;
+    padding: 4px 9px;
+    font-size: 11px;
+  }
 }
 
 /* 検索欄と部位チップの組。組の外側の余白はここが持つ */
 .filterBar {
-  margin-top: 14px;
+  margin-top: 12px;
 
   .filterRow {
-    margin-top: 8px;
+    margin-top: 6px;
   }
-
-  .filterToggle {
-    margin: 0 0 8px;
-  }
-}
-
-/* フィルターの開閉ボタン。幅はほかのボタンと同じく btnRow に任せる */
-.filterToggle {
-  margin: 14px 0 0;
-}
-
-.searchField {
-  width: 100%;
-  min-height: 40px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
-  background: var(--surface);
-  color: var(--ink);
-  /* 16px 未満だと iOS が focus のたびに画面を拡大する */
-  font-size: 16px;
 }
 
 /*
@@ -407,13 +472,13 @@
  * 見出しと行の間より、組と組の間を広く取らないと、どの見出しがどの行かが読めない
  */
 .filters {
-  margin: 14px 0 12px;
+  margin: 10px 0 12px;
 
   .pickerLabel {
-    margin-bottom: 4px;
+    margin: 8px 0 4px;
 
     & + .filterRow + .pickerLabel {
-      margin-top: 12px;
+      margin-top: 8px;
     }
   }
 
@@ -1291,4 +1356,80 @@
   line-height: 1.5;
   color: var(--ink-muted);
   overflow-wrap: anywhere;
+}
+
+/*
+ * 補助（回復・プリセット）の帯。
+ * カードで積むと種目カードまでのスクロールが伸びるので、1 行にまとめる。
+ */
+/*
+ * 補助の帯。**1 枚のカードの中で仕切るのをやめて、押せる札を 2 枚並べる。**
+ *
+ * 仕切り線で割っただけの頃は、カードの中に文字が並んでいるようにしか見えず、
+ * 押せること自体が伝わっていなかった。1 枚ずつ枠を持たせ、右端に「›」を置く——
+ * ＋ のメニュー（.menuItem）と同じ形にして、押すと面が開くことを同じ印で示す。
+ */
+.aside {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.asideItem {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1px 8px;
+  padding: 9px 11px;
+  text-align: left;
+  @include card;
+}
+
+.asideLabel {
+  grid-column: 1;
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+/* 押した先があることの印。＋ のメニューと同じ字を同じ位置に置く */
+.asideChevron {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: 16px;
+  color: var(--ink-muted);
+}
+
+/* 開かなくても読めるように、要約はここに出す。長ければ 1 行で切る */
+.asideValue {
+  grid-column: 1;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* いまの組み合わせがまだ保存されていない。押せば残せる、と気づける */
+.asideAlert {
+  color: var(--warning);
+}
+
+/*
+ * ＋ボタンのぶんの余白。
+ *
+ * ボタンはタブバーの上 16px に浮いていて、高さが 56px。地の下余白（App.module.scss）は
+ * タブバー + 28px しか無いので、その差ぶんをここで足す（56 + 16 + 16 − 28 ≒ 60px）。
+ * 画面ごと広げないのは、ボタンの無い画面に理由の無い空きを作らないため。
+ */
+.fabSpace {
+  height: 60px;
+}
+
+/* セットを打つ入口。読むための入口（推移・目標）と並ぶので、こちらを主にする */
+.editBtn {
+  border-color: var(--accent);
+  color: var(--accent);
 }

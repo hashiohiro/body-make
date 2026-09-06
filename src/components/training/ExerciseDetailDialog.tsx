@@ -240,6 +240,12 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
           unit={metric.unit}
           digits={metric.digits}
           legend={false}
+          /*
+             印を付けるのは **開いている日**。今日で固定しない。
+             カレンダーから過去の日を開いたときは、その日を見に来ている。
+             下の週の内訳と同じ `refDate` を使うので、グラフと内訳が同じ週を指す。
+          */
+          highlight={isoToTime(refDate)}
           ariaLabel={`${exercise.name}の${metric.label}の推移`}
           emptyMessage={
             metric.needsWeight && exercise.repUnit === 'seconds'

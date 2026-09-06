@@ -9,6 +9,7 @@ import { App } from '../App';
 import { BadgeGrid } from '../components/BadgeGrid';
 import { DateNav } from '../components/DateNav';
 import { ChartsView } from './ChartsView';
+import { TimeSeriesChart } from '../components/charts/TimeSeriesChart';
 import { GoalsView } from './GoalsView';
 import { RecordsView } from './RecordsView';
 import {
@@ -26,6 +27,7 @@ import { todayISO } from '../lib/date';
 import { CATALOG, fromCatalog } from '../lib/exerciseCatalog';
 import type { AppData, Domain, ThemePref } from '../types';
 import { emptyData, flushSave, loadData, resetStorageForTests, sanitizeData } from '../lib/storage';
+import { buildSessions } from '../lib/training';
 import { clearAllRecords, resetDbForTests } from '../lib/db';
 
 /**
@@ -120,9 +122,42 @@ function isoAdd(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** 記録画面の右下の ＋ から種目ピッカーを開く */
-function openPicker() {
+/** 記録画面の右下の ＋ を押す。最初に出るのは足し方のメニュー */
+function openMenu() {
   fireEvent.click(screen.getByRole('button', { name: '種目を追加' }));
+}
+
+/** ＋ → メニュー → マイ種目から選ぶ */
+function openPicker() {
+  openMenu();
+  fireEvent.click(screen.getByRole('button', { name: /^マイ種目から選ぶ/ }));
+}
+
+/** ＋ → メニュー → カタログから選ぶ */
+function openCatalog() {
+  openMenu();
+  fireEvent.click(screen.getByRole('button', { name: /^カタログから選ぶ/ }));
+}
+
+/** ＋ → メニュー → プリセットから入れる（帯のプリセットは別。あちらは保存の場所） */
+function openPresetAdd() {
+  openMenu();
+  fireEvent.click(screen.getByRole('button', { name: /^プリセットから入れる/ }));
+}
+
+/**
+ * セットの入力はダイアログ。触る前にカードの「編集」から開く。
+ * 名前の前方一致で引く（カタログ名は「ベンチプレス（バーベル）」のように長い）。
+ */
+function expand(name: string) {
+  const btn = screen
+    .getAllByRole('button')
+    .find(
+      (b) =>
+        (b.getAttribute('aria-label') ?? '').startsWith(`${name}`) &&
+        (b.getAttribute('aria-label') ?? '').endsWith('のセットを編集'),
+    );
+  if (btn) fireEvent.click(btn);
 }
 
 function setRows(): HTMLElement[] {
@@ -146,9 +181,10 @@ describe('トレ画面', () => {
 
     // 「設定から追加してください」だけを出す行き止まりにしない
     expect(screen.getByText(/マイ種目がまだ空です/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '＋ マイ種目に追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '＋ カタログから選ぶ' }));
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
-    // 追加済みになったので、カタログの一覧からは消える
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
+    // その日に入ったので、カタログの一覧からは消える
     expect(screen.queryByText('＋ ベンチプレス（バーベル）')).toBeNull();
   });
 
@@ -164,6 +200,8 @@ describe('トレ画面', () => {
 
     openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
 
     // 1 セット目が用意されている
     let rows = setRows();
@@ -192,6 +230,8 @@ describe('トレ画面', () => {
     render(<Harness />);
     openPicker();
     fireEvent.click(screen.getByText('＋ スクワット'));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('スクワット');
 
     typeSet(setRows()[0]!, '60', '5');
     fireEvent.click(screen.getByText('＋ セットを追加'));
@@ -207,6 +247,8 @@ describe('トレ画面', () => {
     render(<Harness />);
     openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
 
     typeSet(setRows()[0]!, '60', '10');
     // 打ってある行なので確認が入る
@@ -234,6 +276,8 @@ describe('トレ画面', () => {
     render(<Harness />);
     openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
 
     // 最高重量は換算後ではなく、バーに載せた数字
     expect(screen.getByText('最高重量 60.0 kg')).toBeTruthy();
@@ -267,7 +311,12 @@ describe('トレ画面', () => {
 
     // 入力済みなら消えるものがあるので確認する
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
     typeSet(setRows()[0]!, '60', '10');
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+
+    openPicker();
     fireEvent.click(screen.getByText(/✓ ベンチプレス/));
     expect(confirmSpy).toHaveBeenCalledOnce();
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
@@ -280,9 +329,13 @@ describe('トレ画面', () => {
     render(<Harness />);
     openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
     typeSet(setRows()[0]!, '60', '10');
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    openPicker();
     fireEvent.click(screen.getByText(/✓ ベンチプレス/));
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(1);
     confirmSpy.mockRestore();
@@ -309,6 +362,7 @@ describe('トレ画面', () => {
     openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
 
     fireEvent.click(screen.getByText('＋ セットを追加'));
     expect(setRows().length).toBe(2);
@@ -330,12 +384,32 @@ describe('トレ画面', () => {
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(3);
 
     // ベンチの最後の 1 行を消す。消えるのはその行だけで、カードは 3 枚とも残る
-    const bench = within(document.getElementById('ex-card-ex_bench')!);
-    fireEvent.click(bench.getByLabelText('1セット目を削除'));
+    expand('ベンチプレス');
+    fireEvent.click(screen.getByLabelText('1セット目を削除'));
+
+    expect(screen.queryByLabelText(/1セット目の回数/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     expect(document.getElementById('ex-card-ex_bench')).toBeTruthy();
-    expect(bench.queryByLabelText(/1セット目の回数/)).toBeNull();
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(3);
+  });
+
+  /*
+   * セットの入力はカードではなくダイアログ。カードに積んだままだと、種目が増えるほど
+   * いま打つ種目に届くまでスクロールが要る。カードは要約と入口だけを持つ。
+   */
+  it('セットの入力はダイアログで開く', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+
+    // カードには入力欄が無い
+    expect(screen.queryByLabelText(/1セット目の回数/)).toBeNull();
+
+    expand('ベンチプレス');
+    expect(screen.getByLabelText(/1セット目の回数/)).toBeTruthy();
   });
 
   it('その日の種目の並びを、掴んで置き場所をタップで変えられる', () => {
@@ -348,14 +422,17 @@ describe('トレ画面', () => {
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     const cardIds = () => [...document.querySelectorAll('[id^="ex-card-"]')].map((el) => el.id);
-    const reps = (id: string) =>
-      (within(document.getElementById(id)!).getByLabelText(/1セット目の回数/) as HTMLInputElement)
-        .value;
+    /** 打った値は、その種目の入力ダイアログを開いて読む */
+    const reps = (name: string) => {
+      expand(name);
+      const value = (screen.getByLabelText(/1セット目の回数/) as HTMLInputElement).value;
+      fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+      return value;
+    };
 
-    fireEvent.change(
-      within(document.getElementById('ex-card-ex_squat')!).getByLabelText(/1セット目の回数/),
-      { target: { value: '10' } },
-    );
+    expand('スクワット');
+    fireEvent.change(screen.getByLabelText(/1セット目の回数/), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     expect(cardIds()).toEqual(['ex-card-ex_bench', 'ex-card-ex_pullup', 'ex-card-ex_squat']);
 
     // カードは縦に長いので、掴んでいる間はその日の種目だけの一覧に畳む
@@ -367,7 +444,7 @@ describe('トレ画面', () => {
 
     // 動くのは並びだけ。打った値はそのまま
     expect(cardIds()).toEqual(['ex-card-ex_squat', 'ex-card-ex_bench', 'ex-card-ex_pullup']);
-    expect(reps('ex-card-ex_squat')).toBe('10');
+    expect(reps('スクワット')).toBe('10');
   });
 
   it('種目が 1 つだけの日には、並べ替えを出さない', () => {
@@ -376,6 +453,7 @@ describe('トレ画面', () => {
     openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
 
     // 動かしようのない操作を出さない
     expect(screen.queryByRole('button', { name: /の順番を変える$/ })).toBeNull();
@@ -386,8 +464,15 @@ describe('トレ画面', () => {
     render(<Harness />);
 
     // カードの追加ボタンは画面の外へ出ていくので、固定の入口を別に持つ
-    fireEvent.click(screen.getByRole('button', { name: '種目を追加' }));
+    openMenu();
     expect(pickerOpen()).toBe(true);
+
+    // ＋ で最初に出るのは足し方（マイ種目・プリセット・カタログ）
+    expect(screen.getByRole('button', { name: /^マイ種目から選ぶ/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^プリセットから入れる/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^カタログから選ぶ/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /^マイ種目から選ぶ/ }));
     expect(screen.getByText('＋ ベンチプレス（バーベル）')).toBeTruthy();
   });
 
@@ -426,6 +511,7 @@ describe('トレ画面', () => {
     openPicker();
     fireEvent.click(screen.getByText(/^＋ 腕立て伏せ/));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('腕立て伏せ');
 
     // 体重が負荷なので、既定では回数だけ
     expect(screen.getByLabelText('1セット目の回数')).toBeTruthy();
@@ -442,6 +528,7 @@ describe('トレ画面', () => {
     openPicker();
     fireEvent.click(screen.getByText(/^＋ プランク/));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('プランク');
 
     expect(screen.getByLabelText('1セット目の秒数')).toBeTruthy();
     expect(screen.queryByLabelText('1セット目の重量')).toBeNull();
@@ -456,6 +543,7 @@ describe('トレ画面', () => {
     openPicker();
     fireEvent.click(screen.getByText(/^＋ クランチ/));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('クランチ');
 
     expect(screen.getByLabelText('1セット目の回数')).toBeTruthy();
     expect(screen.queryByLabelText('1セット目の重量')).toBeNull();
@@ -471,6 +559,7 @@ describe('トレ画面', () => {
       [today]: [{ exerciseId: 'ex_dips', sets: [{ weight: 20, reps: 5 }] }],
     });
     render(<Harness />);
+    expand('ディップス');
 
     expect((screen.getByLabelText('1セット目の重量') as HTMLInputElement).value).toBe('20');
     expect(screen.queryByRole('button', { name: /加重/ })).toBeNull();
@@ -606,8 +695,7 @@ describe('種目管理（設定タブ）', () => {
     fireEvent.click(screen.getByText('＋ マイ種目に追加'));
     expect(screen.getByText(/^＋ スクワット/)).toBeTruthy();
 
-    // フィルターは畳んである
-    fireEvent.click(screen.getByRole('button', { name: 'フィルター' }));
+    // 器具と部位のチップは出しっぱなし。開く操作はいらない
     fireEvent.click(within(screen.getByRole('group', { name: '部位' })).getByText('胸'));
     // 「すべて」は器具でも絞らないので、両方の器具ぶんが出る
     expect(screen.getByText('＋ ベンチプレス（バーベル）')).toBeTruthy();
@@ -792,6 +880,493 @@ describe('設定（カテゴリ別の画面遷移）', () => {
     expect(settingsTitle('training', null)).toBe('トレーニング');
     expect(settingsTitle('general', 'presets')).toBe('一般');
     expect(settingsTitle(null, null)).toBeNull();
+  });
+});
+
+describe('グラフの「いま」の点', () => {
+  /*
+   * SVG は計測した幅で描く（useElementWidth）。jsdom は clientWidth が 0 なので、
+   * 幅を与えないとグラフそのものが出ない。
+   */
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      value: 360,
+    });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
+  });
+
+  function ChartHarness() {
+    const body = useBodyData(seeded);
+    return <ChartsView body={body} domain="body" exerciseId={null} />;
+  }
+
+  /** 折れ線の上に重ねた「いま」の印（TimeSeriesChart の highlight） */
+  const rings = () => [...document.querySelectorAll('[data-now]')];
+
+  it('今日の記録があれば、その点に輪が付く', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      exercises: [],
+      workouts: {},
+      entries: {
+        [isoAdd(todayISO(), -2)]: { am: { weight: 70, bodyFat: 20 } },
+        [isoAdd(todayISO(), -1)]: { am: { weight: 70.2, bodyFat: 20 } },
+        [todayISO()]: { am: { weight: 70.4, bodyFat: 20.1 } },
+      },
+    });
+    render(<ChartHarness />);
+    expect(rings().length).toBeGreaterThan(0);
+  });
+
+  /*
+   * **端の点に付けているのではない。**指した時刻の点に付く。
+   * 「いちばん右＝今日」とは限らない（未来日の記録、期間の絞り込み）ので、
+   * 最後の点に付ける実装だと意味が変わる。
+   */
+  it('指した時刻の点に付く（いちばん右ではない）', () => {
+    const points = [
+      { t: 1000, v: 1 },
+      { t: 2000, v: 2 },
+      { t: 3000, v: 3 },
+    ];
+    render(
+      <TimeSeriesChart
+        // emphasis を付けると端の点にも印が出る。それと位置を比べる
+        series={[{ id: 'a', label: 'A', color: 'red', kind: 'line', points, emphasis: true }]}
+        domain={[1000, 3000]}
+        unit=""
+        ariaLabel="テスト"
+        highlight={2000}
+      />,
+    );
+
+    const ring = rings();
+    expect(ring).toHaveLength(1);
+
+    // 真ん中の点に付いている＝端の点の x より手前にある
+    const cx = Number(ring[0]!.querySelector('circle')!.getAttribute('cx'));
+    const xs = [...document.querySelectorAll('circle')].map((c) => Number(c.getAttribute('cx')));
+    expect(cx).toBeLessThan(Math.max(...xs));
+  });
+
+  /*
+   * カレンダーから過去の日を開いたときは、**その日**を見に来ている。
+   * 今日で固定すると、開いた日には印が付かない。
+   */
+  it('種目の推移は、開いている日の点に付く', () => {
+    const past = isoAdd(todayISO(), -10);
+    const exercise = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
+    const sessions = buildSessions(
+      {
+        [isoAdd(todayISO(), -20)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+        [past]: [{ exerciseId: 'ex_bench', sets: [{ weight: 65, reps: 8 }] }],
+        [isoAdd(todayISO(), -3)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 70, reps: 6 }] }],
+      },
+      [exercise],
+      [],
+    );
+
+    render(
+      <ExerciseDetailDialog
+        open
+        onClose={() => undefined}
+        exercise={exercise}
+        sessions={sessions}
+        from=""
+        date={past}
+      />,
+    );
+
+    const ring = rings();
+    // 点と線で同じ値を持つグラフだが、同じ位置には 1 つだけ描く
+    expect(ring).toHaveLength(1);
+    // 開いた日は最後のセッションではない＝いちばん右ではない
+    const cx = Number(ring[0]!.querySelector('circle')!.getAttribute('cx'));
+    const xs = [...document.querySelectorAll('circle')].map((c) => Number(c.getAttribute('cx')));
+    expect(cx).toBeLessThan(Math.max(...xs));
+  });
+
+  /*
+   * 日平均の点群にも付けると、同じ日に印が 2 つ並んでどちらを読むのか分からなくなる。
+   * 判断に使うのは移動平均の線のほう（README の「計算の定義」）。
+   */
+  it('印は線の上だけ。日平均の点には付けない', () => {
+    render(
+      <TimeSeriesChart
+        series={[
+          { id: 'dots', label: '実測', color: 'red', kind: 'dots', points: [{ t: 2000, v: 5 }] },
+          {
+            id: 'line',
+            label: '移動平均',
+            color: 'red',
+            kind: 'line',
+            points: [
+              { t: 1000, v: 1 },
+              { t: 2000, v: 2 },
+              { t: 3000, v: 3 },
+            ],
+          },
+        ]}
+        domain={[1000, 3000]}
+        unit=""
+        ariaLabel="テスト"
+        highlight={2000}
+      />,
+    );
+
+    const ring = rings();
+    expect(ring).toHaveLength(1);
+
+    // 点群の丸（r=3）とは別の高さに付く＝線の値のほうを指している
+    const dot = [...document.querySelectorAll('circle')].find((c) => c.getAttribute('r') === '3')!;
+    expect(dot).toBeTruthy();
+    expect(ring[0]!.querySelector('circle')!.getAttribute('cy')).not.toBe(dot.getAttribute('cy'));
+  });
+
+  /*
+   * いちばん新しい点はプロットの右端に乗る。触れる範囲を厳密に切ると、
+   * そこを指で狙ったときに数 px はみ出して選べない。少し広く取る。
+   */
+  it('触れる範囲はプロットより広い（右端の点を狙えるように）', () => {
+    render(
+      <TimeSeriesChart
+        series={[
+          {
+            id: 'line',
+            label: 'A',
+            color: 'red',
+            kind: 'line',
+            points: [
+              { t: 1000, v: 1 },
+              { t: 3000, v: 3 },
+            ],
+          },
+        ]}
+        domain={[1000, 3000]}
+        unit=""
+        ariaLabel="テスト"
+      />,
+    );
+
+    // 触れる矩形は、プロット（left 40 / right 50 の余白の内側）より広い
+    const hit = [...document.querySelectorAll('rect')].find(
+      (r) => Number(r.getAttribute('width')) > 0 && r.getAttribute('x') !== '0',
+    )!;
+    expect(Number(hit.getAttribute('x'))).toBeLessThan(40);
+    expect(Number(hit.getAttribute('y'))).toBeLessThan(14);
+  });
+
+  it('指した時刻に点が無ければ、輪は付かない', () => {
+    render(
+      <TimeSeriesChart
+        series={[{ id: 'a', label: 'A', color: 'red', kind: 'line', points: [{ t: 1000, v: 1 }] }]}
+        domain={[1000, 3000]}
+        unit=""
+        ariaLabel="テスト"
+        highlight={2000}
+      />,
+    );
+    expect(rings()).toHaveLength(0);
+  });
+});
+
+describe('体組成の推移を記録から開く', () => {
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      value: 360,
+    });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
+  });
+
+  function RecordsHarness() {
+    const body = useBodyData(seeded);
+    const [date, setDate] = useState(todayISO);
+    return <RecordsView body={body} date={date} onDateChange={setDate} domain="body" />;
+  }
+
+  const openDialog = () => document.querySelector<HTMLDialogElement>('dialog[open]');
+
+  const seedDays = () => {
+    const entries: Record<string, unknown> = {};
+    for (let i = 0; i < 20; i++) {
+      entries[isoAdd(todayISO(), -i)] = {
+        am: { weight: 70 + i / 10, bodyFat: 20 },
+        pm: { weight: null, bodyFat: null },
+      };
+    }
+    seedRaw({ version: 7, settings: {}, entries, exercises: [], workouts: {} });
+  };
+
+  it('記録タブから、体重と体脂肪率の推移を開ける', () => {
+    seedDays();
+    render(<RecordsHarness />);
+    expect(openDialog()).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
+
+    const dialog = within(openDialog()!);
+    expect(dialog.getByRole('heading', { name: '体重の推移' })).toBeTruthy();
+    expect(dialog.getByRole('heading', { name: '体脂肪率の推移' })).toBeTruthy();
+  });
+
+  /*
+   * 推移画面と同じ部品を使う。同じグラフを 2 通りに組むと、片方だけ直る事故が起きる。
+   * ここでは「開いている日に印が付く」ことで、同じ TimeSeriesChart を通っていることを見る。
+   */
+  it('開いている日の点に印が付く', () => {
+    seedDays();
+    render(<RecordsHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
+
+    expect(openDialog()!.querySelectorAll('[data-now]').length).toBeGreaterThan(0);
+  });
+});
+
+describe('＋ボタンの置き場所', () => {
+  /**
+   * タブバーの高さを測れるようにしておく。
+   * jsdom は getBoundingClientRect が 0 を返すので、実測できる形にして渡す。
+   */
+  function withTabBar(height: number) {
+    const bar = document.createElement('nav');
+    bar.setAttribute('data-tabbar', '');
+    bar.getBoundingClientRect = () => ({ height }) as DOMRect;
+    document.body.appendChild(bar);
+    return () => bar.remove();
+  }
+
+  /*
+   * 覚えた置き場所は、読むときにも画面へ収め直す。保存したときと画面の高さが
+   * 違うことがある（横向き・アドレスバーの出入り・機種変更）。収め直さないと、
+   * 条件が変わったときにバーの下へ潜ったまま戻らない。
+   */
+  it('覚えた位置がタブバーに潜っていたら、上へ戻す', () => {
+    // タブバーは 56px + safe-area 34px = 90px を占めるとする
+    const cleanup = withTabBar(90);
+    // バーの下に沈む位置を覚えていた場合
+    localStorage.setItem('bodymake.fab.v1', JSON.stringify({ side: 'right', bottom: 20 }));
+
+    seedExercises('ex_bench');
+    render(<Harness />);
+
+    const fab = screen.getByRole('button', { name: '種目を追加' });
+    expect(Number.parseFloat(fab.style.bottom)).toBeGreaterThanOrEqual(90);
+    cleanup();
+  });
+
+  it('タブバーより十分上に覚えていれば、そのまま', () => {
+    const cleanup = withTabBar(90);
+    localStorage.setItem('bodymake.fab.v1', JSON.stringify({ side: 'right', bottom: 300 }));
+
+    seedExercises('ex_bench');
+    render(<Harness />);
+
+    const fab = screen.getByRole('button', { name: '種目を追加' });
+    expect(fab.style.bottom).toBe('300px');
+    cleanup();
+  });
+});
+
+describe('記録のカレンダー', () => {
+  /** 記録画面の先頭に置く。押すとその日に移る */
+  function CalendarHarness({ domain = 'body' as Domain }) {
+    const body = useBodyData(seeded);
+    const [date, setDate] = useState(todayISO);
+    return <RecordsView body={body} date={date} onDateChange={setDate} domain={domain} />;
+  }
+
+  /** カレンダーの日付ボタン。ラベルは `9/1(火)` の形（lib/date の formatMDW） */
+  const cell = (iso: string) =>
+    screen
+      .getAllByRole('gridcell')
+      .find((b) =>
+        (b.getAttribute('aria-label') ?? '').startsWith(
+          `${Number(iso.slice(5, 7))}/${Number(iso.slice(8))}(`,
+        ),
+      );
+
+  const bench = () =>
+    fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
+  const ago = (n: number) => isoAdd(todayISO(), -n);
+
+  it('記録のある日に印が付き、無い日には付かない', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      exercises: [],
+      workouts: {},
+      entries: {
+        // 朝夜そろった日と、片方だけの日
+        [ago(1)]: { am: { weight: 70, bodyFat: 20 }, pm: { weight: 70.5, bodyFat: 20.5 } },
+        [ago(2)]: { am: { weight: 70, bodyFat: 20 }, pm: { weight: null, bodyFat: null } },
+      },
+    });
+    render(<CalendarHarness />);
+
+    expect(cell(ago(1))!.getAttribute('aria-label')).toContain('記録あり');
+    expect(cell(ago(3))!.getAttribute('aria-label')).not.toContain('記録あり');
+
+    // 記録の印は数字の下の小さいまる。そろった日は塗り、片方だけは中抜き
+    expect(cell(ago(3))!.querySelector('[data-mark]')).toBeNull();
+    expect(cell(ago(1))!.querySelector('[data-mark]')?.getAttribute('data-mark')).toBe('full');
+    expect(cell(ago(2))!.querySelector('[data-mark]')?.getAttribute('data-mark')).toBe('half');
+  });
+
+  /*
+   * 今日のまると記録の印は別の軸。同じ形の濃さ違いにすると、
+   * 「今日はまだ付けていない」が読み取れなくなる。
+   */
+  it('今日のまるは、記録の有無とは別に付く', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      exercises: [],
+      workouts: {},
+      entries: { [ago(1)]: { am: { weight: 70, bodyFat: 20 } } },
+    });
+    render(<CalendarHarness />);
+
+    expect(cell(todayISO())!.className).toMatch(/today/);
+    expect(cell(todayISO())!.querySelector('[data-mark]')).toBeNull();
+    expect(cell(ago(1))!.className).not.toMatch(/today/);
+    expect(cell(ago(1))!.querySelector('[data-mark]')).toBeTruthy();
+  });
+
+  /*
+   * 今日と、いま開いている日は、同じ大きさのまるを線と塗りで描き分ける。
+   * 見た目は測れないので、2 つが別の印として付くことを固定する。
+   */
+  it('今日と、開いている日は、別々の印になる', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      exercises: [],
+      workouts: {},
+      entries: { [ago(2)]: { am: { weight: 70, bodyFat: 20 } } },
+    });
+    render(<CalendarHarness />);
+
+    // 開いた直後は今日を見ている。同じセルに両方が付く
+    expect(cell(todayISO())!.className).toMatch(/today/);
+    expect(cell(todayISO())!.className).toMatch(/selected/);
+    expect(cell(todayISO())!.getAttribute('aria-label')).toContain('今日');
+
+    // 別の日へ移すと、今日と開いている日が分かれる
+    fireEvent.click(cell(ago(2))!);
+    expect(cell(todayISO())!.className).toMatch(/today/);
+    expect(cell(todayISO())!.className).not.toMatch(/selected/);
+    expect(cell(ago(2))!.className).toMatch(/selected/);
+    expect(cell(ago(2))!.className).not.toMatch(/today/);
+    expect(cell(ago(2))!.getAttribute('aria-label')).not.toContain('今日');
+  });
+
+  /*
+   * 記録画面の先頭に置くので、いつも 1 か月ぶん開いていると入力欄が下に押し出される。
+   * 既定は 2 週。遡りたいときだけ広げる。
+   */
+  it('既定は2週。1週と月も選べる', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      exercises: [],
+      workouts: {},
+      entries: { [todayISO()]: { am: { weight: 70, bodyFat: 20 } } },
+    });
+    render(<CalendarHarness />);
+    expect(screen.getAllByRole('gridcell')).toHaveLength(14);
+
+    fireEvent.click(screen.getByRole('button', { name: '1週' }));
+    expect(screen.getAllByRole('gridcell')).toHaveLength(7);
+
+    fireEvent.click(screen.getByRole('button', { name: '月' }));
+    expect(screen.getAllByRole('gridcell').length).toBeGreaterThan(27);
+  });
+
+  /* 先の日も選べる。予定の日に付けておく使い方がある */
+  it('先の日も押せる', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      exercises: [],
+      workouts: {},
+      entries: { [ago(1)]: { am: { weight: 70, bodyFat: 20 } } },
+    });
+    render(<CalendarHarness />);
+
+    const disabled = screen
+      .getAllByRole('gridcell')
+      .filter((b) => (b as HTMLButtonElement).disabled);
+    expect(disabled).toHaveLength(0);
+
+    // 押せば、その日の記録に移る
+    const tomorrow = isoAdd(todayISO(), 1);
+    const cellTomorrow = cell(tomorrow);
+    if (cellTomorrow) {
+      fireEvent.click(cellTomorrow);
+      expect(cellTomorrow.getAttribute('aria-current')).toBe('true');
+    }
+  });
+
+  /*
+   * 体組成とトレーニングを 1 つの面に重ねない。
+   * 以前は体組成のセルにトレーニングを枠で重ねていた。
+   */
+  it('切り替えで、体組成とトレーニングを別々に出す', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      exercises: [bench()],
+      entries: { [ago(1)]: { am: { weight: 70, bodyFat: 20 } } },
+      workouts: { [ago(2)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }] },
+    });
+
+    const { unmount } = render(<CalendarHarness domain="body" />);
+    expect(cell(ago(1))!.getAttribute('aria-label')).toContain('記録あり');
+    expect(cell(ago(2))!.getAttribute('aria-label')).not.toContain('記録あり');
+    unmount();
+
+    render(<CalendarHarness domain="training" />);
+    expect(cell(ago(1))!.getAttribute('aria-label')).not.toContain('記録あり');
+    expect(cell(ago(2))!.getAttribute('aria-label')).toContain('記録あり');
+  });
+
+  /*
+   * 記録画面にいるので、押した日に**移る**。読むだけのダイアログは要らない
+   * （ヘッダの日付ナビが 1 日ずつ、カレンダーが面で選ぶ）。
+   */
+  it('日付を押すと、その日の記録に移る', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      exercises: [],
+      workouts: {},
+      entries: {
+        [todayISO()]: { am: { weight: 70, bodyFat: 20 } },
+        [ago(3)]: { am: { weight: 68.4, bodyFat: 18 } },
+      },
+    });
+    render(<CalendarHarness />);
+
+    // はじめは今日を見ている
+    expect((screen.getAllByLabelText(/体重/)[0] as HTMLInputElement).value).toBe('70');
+
+    fireEvent.click(cell(ago(3))!);
+
+    expect((screen.getAllByLabelText(/体重/)[0] as HTMLInputElement).value).toBe('68.4');
+    expect(cell(ago(3))!.getAttribute('aria-current')).toBe('true');
   });
 });
 
@@ -1744,6 +2319,106 @@ describe('実績バッジ', () => {
   });
 });
 
+/*
+ * ＋ は「どこから足すか」を先に聞く。3 つの道（マイ種目・プリセット・カタログ）が
+ * それぞれ別の場所に散っていたのをひとつにまとめたので、道ごとに結線を見る。
+ */
+describe('種目の足し方', () => {
+  it('プリセットから、その日にまとめて入れられる', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      workouts: {},
+      exercises: ['ex_bench', 'ex_squat'].map((id, i) =>
+        fromCatalog(
+          CATALOG.find((c) => c.id === id)!,
+          i,
+        ),
+      ),
+      presets: [{ id: 'p1', name: '押す日', exerciseIds: ['ex_bench', 'ex_squat'] }],
+    });
+    render(<Harness />);
+    openPresetAdd();
+
+    fireEvent.click(screen.getByRole('button', { name: '押す日をこの日に入れる' }));
+
+    // 入れたら閉じる。1 回で決まるので、開いたままにする理由が無い
+    expect(pickerOpen()).toBe(false);
+    expect(screen.getAllByRole('button', { name: /のセットを編集$/ })).toHaveLength(2);
+  });
+
+  it('プリセットが 1 つも無いときは、作り方を出す', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+    openPresetAdd();
+    expect(screen.getByText(/保存した組み合わせはまだありません/)).toBeTruthy();
+  });
+
+  /*
+   * カタログから足したものは **その日に入る**。
+   * マイ種目に残すかは、入れたあとに聞く（設定の話から始めさせない）。
+   */
+  it('カタログから足すと、その日に入る。マイ種目に残すかを聞く', async () => {
+    render(<Harness />);
+    openCatalog();
+    fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
+
+    // 答えは 2 つのボタンそのもの。OK / キャンセルでどちらの結果か読ませない
+    expect(screen.getByText('マイ種目にも追加しますか？')).toBeTruthy();
+    expect(screen.getByText('ベンチプレス（バーベル）')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
+
+    expect(
+      screen.getByRole('button', { name: /^ベンチプレス（バーベル）のセットを編集$/ }),
+    ).toBeTruthy();
+
+    const stored = await storedData();
+    expect(stored.workouts[todayISO()]?.[0]?.exerciseId).toBe('ex_bench');
+    // 残すと答えたので、次からはマイ種目の候補に並ぶ
+    expect(stored.exercises[0]!.hidden).toBeFalsy();
+  });
+
+  /* 答えずに戻ったら、その種目は入れない */
+  it('聞かれた面から戻ると、何も入らない', async () => {
+    render(<Harness />);
+    openCatalog();
+    fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
+    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+
+    // 戻り先はカタログ。選び直せる
+    expect(screen.getByText('＋ ベンチプレス（バーベル）')).toBeTruthy();
+    const stored = await storedData();
+    expect(stored.workouts[todayISO()]).toBeUndefined();
+    expect(stored.exercises).toHaveLength(0);
+  });
+
+  /*
+   * 残さないと答えても、種目そのものは非表示で持つ。
+   * その日の記録が種目を参照しているので、実体が無いと記録のほうが落ちる。
+   */
+  it('マイ種目に残さないと答えたら、その日だけの種目になる', async () => {
+    render(<Harness />);
+    openCatalog();
+    fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
+    fireEvent.click(screen.getByRole('button', { name: 'この日だけ' }));
+
+    const stored = await storedData();
+    expect(stored.workouts[todayISO()]?.[0]?.exerciseId).toBe('ex_bench');
+    expect(stored.exercises[0]!.hidden).toBe(true);
+  });
+
+  /* 入れた種目をカタログにも残すと、同じ種目が二重に並ぶ */
+  it('その日に入れた種目は、カタログの候補から消える', () => {
+    render(<Harness />);
+    openCatalog();
+    fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
+    fireEvent.click(screen.getByRole('button', { name: 'この日だけ' }));
+
+    expect(screen.queryByText('＋ ベンチプレス（バーベル）')).toBeNull();
+  });
+});
+
 describe('ダイアログの戻り方', () => {
   it('面を差し替えているあいだは、右上が「‹ 戻る」になる', () => {
     seedExercises('ex_bench');
@@ -1755,18 +2430,22 @@ describe('ダイアログの戻り方', () => {
     }
 
     render(<Harness />);
-    openPicker();
+    openMenu();
 
-    // 種目を選ぶ面では「閉じる」（ここで閉じれば記録画面に戻るだけ）
+    // 足し方を選ぶ面は根なので、戻り先が無い
+    expect(screen.queryByRole('button', { name: '‹ 戻る' })).toBeNull();
     expect(screen.getByRole('button', { name: '閉じる' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /マイ種目を増やす/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^カタログから選ぶ/ }));
     expect(screen.getByText(/^カタログから追加/)).toBeTruthy();
 
-    // カタログの面では「‹ 戻る」。閉じるとダイアログごと消えて、選ぶ作業まで失われる
-    expect(screen.queryByRole('button', { name: '閉じる' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+    /*
+     * 奥の面では「‹ 戻る」と「閉じる」を両方出す。
+     * 戻るだけにすると、そこで用が済んだ人が閉じるまでに 2 回押すことになる。
+     */
     expect(screen.getByRole('button', { name: '閉じる' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+    expect(screen.queryByRole('button', { name: '‹ 戻る' })).toBeNull();
   });
 });
 
@@ -2211,29 +2890,48 @@ describe('プリセット（種目の組み合わせ）', () => {
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
   }
 
-  /** カードから、いまの組み合わせを保存する */
+  /** プリセットは補助の帯の中。開いてから触る */
+  function openPresets() {
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットを開く' }));
+  }
+
+  /** 帯から開いて、いまの組み合わせを保存する */
   function save(name: string) {
+    openPresets();
     fireEvent.click(screen.getByRole('button', { name: 'いまの組み合わせをプリセットに保存' }));
     fireEvent.change(screen.getByLabelText('プリセットの名前'), { target: { value: name } });
     fireEvent.click(screen.getByRole('button', { name: 'この名前で保存' }));
   }
 
-  it('カードの中身が、その日の状態で入れ替わる', () => {
+  it('中身が、その日の状態で入れ替わる', () => {
     seedExercises('ex_bench', 'ex_pullup');
     render(<Harness />);
 
     // まだ何も入れていない日は、呼び出す場所（1 件も無ければその案内）
-    expect(screen.getByRole('heading', { name: 'プリセット' })).toBeTruthy();
+    openPresets();
     expect(screen.queryByRole('button', { name: 'いまの組み合わせをプリセットに保存' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     // 種目を入れると、同じ場所が保存する場所になる
     addTwo();
-    expect(screen.getByRole('heading', { name: 'プリセット' })).toBeTruthy();
+    openPresets();
     expect(screen.getByRole('button', { name: 'いまの組み合わせをプリセットに保存' })).toBeTruthy();
+  });
 
-    // 保存済みの組み合わせなら、することが無いのでカードごと出さない
+  /*
+   * 帯には要約も出す。開かなくても「まだ残していない」と分かる
+   * （ダイアログに畳んだぶん、保存できることに気づけなくなるのを受ける）。
+   */
+  it('未保存の組み合わせは、帯に出る', () => {
+    seedExercises('ex_bench', 'ex_pullup');
+    render(<Harness />);
+    expect(screen.queryByText('未保存')).toBeNull();
+
+    addTwo();
+    expect(screen.getByText('未保存')).toBeTruthy();
+
     save('押す日');
-    expect(screen.queryByRole('heading', { name: 'プリセット' })).toBeNull();
+    expect(screen.queryByText('未保存')).toBeNull();
   });
 
   it('カードで保存し、別の日にカードから呼び出せる', async () => {
@@ -2242,6 +2940,7 @@ describe('プリセット（種目の組み合わせ）', () => {
     addTwo();
 
     // 名前の下書きは部位から作る。書き換えてもいい
+    openPresets();
     fireEvent.click(screen.getByRole('button', { name: 'いまの組み合わせをプリセットに保存' }));
     expect((screen.getByLabelText('プリセットの名前') as HTMLInputElement).value).toBe(
       '胸・背中の日',
@@ -2254,6 +2953,7 @@ describe('プリセット（種目の組み合わせ）', () => {
     render(<DayHarness day={isoAdd(todayISO(), -1)} />);
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
 
+    openPresets();
     fireEvent.click(screen.getByRole('button', { name: '押す日をこの日に入れる' }));
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(2);
   });
@@ -2270,8 +2970,10 @@ describe('プリセット（種目の組み合わせ）', () => {
     openPicker();
     fireEvent.click(screen.getByText(/^＋ スクワット/));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('スクワット');
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    openPresets();
     fireEvent.click(screen.getByRole('button', { name: 'いまの組み合わせをプリセットに保存' }));
     fireEvent.change(screen.getByLabelText('プリセットの名前'), { target: { value: '押す日' } });
     fireEvent.click(screen.getByRole('button', { name: 'この名前で保存' }));
@@ -2304,6 +3006,7 @@ describe('プリセット（種目の組み合わせ）', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     // 記録は消えないが、付けた名前と組み合わせは戻せない
+    openPresets();
     fireEvent.click(screen.getByRole('button', { name: '押す日を削除' }));
     expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('元に戻せません'));
     expect(screen.getByText('押す日')).toBeTruthy();
@@ -2321,6 +3024,7 @@ describe('プリセット（種目の組み合わせ）', () => {
     openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
     typeSet(setRows()[0]!, '60', '10');
 
     // 値を打ってから保存しても、持つのは種目だけ
@@ -2401,6 +3105,20 @@ describe('レビュー（記録画面）', () => {
     seedExercises('ex_deadlift');
     render(<Harness />);
     expect(screen.queryByText('レビュー')).toBeNull();
+  });
+
+  /*
+   * 帯の見出しが「回復済み」なので、値は部位の名前だけを並べる。
+   * 「胸・脚 が回復済み」だと、同じことを 2 回言うことになる。
+   */
+  it('回復の帯は、見出しが回復済みで、値は部位の名前だけ', () => {
+    seedExercises('ex_deadlift');
+    render(<Harness />);
+
+    expect(screen.getByText('回復済み')).toBeTruthy();
+    expect(screen.queryByText(/が回復済み/)).toBeNull();
+    // 何も打っていなければ、どの部位も空いている
+    expect(screen.getByText(/^胸・/)).toBeTruthy();
   });
 
   it('種目を置くと、今日の負荷・前日までの疲れ・見積もり時間が出る', () => {
@@ -2724,10 +3442,22 @@ describe('プリセット（設定から見る・編集する）', () => {
 });
 
 describe('日付ナビ', () => {
-  it('今日を見ているときは「今日」ボタンを出さず、先へも進めない', () => {
+  it('今日を見ているときは「今日」ボタンを出さない', () => {
     render(<DateNav date={todayISO()} onChange={() => {}} />);
     expect(screen.queryByRole('button', { name: '今日' })).toBeNull();
-    expect((screen.getByLabelText('次の日') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  /*
+   * 先の日も選べる。予定の日に付けておく使い方があるし、
+   * 日付をまたいだ深夜に翌日ぶんとして付けることもある。
+   */
+  it('先の日へも進める', async () => {
+    const { addDays } = await import('../lib/date');
+    const onChange = vi.fn();
+    render(<DateNav date={todayISO()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByLabelText('次の日'));
+    expect(onChange).toHaveBeenCalledWith(addDays(todayISO(), 1));
   });
 
   it('過去を見ているときだけ「今日」で戻れる', async () => {
@@ -2847,7 +3577,7 @@ describe('モーダル', () => {
     render(<Harness />);
     openPicker();
     // 種目が無いときのカタログは、開いているときだけ置く形
-    fireEvent.click(screen.getByRole('button', { name: '＋ マイ種目に追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '＋ カタログから選ぶ' }));
     expect(document.body.style.position).toBe('fixed');
 
     cleanup();
@@ -3046,7 +3776,6 @@ describe('種目の表示 / 非表示', () => {
     expect(screen.getByLabelText('スクワットを表示に戻す')).toBeTruthy();
     expect(screen.getByLabelText('ランニングを表示に戻す')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'フィルター' }));
     fireEvent.click(screen.getByRole('button', { name: '有酸素' }));
 
     expect(screen.getByLabelText('ランニングを表示に戻す')).toBeTruthy();
@@ -3131,6 +3860,8 @@ describe('有酸素', () => {
     render(<Harness />);
     openPicker();
     fireEvent.click(screen.getByText('＋ ランニング'));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ランニング');
 
     // 重量ではなく距離。回数でも秒数でもなく時間
     expect(screen.getByLabelText('1セット目の時間')).toBeTruthy();
@@ -3144,6 +3875,8 @@ describe('有酸素', () => {
     render(<Harness />);
     openPicker();
     fireEvent.click(screen.getByText('＋ サイクリング（屋外）'));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('サイクリング（屋外）');
 
     const row = setRows()[0]!;
     const minutes = within(row).getByLabelText('1セット目の時間') as HTMLInputElement;
@@ -3166,6 +3899,7 @@ describe('有酸素', () => {
       ],
     });
     render(<Harness />);
+    expand('水泳');
 
     expect(screen.getByText(/2\s*本/)).toBeTruthy();
     expect(screen.queryByText(/2\s*セット/)).toBeNull();
@@ -3178,6 +3912,7 @@ describe('有酸素', () => {
       [todayISO()]: [{ exerciseId: 'ex_swim_free', sets: [{ meters: 25, seconds: 47 }] }],
     });
     render(<Harness />);
+    expand('水泳');
 
     const field = screen.getByLabelText('1セット目の時間') as HTMLInputElement;
     expect(field.value).toBe('0.78');
@@ -3188,6 +3923,7 @@ describe('有酸素', () => {
       [todayISO()]: [{ exerciseId: 'ex_running', sets: [{ meters: 5200, seconds: 1800 }] }],
     });
     render(<Harness />);
+    expand('ランニング');
 
     // 残るのは入力欄 2 つだけ。足す・消す・何本目か はどれも要らない
     expect(screen.getByLabelText('1セット目の時間')).toBeTruthy();
@@ -3224,6 +3960,7 @@ describe('有酸素', () => {
       ],
     });
     render(<Harness />);
+    expand('サーキット');
 
     // 距離は出ないので、量は時間と本数で見る
     expect(screen.getByText(/3\s*本/)).toBeTruthy();
@@ -3259,8 +3996,7 @@ describe('有酸素', () => {
   it('カタログに有酸素の欄がある（部位の並びで切ると出てこない）', () => {
     seedCardio(['ex_bench']);
     render(<Harness />);
-    openPicker();
-    fireEvent.click(screen.getByRole('button', { name: '＋ マイ種目を増やす' }));
+    openCatalog();
 
     // 絞り込みチップと見出しの 2 か所に出る
     expect(screen.getAllByText('有酸素').length).toBeGreaterThan(0);
@@ -3288,7 +4024,7 @@ describe('有酸素', () => {
   });
 });
 
-describe('種目の絞り込み（検索と部位）', () => {
+describe('種目の絞り込み（部位）', () => {
   function ManagerHarness() {
     const body = useBodyData(seeded);
     return (
@@ -3326,128 +4062,78 @@ describe('種目の絞り込み（検索と部位）', () => {
     seedRaw({ version: 5, settings: {}, entries: {}, exercises, workouts: {} });
   }
 
-  /** フィルターは畳んであるので、開いてから触る */
-  function openFilter(root: { getByRole: typeof screen.getByRole } = screen) {
-    fireEvent.click(root.getByRole('button', { name: 'フィルター' }));
-  }
-
   it('件数が少ないうちは絞り込みを出さない', () => {
     seedExercises('ex_bench', 'ex_squat');
     render(<ManagerHarness />);
-    expect(screen.queryByRole('button', { name: 'フィルター' })).toBeNull();
-    expect(screen.queryByLabelText('種目を検索')).toBeNull();
+    expect(screen.queryByRole('group', { name: '部位で絞り込む' })).toBeNull();
   });
 
-  it('既定では畳んでいて、押すと開く', () => {
+  /*
+   * 畳んで「フィルター」ボタンにしていた頃は、開くのに 1 回・選ぶのに 1 回で、
+   * 探すたびに 2 回押していた。何で絞っているかも開くまで読めない。
+   */
+  it('部位のチップは出しっぱなし。押す前から何で絞れるか読める', () => {
     seedMany();
     render(<ManagerHarness />);
 
-    expect(screen.queryByLabelText('種目を検索')).toBeNull();
-    openFilter();
-    expect(screen.getByLabelText('種目を検索')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'フィルター' })).toBeNull();
     expect(screen.getByRole('group', { name: '部位で絞り込む' })).toBeTruthy();
   });
 
-  it('閉じても条件は効いたまま。効いていることは文言で分かる', () => {
+  it('部位で絞れる', () => {
     seedMany();
     render(<ManagerHarness />);
 
-    openFilter();
-    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'スクワット' } });
-    expect(screen.queryByText('プランク')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'フィルターを閉じる' }));
-    // 畳んでも減ったまま。理由がボタンから読める
-    expect(screen.queryByText('プランク')).toBeNull();
-    expect(screen.getByText('スクワット')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'フィルター中' })).toBeTruthy();
-
-    // 開き直すと打った内容も残っている
-    fireEvent.click(screen.getByRole('button', { name: 'フィルター中' }));
-    expect((screen.getByLabelText('種目を検索') as HTMLInputElement).value).toBe('スクワット');
-  });
-
-  it('名前で検索できる', () => {
-    seedMany();
-    render(<ManagerHarness />);
-    openFilter();
-
-    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'スクワット' } });
+    fireEvent.click(within(screen.getByRole('group', { name: '部位で絞り込む' })).getByText('脚'));
     expect(screen.getByText('スクワット')).toBeTruthy();
     expect(screen.queryByText('プランク')).toBeNull();
-  });
-
-  it('ひらがなで打っている途中でも当たる', () => {
-    seedMany();
-    render(<ManagerHarness />);
-    openFilter();
-
-    // 変換前の「ぷらんく」で「プランク」に届く
-    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'ぷらんく' } });
-    expect(screen.getByText('プランク')).toBeTruthy();
-    expect(screen.queryByText('スクワット')).toBeNull();
-  });
-
-  it('検索と部位は同時に効く', () => {
-    seedMany();
-    render(<ManagerHarness />);
-    openFilter();
-
-    fireEvent.click(screen.getByRole('button', { name: '脚' }));
-    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'スクワット' } });
-    expect(screen.getByText('スクワット')).toBeTruthy();
-    expect(screen.queryByText('レッグプレス')).toBeNull();
 
     // 合わなくなったら、そう言う（黙って空にしない）
-    fireEvent.click(screen.getByRole('button', { name: '胸' }));
-    expect(screen.getByText('このフィルターに合う種目はありません。')).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('group', { name: '部位で絞り込む' })).getByText('胸'));
+    expect(screen.queryByText('スクワット')).toBeNull();
+
+    // 「すべて」で戻る
+    fireEvent.click(
+      within(screen.getByRole('group', { name: '部位で絞り込む' })).getByText('すべて'),
+    );
+    expect(screen.getByText('スクワット')).toBeTruthy();
   });
 
-  it('カタログ（マイ種目に追加）でも検索できる', () => {
+  /* 検索欄は置かない。部位で切れば一画面に収まる */
+  it('種目を検索する欄は置かない', () => {
     seedMany();
     render(<ManagerHarness />);
+    expect(screen.queryByLabelText('種目を検索')).toBeNull();
+
     fireEvent.click(screen.getByText('＋ マイ種目に追加'));
-    const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
-    openFilter(dialog);
-
-    // 変換前のひらがなでも当たる（マイ種目に無い種目で見る）
-    fireEvent.change(dialog.getByLabelText('種目を検索'), { target: { value: 'でっど' } });
-    expect(screen.getByText(/^＋ デッドリフト/)).toBeTruthy();
-    expect(screen.queryByText(/^＋ 懸垂/)).toBeNull();
-
-    // 器具の絞り込みと重ねて効く。シュラッグはバーベル版とダンベル版が並ぶ
-    fireEvent.change(dialog.getByLabelText('種目を検索'), { target: { value: 'シュラッグ' } });
-    expect(screen.getByText('＋ シュラッグ（バーベル）')).toBeTruthy();
-    fireEvent.click(within(screen.getByRole('group', { name: '器具' })).getByText('ダンベル'));
-    expect(screen.getByText('＋ シュラッグ（ダンベル）')).toBeTruthy();
-    expect(screen.queryByText('＋ シュラッグ（バーベル）')).toBeNull();
+    expect(screen.queryByLabelText('種目を検索')).toBeNull();
   });
 
   it('記録画面のピッカーでも同じように絞り込める', () => {
     seedMany();
     render(<Harness />);
     openPicker();
-    openFilter();
 
-    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'らんにんぐ' } });
+    fireEvent.click(
+      within(screen.getByRole('group', { name: '部位で絞り込む' })).getByText('有酸素'),
+    );
     expect(screen.getByText('＋ ランニング')).toBeTruthy();
-    expect(screen.queryByText('＋ ベンチプレス')).toBeNull();
+    expect(screen.queryByText(/^＋ ベンチプレス/)).toBeNull();
   });
 
   it('ピッカーを閉じると絞り込みは白紙に戻る', () => {
     seedMany();
     render(<Harness />);
     openPicker();
-    openFilter();
-    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'スクワット' } });
+    fireEvent.click(
+      within(screen.getByRole('group', { name: '部位で絞り込む' })).getByText('有酸素'),
+    );
+    expect(screen.queryByText(/^＋ ベンチプレス/)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     openPicker();
-    // 開き直すと畳んだ状態、条件も白紙から始まる
-    expect(screen.queryByLabelText('種目を検索')).toBeNull();
-    expect(screen.getByRole('button', { name: 'フィルター' })).toBeTruthy();
-    openFilter();
-    expect((screen.getByLabelText('種目を検索') as HTMLInputElement).value).toBe('');
+    // 前の日の絞り込みが残っていると、種目が減ったように見える
+    expect(screen.getByText(/^＋ ベンチプレス/)).toBeTruthy();
   });
 });
 
@@ -3509,10 +4195,17 @@ describe('消えるものがあるときだけ聞く', () => {
     render(<Harness />);
     openPicker();
     fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+  }
+
+  /** セットの入力はダイアログ。行を触るテストはここから開く */
+  function editBench() {
+    addBench();
+    expand('ベンチプレス');
   }
 
   it('空のセット行は確認せずに消える', () => {
-    addBench();
+    editBench();
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     fireEvent.click(screen.getByLabelText('1セット目を削除'));
@@ -3521,7 +4214,7 @@ describe('消えるものがあるときだけ聞く', () => {
   });
 
   it('打ってあるセット行は確認してから消す', () => {
-    addBench();
+    editBench();
     typeSet(setRows()[0]!, '60', '10');
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
@@ -3534,8 +4227,9 @@ describe('消えるものがあるときだけ聞く', () => {
   });
 
   it('カードの × も、打ってあれば確認する（ピッカーの ✓ と同じ扱い）', () => {
-    addBench();
+    editBench();
     typeSet(setRows()[0]!, '60', '10');
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     fireEvent.click(screen.getByLabelText(/ベンチプレス.*をこの日から外す/));

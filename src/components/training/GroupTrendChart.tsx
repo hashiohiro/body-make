@@ -1,7 +1,7 @@
 import { TimeSeriesChart } from '../charts/TimeSeriesChart';
 import type { ChartSeries } from '../charts/TimeSeriesChart';
 import { GROUP_COLORS, GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
-import { addDays, isoToTime } from '../../lib/date';
+import { addDays, isoToTime, startOfWeek, todayISO } from '../../lib/date';
 import { GROUP_VALUES } from './groupValues';
 import type { GroupValueId } from './groupValues';
 import type { WeekSetCount } from '../../lib/training';
@@ -67,6 +67,8 @@ export function GroupTrendChart({ weeks, valueId, onValueChange }: Props) {
         unit={value.unit}
         digits={value.digits}
         legend
+        // 週次なので、印を付けるのは今週の始まり（日曜）
+        highlight={isoToTime(startOfWeek(todayISO()))}
         ariaLabel={`部位別の週あたり${value.label}の推移`}
         emptyMessage="この期間に記録がありません"
       />

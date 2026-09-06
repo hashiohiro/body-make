@@ -33,7 +33,11 @@ export function DateNav({ date, onChange }: Props) {
         className={s.dateInput}
         type="date"
         value={date}
-        max={today}
+        /*
+          **先の日も選べる。**旅行や大会の前に予定の日へ入れておく、
+          日付をまたいだ深夜に翌日ぶんとして付ける、といった使い方がある。
+          導出は先の日付を織り込んである（連続記録と記録率は今日までしか数えない）。
+        */
         onChange={(e) => e.target.value && onChange(e.target.value)}
         aria-label="記録する日付"
       />
@@ -42,7 +46,6 @@ export function DateNav({ date, onChange }: Props) {
         type="button"
         className={s.nav}
         onClick={() => onChange(addDays(date, 1))}
-        disabled={date >= today}
         aria-label="次の日"
       >
         ›

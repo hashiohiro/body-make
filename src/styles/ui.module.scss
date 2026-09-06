@@ -332,3 +332,24 @@
   border-radius: 2px;
   flex: none;
 }
+
+/*
+ * カードの下に置く、読むための入口（推移を見る・目標）。
+ * 種目カードと体組成カードで同じものを使う。片方だけ見た目が違う理由が無い。
+ */
+.detailRow {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.detailBtn {
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 10px;
+  color: var(--ink-2);
+  min-height: 0;
+}

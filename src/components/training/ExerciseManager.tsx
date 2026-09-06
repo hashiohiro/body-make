@@ -13,12 +13,7 @@ import { FACTOR_RANGE, RM_DIVISOR_RANGE } from '../../lib/storage';
 import { DEFAULT_RM_DIVISOR } from '../../lib/training';
 import type { Exercise, ExerciseGroup, LoadMode, RepUnit, SessionPoint } from '../../types';
 import { CatalogPicker } from './CatalogPicker';
-import {
-  ExerciseFilterBar,
-  FILTER_THRESHOLD,
-  matchesGroup,
-  matchesQuery,
-} from './ExerciseFilterBar';
+import { ExerciseFilterBar, FILTER_THRESHOLD, matchesGroup } from './ExerciseFilterBar';
 import { ExerciseSettingsForm } from './ExerciseSettingsForm';
 import { GoalEditor } from './GoalEditor';
 import { ExerciseSummaryCard } from './ExerciseSummaryCard';
@@ -80,7 +75,6 @@ const EMPTY_FORM = {
 export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, sessions }: Props) {
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<ExerciseGroup | 'all'>('all');
-  const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   /** 目標を開いている種目。設定（詳細）とは同時に開かない */
   const [goalOf, setGoalOf] = useState<string | null>(null);
@@ -99,7 +93,7 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
   const settingsExercise = editing ? (byId.get(editing) ?? null) : null;
 
   const sorted = [...exercises].sort((a, b) => a.order - b.order);
-  const filtered = sorted.filter((e) => matchesGroup(e, filter) && matchesQuery(e.name, query));
+  const filtered = sorted.filter((e) => matchesGroup(e, filter));
   const shown = filtered.filter((e) => !e.hidden);
   /*
    * 非表示も部位で切る。**絞り込みは一覧ぜんぶに掛かる。**
@@ -402,13 +396,7 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
       ) : (
         <>
           {sorted.length > FILTER_THRESHOLD && (
-            <ExerciseFilterBar
-              query={query}
-              onQuery={setQuery}
-              group={filter}
-              onGroup={setFilter}
-              exercises={sorted}
-            />
+            <ExerciseFilterBar group={filter} onGroup={setFilter} exercises={sorted} />
           )}
 
           {/*

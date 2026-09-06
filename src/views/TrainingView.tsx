@@ -1,25 +1,36 @@
 import { useMemo, useState } from 'react';
 import { CheckCard } from '../components/training/CheckCard';
-import { RecoveryCard } from '../components/training/RecoveryCard';
+import { TrainingAside } from '../components/training/TrainingAside';
 import { ExerciseCard } from '../components/training/ExerciseCard';
+import { ExerciseSetEditor } from '../components/training/ExerciseSetEditor';
 import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialog';
 import { ExercisePicker } from '../components/training/ExercisePicker';
 import { GoalEditor } from '../components/training/GoalEditor';
 import { Modal } from '../components/Modal';
 import { OrderList } from '../components/training/OrderList';
-import { PresetCard } from '../components/training/PresetCard';
 import { groupsOf, isCardio } from '../lib/exerciseCatalog';
 import { addDays } from '../lib/date';
 import { personalBest, pickVolume, previousPoint } from '../lib/training';
 import { isCardioSet } from '../types';
-import type { SessionSet } from '../types';
+import type { Exercise, SessionSet } from '../types';
 import type { BodyData } from '../hooks/useBodyData';
 import ui from '../styles/ui.module.scss';
+import s from '../components/training/training.module.scss';
 
 interface Props {
   body: BodyData;
   /** 記録する日。ヘッダの日付ナビが持つ */
   date: string;
+  /**
+   * 読むだけ。**カレンダーから過去の日を開いたときに使う。**
+   *
+   * その日に何をしたかだけを出す。組むための面——プリセット・レビュー・回復・
+   * 種目を足す——は出さない。それらは「これから決める」ための道具で、
+   * 見に来た日には答える相手がいない。
+   *
+   * 推移（種目の詳細）だけは残す。読むための面なので。
+   */
+  readOnly?: boolean | undefined;
 }
 
 /** その行に何か打ってあるか。器で見るものが違う */
@@ -29,7 +40,7 @@ function hasValue(set: SessionSet): boolean {
     : set.weight != null || set.reps != null;
 }
 
-export function TrainingView({ body, date }: Props) {
+export function TrainingView({ body, date, readOnly }: Props) {
   const {
     data,
     sessions,
@@ -64,9 +75,18 @@ export function TrainingView({ body, date }: Props) {
   const [goalId, setGoalId] = useState<string | null>(null);
   /** 並べ替えで掴んでいる種目。カードは大きいので、掴んでいる間だけ一覧に畳む */
   const [moving, setMoving] = useState<string | null>(null);
+  /**
+   * セットを打っている種目。**入力はカードではなくダイアログに置く。**
+   *
+   * カードに積んだままだと、種目が増えるほど、いま打つ種目に届くまでスクロールが要る。
+   * 打つあいだは 1 種目に集中するので、面を分けたほうが入力欄も大きく取れる。
+   */
+  const [editId, setEditId] = useState<string | null>(null);
 
   const usedIds = new Set(dayEntries.map((e) => e.exerciseId));
   const goalExercise = goalId ? (byId.get(goalId) ?? null) : null;
+  const editExercise = editId ? (byId.get(editId) ?? null) : null;
+  const editEntry = editId ? (dayEntries.find((e) => e.exerciseId === editId) ?? null) : null;
 
   // 名前を付けて残した組み合わせ。中身の部位は、そのつどマイ種目から引き直す
   const presets = useMemo(
@@ -89,6 +109,10 @@ export function TrainingView({ body, date }: Props) {
   const toggle = (id: string) => {
     const entry = dayEntries.find((e) => e.exerciseId === id);
     if (!entry) {
+      /*
+       * 足しただけでは開かない。**ピッカーが開いたままなので、面が重なる。**
+       * 何種目か続けて足すこともあるので、打ちはじめる種目はカードの「編集」で選ぶ。
+       */
       addDayExercise(date, id);
       return;
     }
@@ -108,6 +132,19 @@ export function TrainingView({ body, date }: Props) {
       if (!confirm(`「${name}」を削除します。`)) return;
     }
     removeDayExercise(date, id);
+  };
+
+  /**
+   * カタログから、その日に種目を足す。
+   *
+   * `keep` は「マイ種目にも残すか」。**聞くのはピッカーの仕事**で、ここは答えを書くだけ。
+   * 残さないと答えても、種目そのものは非表示で持つ。その日の記録が種目を参照して
+   * いるので、実体が無いと記録のほうが行き先を失う（sanitize が黙って落とす）。
+   * 非表示の種目はカタログにまた並ぶので、次に選べば同じ問いに戻る。
+   */
+  const addFromCatalog = (exercise: Exercise, keep: boolean) => {
+    addExercises([keep ? exercise : { ...exercise, hidden: true }]);
+    addDayExercise(date, exercise.id);
   };
 
   /**
@@ -135,24 +172,29 @@ export function TrainingView({ body, date }: Props) {
         ダイアログの中に畳むと「保存できること」に気づけない。
         置き場所は種目カードより上。献立を選ぶのは記録を始める前なので、最初に目に入る位置にする
       */}
-      <PresetCard
-        presets={presets}
-        currentIds={currentIds}
-        currentName={currentIds.length > 0 ? `${groupsOf(data.exercises, currentIds)}の日` : ''}
-        onAdd={(ids) => addDayExercises(date, ids)}
-        onSave={savePreset}
-        onRemove={removePreset}
-      />
+      {/*
+        補助（回復・プリセット）は 1 行の帯にまとめる。
+        カードで積むと、種目カードに届くまでのスクロールがそのぶん伸びる。
+        帯は入口であると同時に要約なので、開かずに読める範囲もある。
+      */}
+      {!readOnly && moving == null && (
+        <TrainingAside
+          date={date}
+          history={checkHistory}
+          presets={presets}
+          currentIds={currentIds}
+          currentName={currentIds.length > 0 ? `${groupsOf(data.exercises, currentIds)}の日` : ''}
+          onAdd={(ids) => addDayExercises(date, ids)}
+          onSave={savePreset}
+          onRemove={removePreset}
+        />
+      )}
 
       {/*
-        レビューが先、回復が後。
-        レビューは**いま組んだものへの指摘**なので、種目カードのすぐ上にあるのが素直。
-        回復は入口 1 行だけなので、下に置いても埋もれない。
-
-        回復は種目が 1 つも無い日でも出す
-        （何も置いていないときこそ「どこが回復しているか」を知りたい）。
+        レビューは**いま組んだものへの指摘**なので、種目カードのすぐ上に置く。
+        警告があるときだけ出るので、無い日は高さを取らない。
       */}
-      {moving == null && (
+      {!readOnly && moving == null && (
         <CheckCard
           date={date}
           entries={dayEntries}
@@ -163,8 +205,6 @@ export function TrainingView({ body, date }: Props) {
           onSuppress={suppressWarning}
         />
       )}
-
-      {moving == null && <RecoveryCard date={date} history={checkHistory} />}
 
       {/*
         並べ替え中は、カードの代わりにその日の種目だけを一覧で出す。
@@ -206,7 +246,6 @@ export function TrainingView({ body, date }: Props) {
             <ExerciseCard
               key={entry.exerciseId}
               exercise={exercise}
-              entry={entry}
               point={session?.exercises.find((p) => p.exerciseId === entry.exerciseId) ?? null}
               previous={previousPoint(sessions, entry.exerciseId, date)}
               best={personalBest(sessions, entry.exerciseId, addDays(date, -1), pickVolume)}
@@ -217,25 +256,15 @@ export function TrainingView({ body, date }: Props) {
                 // 換算後ではなく、バーに載せた数字。目標やグラフの「最大重量」と揃える
                 (p) => p.top?.weight ?? null,
               )}
-              onValue={(index, field, value) =>
-                setSetValue(date, entry.exerciseId, index, field, value)
-              }
-              onAddSet={() => addSet(date, entry.exerciseId)}
-              onRemoveSet={(index) => removeSetAt(entry.exerciseId, index)}
-              onRemove={() => removeExercise(entry.exerciseId)}
-              // 1 種目しか無い日に、動かしようのない操作を出さない
-              onMove={dayEntries.length > 1 ? () => setMoving(entry.exerciseId) : undefined}
               onOpenDetail={() => setDetailId(entry.exerciseId)}
               onOpenGoal={() => setGoalId(entry.exerciseId)}
-              onCopyPrevious={() => {
-                const prev = previousPoint(sessions, entry.exerciseId, date);
-                if (!prev) return;
-                copySets(
-                  date,
-                  entry.exerciseId,
-                  prev.point.sets.map((set) => ({ weight: set.weight, reps: set.reps })),
-                );
-              }}
+              onEdit={() => setEditId(entry.exerciseId)}
+              onRemove={() => removeExercise(entry.exerciseId)}
+              // 1 種目しか無い日に、動かしようのない操作を出さない
+              onMove={
+                !readOnly && dayEntries.length > 1 ? () => setMoving(entry.exerciseId) : undefined
+              }
+              readOnly={readOnly}
             />
           );
         })}
@@ -244,12 +273,53 @@ export function TrainingView({ body, date }: Props) {
         種目を足す入口。画面の中に置くとカードが積み上がるほど遠くなるので、右下に固定する。
         過去の日から写す動線もここに預ける。その日をどう始めるかの選択肢なので、同じ面にあるほうがいい
       */}
-      <ExercisePicker
-        exercises={active}
-        usedIds={usedIds}
-        onToggle={toggle}
-        onAddExercises={addExercises}
-      />
+      {/*
+        ＋ボタンのぶんの余白。いちばん下まで送ったときに、最後のカードが
+        ボタンの下に潜らないようにする。**この画面にだけ置く**——ボタンが無い画面で
+        同じ余白を取ると、下に理由の無い空きができる。
+      */}
+      {!readOnly && <div className={s.fabSpace} aria-hidden="true" />}
+
+      {!readOnly && (
+        <ExercisePicker
+          exercises={active}
+          usedIds={usedIds}
+          presets={presets}
+          onToggle={toggle}
+          onAddPreset={(ids) => addDayExercises(date, ids)}
+          onAddFromCatalog={addFromCatalog}
+        />
+      )}
+
+      {/*
+        セットを打つ面。カードから開く。
+        1 種目に集中して打てるようにするのと、カードの高さをそろえるため
+      */}
+      {editExercise && editEntry && (
+        <Modal open title={editExercise.name} onClose={() => setEditId(null)}>
+          <ExerciseSetEditor
+            exercise={editExercise}
+            entry={editEntry}
+            point={session?.exercises.find((p) => p.exerciseId === editExercise.id) ?? null}
+            previous={previousPoint(sessions, editExercise.id, date)}
+            onValue={(index, field, value) =>
+              setSetValue(date, editExercise.id, index, field, value)
+            }
+            onAddSet={() => addSet(date, editExercise.id)}
+            onRemoveSet={(index) => removeSetAt(editExercise.id, index)}
+            onCopyPrevious={() => {
+              const prev = previousPoint(sessions, editExercise.id, date);
+              if (!prev) return;
+              copySets(
+                date,
+                editExercise.id,
+                prev.point.sets.map((set) => ({ weight: set.weight, reps: set.reps })),
+              );
+            }}
+            readOnly={readOnly}
+          />
+        </Modal>
+      )}
 
       {goalExercise && (
         <Modal open title={`${goalExercise.name}の目標`} onClose={() => setGoalId(null)}>

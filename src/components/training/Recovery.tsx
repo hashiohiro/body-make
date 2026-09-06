@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Modal } from '../Modal';
 import { GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
 import { MAX_RECOVERY_DAYS, axialStatus, groupReadiness, type CheckHistory } from '../../lib/check';
@@ -8,6 +8,8 @@ import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
 interface Props {
+  open: boolean;
+  onClose: () => void;
   date: string;
   history: CheckHistory;
 }
@@ -56,11 +58,10 @@ interface Row {
  * それは許可を出す言い方で、決めるのは本人（design-training.md §1.1）。
  * アプリが言えるのは体がどうなっているかまでで、やるかどうかはその先にある。
  */
-export function RecoveryCard({ date, history }: Props) {
-  const [open, setOpen] = useState(false);
-  const readiness = useMemo(() => groupReadiness(history, date), [history, date]);
-
-  const muscles: Row[] = GROUP_ORDER.map((g) => {
+/** 部位ごとの行。要約と中身の両方が同じ数え方を通るように、1 か所で作る */
+function rowsOf(history: CheckHistory, date: string): Row[] {
+  const readiness = groupReadiness(history, date);
+  return GROUP_ORDER.map((g) => {
     const r = readiness[g];
     return {
       key: g,
@@ -73,8 +74,29 @@ export function RecoveryCard({ date, history }: Props) {
           : `${r.since === 1 ? '昨日' : `${r.since}日前`} ${formatSets(r.sets)}セット`,
     };
   });
+}
 
-  const axial = axialStatus(history, date);
+/**
+ * 帯に出す一行。**出すのは回復している側。**
+ *
+ * 「脚・胸 は空くのを待っています」だと、できないことの一覧を毎回読むことになる。
+ * 献立を決める場面で要るのは「どこが使えるか」のほう。
+ *
+ * **部位の名前だけを並べる。**帯の見出しが「回復済み」なので、
+ * 値のほうに「が回復済み」と書くと同じことを 2 回言うことになる。
+ *
+ * **軸荷重は混ぜない。**部位の名前が並んでいるところに「（軸荷重は昨日）」が
+ * 続くと、部位と同じ物差しの話に見える。あれは回復ではなく実績で、
+ * 置き場所はダイアログの中（別のセクション）にある。
+ */
+export function recoverySummary(history: CheckHistory, date: string): string {
+  const recovered = rowsOf(history, date).filter((r) => r.left === 0);
+  return recovered.length === 0 ? 'なし' : recovered.map((r) => r.label).join('・');
+}
+
+export function RecoveryDialog({ open, onClose, date, history }: Props) {
+  const muscles = useMemo(() => rowsOf(history, date), [history, date]);
+  const axial = useMemo(() => axialStatus(history, date), [history, date]);
 
   /*
    * ゲージは **表示している日数だけ** から引く。
@@ -87,18 +109,6 @@ export function RecoveryCard({ date, history }: Props) {
    */
   const scale = Math.max(...muscles.map((r) => r.max), 1);
   const progress = (r: Row) => Math.max(0, (scale - r.left) / scale);
-
-  const recovered = muscles.filter((r) => r.left === 0);
-
-  /*
-   * カードに出すのは **回復している側**。
-   * 「脚・胸 は空くのを待っています」だと、できないことの一覧を毎回読むことになる。
-   * 献立を決める場面で要るのは「どこが使えるか」のほう。
-   */
-  const summary =
-    recovered.length === 0
-      ? '回復した部位はありません'
-      : `${recovered.map((r) => r.label).join('・')} が回復済み`;
 
   const row = (r: Row) => (
     <div key={r.key} className={s.recoveryRow}>
@@ -113,25 +123,12 @@ export function RecoveryCard({ date, history }: Props) {
     </div>
   );
 
+  if (!open) return null;
+
   return (
     <>
-      <button
-        type="button"
-        className={`${ui.card} ${ui.linkRow}`}
-        aria-label="回復の状態を見る"
-        onClick={() => setOpen(true)}
-      >
-        <span>回復</span>
-        <span className={s.recoverySummary}>
-          {summary}
-          {/* 軸荷重は回復の話ではないが、連日かどうかは献立を決める前に知りたい */}
-          {axial.since === 1 && '（軸荷重種目は昨日）'}
-        </span>
-        <span aria-hidden="true">›</span>
-      </button>
-
-      {open && (
-        <Modal open title="回復" onClose={() => setOpen(false)}>
+      {
+        <Modal open title="回復" onClose={onClose}>
           <div>
             <div className={ui.sectionLabel}>筋肉の疲労</div>
             {muscles.map(row)}
@@ -162,7 +159,7 @@ export function RecoveryCard({ date, history }: Props) {
             </div>
           </div>
         </Modal>
-      )}
+      }
     </>
   );
 }

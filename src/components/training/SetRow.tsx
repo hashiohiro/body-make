@@ -18,6 +18,7 @@ interface NumberCellProps {
   integer?: boolean;
   ariaLabel: string;
   onCommit: (value: number | null) => void;
+  readOnly?: boolean | undefined;
 }
 
 /**
@@ -25,7 +26,16 @@ interface NumberCellProps {
  * 1 行に重量と回数を並べる都合上、ボタンを付けると数値の表示幅が削られて読みにくくなる。
  * 打鍵途中を潰さない確定ロジックは useNumericField に集約されている。
  */
-function NumberCell({ value, fallback, min, max, integer, ariaLabel, onCommit }: NumberCellProps) {
+function NumberCell({
+  value,
+  fallback,
+  min,
+  max,
+  integer,
+  ariaLabel,
+  onCommit,
+  readOnly,
+}: NumberCellProps) {
   const field = useNumericField(value, min, max, onCommit);
 
   return (
@@ -36,7 +46,8 @@ function NumberCell({ value, fallback, min, max, integer, ariaLabel, onCommit }:
       step={integer ? 1 : 'any'}
       min={min}
       max={max}
-      placeholder={fallback == null ? '—' : String(fallback)}
+      placeholder={readOnly ? '—' : fallback == null ? '—' : String(fallback)}
+      readOnly={readOnly}
       aria-label={ariaLabel}
       value={field.text}
       onChange={(e) => field.handleChange(e.target.value)}
@@ -68,7 +79,17 @@ interface Props {
   onValue: (field: SetField, value: number | null) => void;
   /** 行を足せない種目では、連番も削除も出さない（1 回で完結する種目） */
   rowClass: string;
+  /**
+   * 連番（と TOP の印）を出すか。**行を足せる種目かどうかで決まる。**
+   *
+   * 以前は `onRemove` の有無で出し分けていたが、読むだけのときに削除を落とすと
+   * 連番まで消え、`grid-template-columns` の 1 列目（34px）に入力欄が入って潰れた。
+   * **見せる情報と、押せる操作は別。**
+   */
+  showIndex: boolean;
   onRemove: (() => void) | undefined;
+  /** 読むだけ。値は変えられず、削除も出さない */
+  readOnly?: boolean | undefined;
 }
 
 export function SetRow({
@@ -81,8 +102,10 @@ export function SetRow({
   fallbackWeight,
   fallbackReps,
   onValue,
+  showIndex,
   onRemove,
   rowClass,
+  readOnly,
 }: Props) {
   const role = point?.role ?? 'work';
   // 器はこの行の描き方そのものを変える。種目が決めるので set 側の形は見ない
@@ -92,7 +115,7 @@ export function SetRow({
   return (
     <div className={`${s.setRow} ${rowClass}`} data-set-row={index}>
       {/* TOP は「いちばん重かったセット」の印。有酸素にその概念はない */}
-      {onRemove && (
+      {showIndex && (
         <span className={`${s.setIndex} ${role === 'top' && !cardio ? s.setIndexTop : ''}`}>
           {role === 'top' && !cardio ? 'TOP' : index + 1}
         </span>
@@ -111,6 +134,7 @@ export function SetRow({
             min={DURATION_SEC_RANGE[0] / 60}
             max={DURATION_SEC_RANGE[1] / 60}
             ariaLabel={`${index + 1}セット目の時間`}
+            readOnly={readOnly}
             // 打つのは分、持つのは秒。90 秒を 1.5 と書けて、丸めも起きない
             onCommit={(v) => onValue('seconds', v == null ? null : Math.round(v * 60))}
           />
@@ -127,6 +151,7 @@ export function SetRow({
             min={DISTANCE_M_RANGE[0]}
             max={DISTANCE_M_RANGE[1]}
             ariaLabel={`${index + 1}セット目の距離`}
+            readOnly={readOnly}
             onCommit={(v) => onValue('meters', v)}
           />
         </>
@@ -140,6 +165,7 @@ export function SetRow({
             min={repRangeOf(repUnit)[0]}
             max={repRangeOf(repUnit)[1]}
             ariaLabel={`${index + 1}セット目の${FIELD_NOUNS[repUnit]}`}
+            readOnly={readOnly}
             onCommit={(v) => onValue('reps', v)}
           />
 
@@ -155,6 +181,7 @@ export function SetRow({
                 min={SET_WEIGHT_RANGE[0]}
                 max={SET_WEIGHT_RANGE[1]}
                 ariaLabel={`${index + 1}セット目の重量`}
+                readOnly={readOnly}
                 onCommit={(v) => onValue('weight', v)}
               />
             </>
@@ -162,16 +189,20 @@ export function SetRow({
         </>
       )}
 
-      {onRemove && (
-        <button
-          type="button"
-          className={s.rowBtn}
-          aria-label={`${index + 1}セット目を削除`}
-          onClick={onRemove}
-        >
-          ×
-        </button>
-      )}
+      {/* 列を空けたままにする。落とすと残りの欄が寄って、幅が変わって見える */}
+      {showIndex &&
+        (onRemove ? (
+          <button
+            type="button"
+            className={s.rowBtn}
+            aria-label={`${index + 1}セット目を削除`}
+            onClick={onRemove}
+          >
+            ×
+          </button>
+        ) : (
+          <span />
+        ))}
     </div>
   );
 }

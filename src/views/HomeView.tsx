@@ -3,7 +3,6 @@ import { BadgeGrid } from '../components/BadgeGrid';
 import { Hero } from '../components/Hero';
 import { SafetyNotices } from '../components/SafetyNotices';
 import { StatTiles } from '../components/StatTiles';
-import { StreakStrip } from '../components/StreakStrip';
 import { GroupSetsHeatmap } from '../components/training/GroupSetsHeatmap';
 import { TrainingSummary } from '../components/training/TrainingSummary';
 import type { GroupValueId } from '../components/training/groupValues';
@@ -44,9 +43,6 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
     .filter((p) => p.maWeight != null && p.maBodyFat != null)
     .map((p) => ({ t: p.time, v: p.maWeight! - (p.maWeight! * p.maBodyFat!) / 100 }));
 
-  // 体組成の記録カレンダーに、トレーニングした日を重ねる
-  const trainingDates = new Set(sessions.map((x) => x.date));
-
   /*
    * 実績もいまの側だけを出す。
    * 体重を測っただけの日に「トレ100回まであと少し」が並ぶと、
@@ -71,12 +67,6 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
 
   return (
     <>
-      {/*
-        記録が消えることの案内は、いちばん上——切り替えと現在地のあいだ——に置く。
-        いったん下に置いていたが、**毎日見る数字より下にあると読まれない。**
-        言っているのは「この端末にしか無い」なので、読まれなければ意味がない。
-        切り替えのどちら側でも同じことを言うので、出し分けない。
-      */}
       <SafetyNotices data={body.data} />
 
       {domain === 'body' &&
@@ -130,11 +120,9 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
         </>
       )}
 
-      {/* 記録の継続は体組成の記録カレンダー。トレーニング側は今週の 7 日を上のカードが持つ */}
       {domain === 'body' && daily.length > 0 && (
         <>
           <p className={ui.sectionLabel}>実績</p>
-          <StreakStrip daily={daily} stats={stats} trainingDates={trainingDates} />
           <BadgeGrid badges={badges} />
         </>
       )}

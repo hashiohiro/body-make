@@ -35,9 +35,31 @@ export interface TimeSeriesChartProps {
   emptyMessage?: string;
   /** 既定は系列が 2 本以上のとき。同じ量を点と線で描く場合は明示的に消す */
   legend?: boolean;
+  /**
+   * 「いま」の点。日次のグラフなら今日、週次なら今週の x 値（`isoToTime`）。
+   *
+   * **色は系列のまま**にして、輪だけを重ねる。ここに別の色を足すと、
+   * 系列の色が実体に固定されている（体重は青、体脂肪はオレンジ）約束が崩れ、
+   * 読む側は「この色は何か」をもう 1 つ覚えることになる。
+   *
+   * 端の点とは限らない。まとめて入力した日や、今日まだ記録していない日がある。
+   */
+  highlight?: number | null;
 }
 
 const MARGIN = { top: 14, right: 50, bottom: 24, left: 40 } as const;
+
+/**
+ * 触れる範囲をプロットより広げる量（px）。
+ *
+ * **幾何ではなく指の太さのための値。**いちばん新しい点はプロットの右端に乗るので、
+ * そこを狙うと接触点が数 px はみ出す。厳密に切ると、読みたい点が選べないうえに、
+ * 出ていたツールチップも消える。
+ *
+ * 軸ラベルの帯（下 24px・左 40px）までは届かない大きさにする。
+ * ここを広げすぎると「グラフの外を触ったら消える」が効かなくなる。
+ */
+const OUTSIDE_SLACK = 12;
 
 export function TimeSeriesChart({
   series,
@@ -49,28 +71,41 @@ export function TimeSeriesChart({
   reference = null,
   emptyMessage = 'まだ記録がありません',
   legend,
+  highlight = null,
 }: TimeSeriesChartProps) {
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
+  /** プロットの矩形。外を触ったかどうかは**ここ**で判定する */
+  const hitRef = useRef<SVGRectElement>(null);
   const [active, setActive] = useState<number | null>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const [tipW, setTipW] = useState(128);
 
   /*
-   * **グラフの外を触ったら選択を解く。**
+   * **プロットの外を触ったら選択を解く。**
    *
    * 指を離しても残すようにしたぶん、放っておくと消す手段が無くなる。
    * 別のグラフを触ったときもそちらが選ばれてこちらは消える（同時に 2 つ出さない）。
    * 捕捉フェーズで見るのは、内側のハンドラが動く前に外かどうかを決めたいため。
+   *
+   * **判定は「包んでいる要素の中か」ではなく、プロットの矩形そのもの。**
+   * 包む div で見ると、軸ラベルや上下の余白——見た目にはグラフの外——を触っても
+   * 残ってしまう。読む人にとっての「グラフ」は、点と線が乗っている範囲のほう。
    */
   useEffect(() => {
     if (active == null) return;
     const onDown = (e: PointerEvent) => {
-      const node = wrapRef.current;
-      if (node && !node.contains(e.target as Node)) setActive(null);
+      const rect = hitRef.current?.getBoundingClientRect();
+      const inside =
+        rect != null &&
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+      if (!inside) setActive(null);
     };
     document.addEventListener('pointerdown', onDown, true);
     return () => document.removeEventListener('pointerdown', onDown, true);
-  }, [active, wrapRef]);
+  }, [active]);
 
   // 中身で幅が変わるので測る。同じ値なら state を触らない（再描画を呼ばない）
   useLayoutEffect(() => {
@@ -104,6 +139,31 @@ export function TimeSeriesChart({
 
   const x = linearScale(domain, [MARGIN.left, MARGIN.left + plotW]);
   const y = linearScale([yScaleInfo.min, yScaleInfo.max], [MARGIN.top + plotH, MARGIN.top]);
+
+  /*
+   * 「いま」の点に重ねる印。
+   *
+   * **線の上だけに置く。**日平均の点群にも付けると、同じ日に印が 2 つ並んで
+   * どちらを読めばいいのか分からなくなる。判断に使うのは移動平均の線のほう。
+   *
+   * **同じ位置には 1 つだけ描く。**線どうしが同じ値を通ることがある。
+   * 2 度描くと半透明の輪が重なって、そこだけ濃く見える。
+   */
+  const nowMarks: { id: string; color: string; cx: number; cy: number }[] = [];
+  if (highlight != null) {
+    const seen = new Set<string>();
+    // **線の上だけに置く。**点群にも付けると、同じ日に印が 2 つ出て読みにくい
+    for (const serie of series.filter((serie) => serie.kind === 'line')) {
+      const p = serie.points.find((point) => point.t === highlight);
+      if (!p) continue;
+      const cx = x(p.t);
+      const cy = y(p.v);
+      const key = `${cx},${cy}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      nowMarks.push({ id: serie.id, color: serie.color, cx, cy });
+    }
+  }
   const decimals = tickDecimals(yScaleInfo.step);
 
   const xTicks = useMemo(() => pickTimeTicks(times, 4), [times]);
@@ -112,8 +172,17 @@ export function TimeSeriesChart({
 
   function handleMove(event: ReactPointerEvent<SVGRectElement>) {
     if (!hasData || plotW <= 0) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = (event.clientX - rect.left) / rect.width;
+    /*
+     * 触れる矩形はプロットより広いので、そちらを基準にすると位置がずれる。
+     * SVG の座標系に直してから、プロットの範囲で 0〜1 に収める
+     * （はみ出したぶんは端の点として読む）。
+     */
+    const svg = event.currentTarget.ownerSVGElement;
+    if (!svg) return;
+    const box = svg.getBoundingClientRect();
+    const scale = box.width > 0 ? width / box.width : 1;
+    const ux = (event.clientX - box.left) * scale;
+    const ratio = Math.min(1, Math.max(0, (ux - MARGIN.left) / plotW));
     const t = domain[0] + ratio * (domain[1] - domain[0]);
     let best = 0;
     let bestDist = Infinity;
@@ -285,7 +354,7 @@ export function TimeSeriesChart({
                           stroke="var(--surface)"
                           strokeWidth={2}
                         />
-                        <text className={s.endLabel} x={x(last.t) + 9} y={y(last.v)} dy="0.32em">
+                        <text className={s.endLabel} x={x(last.t) + 12} y={y(last.v)} dy="0.32em">
                           {last.v.toFixed(digits)}
                         </text>
                       </>
@@ -293,6 +362,32 @@ export function TimeSeriesChart({
                   </g>
                 );
               })}
+
+            {/*
+              「いま」の点。輪を重ねて、線の上のどこが今日（今週）かを一目で出す。
+              ホバーより先に描いて、触っているあいだはそちらが上に来るようにする。
+            */}
+            {nowMarks.map((mark) => (
+              <g key={`now-${mark.id}`} data-now="">
+                <circle
+                  cx={mark.cx}
+                  cy={mark.cy}
+                  r={6.5}
+                  fill="none"
+                  stroke={mark.color}
+                  strokeWidth={1.5}
+                  opacity={0.45}
+                />
+                <circle
+                  cx={mark.cx}
+                  cy={mark.cy}
+                  r={4}
+                  fill={mark.color}
+                  stroke="var(--surface)"
+                  strokeWidth={2}
+                />
+              </g>
+            ))}
 
             {/* ホバー中の点は 2px のサーフェスリングで線から浮かせる */}
             {activeTime != null &&
@@ -313,11 +408,18 @@ export function TimeSeriesChart({
               })}
 
             <rect
+              ref={hitRef}
               className={s.hit}
-              x={MARGIN.left}
-              y={MARGIN.top}
-              width={plotW}
-              height={plotH}
+              /*
+                **プロットより少し広く取る。**いちばん新しい点は右端に乗るので、
+                そこを指で狙うと接触点が数 px はみ出す。厳密に切ると、読みたい点が
+                選べないうえに、出ていたツールチップも消える。
+                外を触ったかどうかの判定も、この矩形 1 つに任せる。
+              */
+              x={MARGIN.left - OUTSIDE_SLACK}
+              y={MARGIN.top - OUTSIDE_SLACK}
+              width={plotW + OUTSIDE_SLACK * 2}
+              height={plotH + OUTSIDE_SLACK * 2}
               onPointerMove={handleMove}
               onPointerDown={handleMove}
               /*

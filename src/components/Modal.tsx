@@ -9,9 +9,11 @@ interface Props {
   /**
    * 面を差し替えている最中の戻り先。
    *
-   * 渡すと、右上のボタンが「閉じる」ではなく「‹ 戻る」になる。
-   * 深い面から「閉じる」でダイアログごと消えると、元居た面まで一緒に失われる。
-   * Esc と背面のキャンセルも同じ戻り方にそろえる。
+   * 渡すと、見出しの左に「‹ 戻る」が出る。**閉じるは残す。**
+   * 戻るだけにすると、用が済んだ人が閉じるまでに 2 回押すことになる
+   * （深い面ほど、そこで終わる回数のほうが多い）。
+   * Esc と背面のキャンセルは戻るに合わせる。ダイアログごと消えると、
+   * 元居た面まで一緒に失われるため。
    */
   onBack?: (() => void) | undefined;
   children: ReactNode;
@@ -91,9 +93,14 @@ export function Modal({ open, title, onClose, onBack, children }: Props) {
   return (
     <dialog ref={ref} className={s.dialog} onCancel={onBack ?? onClose} onClose={onBack ?? onClose}>
       <div className={s.head}>
+        {onBack && (
+          <button type="button" className={s.back} onClick={onBack}>
+            ‹ 戻る
+          </button>
+        )}
         <span className={s.title}>{title}</span>
-        <button type="button" className={s.close} onClick={onBack ?? onClose}>
-          {onBack ? '‹ 戻る' : '閉じる'}
+        <button type="button" className={s.close} onClick={onClose}>
+          閉じる
         </button>
       </div>
       <div className={s.body}>{open && children}</div>

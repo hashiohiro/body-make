@@ -9,8 +9,17 @@ function inset(): number {
   return Math.max(16, window.innerWidth / 2 - 360 + 16);
 }
 
-/** タブバーの高さ。トークンから引く（値を 2 か所に書かない） */
+/**
+ * タブバーが実際に占める高さ。
+ *
+ * **測る。**`--tab-h` はバーの中身の高さで、その下に `env(safe-area-inset-bottom)` が
+ * 付く（ホームインジケータのある端末で 30px 前後）。トークンだけを見ていると、
+ * そのぶんボタンがバーの下に潜る。測れない環境ではトークンに落ちる。
+ */
 function tabHeight(): number {
+  const bar = document.querySelector('[data-tabbar]');
+  const measured = bar?.getBoundingClientRect().height ?? 0;
+  if (measured > 0) return measured;
   const raw = getComputedStyle(document.documentElement).getPropertyValue('--tab-h');
   const n = Number.parseFloat(raw);
   return Number.isFinite(n) ? n : 56;
@@ -66,7 +75,15 @@ export function useFabPosition() {
   const justDragged = useRef(false);
   const [offset, setOffset] = useState<{ x: number; y: number } | null>(null);
 
-  useEffect(() => setPos(load()), []);
+  /*
+   * 覚えた置き場所は、**読むときにも画面に収め直す。**
+   * 保存したときと画面の高さが違うことがある（横向き・アドレスバーの出入り・機種変更）。
+   * 保存時にしか収めないと、条件が変わったときにバーの下へ潜ったまま戻らない。
+   */
+  useEffect(() => {
+    const saved = load();
+    setPos(saved && { ...saved, bottom: clampBottom(saved.bottom) });
+  }, []);
 
   const onPointerDown = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
     // 副ボタンや複数指では始めない
