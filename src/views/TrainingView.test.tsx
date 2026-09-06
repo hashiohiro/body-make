@@ -219,8 +219,9 @@ describe('トレ画面', () => {
 
     // 60×10 + 60×9 = 1,140 kg（種目カードの小計）
     expect(screen.getAllByText(/1,140 kg/).length).toBeGreaterThan(0);
-    // 推定1RM は種目カードにだけ出す。ベンチは分母 40 なので 60 × (1 + 10/40) = 75.0
-    expect(screen.getByText(/推定1RM 75\.0 kg/)).toBeTruthy();
+    // 推定1RM はベンチの分母 40 で 60 × (1 + 10/40) = 75.0。
+    // カードと、打っている面（セット入力）の両方に出る
+    expect(screen.getAllByText(/推定1RM 75\.0 kg/)).toHaveLength(2);
     // 換算元のセットは併記しない。その日のセットは編集の面に並んでいる
     expect(screen.queryByText(/から）/)).toBeNull();
   });
@@ -279,9 +280,13 @@ describe('トレ画面', () => {
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     expand('ベンチプレス');
 
-    // 最高重量は換算後ではなく、バーに載せた数字
-    expect(screen.getByText('最高重量 60.0 kg')).toBeTruthy();
-    expect(screen.getByText('最高挙上量 600 kg')).toBeTruthy();
+    /*
+     * 最高重量は換算後ではなく、バーに載せた数字。
+     * カードと、打っている面（セット入力のダイアログ）の両方に出す——
+     * 「前回より重く」を確かめるのに、いちいち閉じて戻らなくてよいように
+     */
+    expect(screen.getAllByText('最高重量 60.0 kg')).toHaveLength(2);
+    expect(screen.getAllByText('最高挙上量 600 kg')).toHaveLength(2);
 
     /*
      * 残り（あと N kg）は出さない。その日の合計はすぐ上の行にあり、
@@ -289,7 +294,7 @@ describe('トレ画面', () => {
      */
     typeSet(setRows()[0]!, '60', '7');
     expect(screen.queryByText(/あと /)).toBeNull();
-    expect(screen.getByText('最高挙上量 600 kg')).toBeTruthy();
+    expect(screen.getAllByText('最高挙上量 600 kg')).toHaveLength(2);
   });
 
   it('✓ をもう一度押すとその日から外れる', () => {
@@ -2667,7 +2672,7 @@ describe('ホームの部位別の配分', () => {
    * 12 週ぶん並べていた頃は、表が画面幅に収まらず横スクロールの中に隠れていた。
    * 隠れるのは端の週で、そこにいちばん見たい直近が入る。
    */
-  it('直近5週だけを、左が最新で出す', () => {
+  it('直近5週だけを、古い順で出す', () => {
     // 8 週ぶん打つ（今週から 7 週前まで）
     const days = [0, 1, 2, 3, 4, 5, 6, 7].map((n) => isoAdd(todayISO(), -7 * n));
     seedData(
@@ -2679,10 +2684,11 @@ describe('ホームの部位別の配分', () => {
     render(<HomeHarness />);
 
     const card = within(screen.getByText('部位別の配分').closest('section')!);
+    // 並びはグラフと同じ向き（左が古い・右が今週）
     const heads = card.getAllByRole('columnheader').map((h) => h.textContent);
     expect(heads).toEqual([
       '部位',
-      ...[0, 1, 2, 3, 4].map((n) => formatMD(startOfWeek(isoAdd(todayISO(), -7 * n)))),
+      ...[4, 3, 2, 1, 0].map((n) => formatMD(startOfWeek(isoAdd(todayISO(), -7 * n)))),
     ]);
   });
 
@@ -3934,7 +3940,8 @@ describe('有酸素', () => {
     render(<Harness />);
     expand('水泳');
 
-    expect(screen.getByText(/2\s*本/)).toBeTruthy();
+    // カードと、打っている面の両方に出る
+    expect(screen.getAllByText(/2\s*本/)).toHaveLength(2);
     expect(screen.queryByText(/2\s*セット/)).toBeNull();
     expect(screen.getByRole('button', { name: '＋ 本を追加' })).toBeTruthy();
   });
@@ -3964,7 +3971,7 @@ describe('有酸素', () => {
     expect(screen.queryByRole('button', { name: '＋ 本を追加' })).toBeNull();
     expect(screen.queryByRole('button', { name: '1セット目を削除' })).toBeNull();
     expect(screen.queryByText(/1\s*本/)).toBeNull();
-    expect(screen.getByText(/5200\s*m/)).toBeTruthy();
+    expect(screen.getAllByText(/5200\s*m/)).toHaveLength(2);
   });
 
   it('繰り返すかどうかはカタログが決める', async () => {
@@ -3996,8 +4003,8 @@ describe('有酸素', () => {
     expand('サーキット');
 
     // 距離は出ないので、量は時間と本数で見る
-    expect(screen.getByText(/3\s*本/)).toBeTruthy();
-    expect(screen.getByText(/18.7\s*分/)).toBeTruthy();
+    expect(screen.getAllByText(/3\s*本/)).toHaveLength(2);
+    expect(screen.getAllByText(/18.7\s*分/)).toHaveLength(2);
   });
 
   it('部位の回復には出ない（筋肥大の回復モデルに乗せない）', () => {

@@ -29,10 +29,11 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
   const [openTrend, setOpenTrend] = useState(false);
   const value = GROUP_VALUES.find((v) => v.id === valueId)!;
   /*
-   * **左が最新。**横に流れるものではなく、いま何をやったかを読む表なので、
-   * 目が最初に入る側に直近を置く（新しい順に並べる）。
+   * **左が古い。**同じ面のグラフ（部位別の推移）と横軸の向きをそろえる。
+   * 表とグラフで時間の向きが逆だと、切り替えるたびに読み方を入れ替えることになる。
+   * 直近は右端。何週ぶん出すかは MAX_WEEKS が決める。
    */
-  const visible = weeks.slice(-MAX_WEEKS).reverse();
+  const visible = weeks.slice(-MAX_WEEKS);
 
   if (visible.length === 0) {
     return (
@@ -47,7 +48,7 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
       <section className={ui.card}>
         <header className={ui.cardHeader}>
           <h2 className={ui.cardTitle}>部位別の配分</h2>
-          <span className={ui.hint}>週あたり / 左が最新</span>
+          <span className={ui.hint}>週あたり / 右が今週</span>
         </header>
 
         <div className={ui.chipRow} role="group" aria-label="表示する値">

@@ -302,6 +302,14 @@ export function TrainingView({ body, date, readOnly }: Props) {
             entry={editEntry}
             point={session?.exercises.find((p) => p.exerciseId === editExercise.id) ?? null}
             previous={previousPoint(sessions, editExercise.id, date)}
+            // カードと同じ通算の最高。打ちながら「最高に届くか」を見られるようにする
+            best={personalBest(sessions, editExercise.id, addDays(date, -1), pickVolume)}
+            bestWeight={personalBest(
+              sessions,
+              editExercise.id,
+              addDays(date, -1),
+              (p) => p.top?.weight ?? null,
+            )}
             onValue={(index, field, value) =>
               setSetValue(date, editExercise.id, index, field, value)
             }

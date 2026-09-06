@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ExerciseTotals } from './ExerciseTotals';
 import { SetRow } from './SetRow';
 import { catalogEquipment, isCardio } from '../../lib/exerciseCatalog';
 import { formatMD } from '../../lib/date';
@@ -14,6 +15,10 @@ interface Props {
   entry: SessionExercise;
   point: ExercisePoint | null;
   previous: ExerciseHistoryPoint | null;
+  /** その日より前の挙上量の最高値。カードと同じものを、打ちながら見られるようにする */
+  best: number | null;
+  /** 同じくその日より前の、記録した重量の最高値 */
+  bestWeight: number | null;
   onValue: (index: number, field: SetField, value: number | null) => void;
   onAddSet: () => void;
   onRemoveSet: (index: number) => void;
@@ -61,6 +66,8 @@ export function ExerciseSetEditor({
   entry,
   point,
   previous,
+  best,
+  bestWeight,
   onValue,
   onAddSet,
   onRemoveSet,
@@ -122,6 +129,19 @@ export function ExerciseSetEditor({
           <span>この種目の記録は初めてです</span>
         )}
       </div>
+
+      {/*
+        その日の合計と通算の最高を、**打っている面にも出す。**
+        「前回より重く」「最高に届くか」を確かめるために、いちいち閉じてカードへ
+        戻ることになっていた。カードと同じ部品なので、数字の出し方もそろう。
+      */}
+      <ExerciseTotals
+        exercise={exercise}
+        point={point}
+        previous={previous}
+        best={best}
+        bestWeight={bestWeight}
+      />
 
       {/*
         **1 回で完結する種目は、行の道具立てを出さない。**
