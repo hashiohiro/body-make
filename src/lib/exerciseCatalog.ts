@@ -1413,16 +1413,29 @@ export const GROUP_COLORS: Record<MuscleGroup, string> = {
  * 「負荷の種類」と「片手ぶんか」を別々に考えさせず、
  * 見れば分かる事実（何を持っているか）だけを 1 つ選ばせる。
  */
+/*
+ * 名前は **同時に持つウエイトの数** で付ける。
+ *
+ * 「バーベル換算」は結果の名前で、どんなときに選ぶのかを言っていなかった
+ * （ダンベル種目に付ける設定なのに、名前がバーベルを指している）。
+ * 判定に使えるのは持つ数のほう——記録欄に書くのはいつでもウエイト 1 つぶんの重量なので、
+ * 実際に動かした重さは **書いた重量 × 持つ数** になる。
+ *
+ * 効いている部位の数では判定できない。ベンチプレスも左右の胸に効いているが、
+ * バーは 1 本で、書いた 60kg にすでに左右ぶんが入っている。
+ */
 export const LOAD_MODE_LABELS: Record<LoadMode, string> = {
-  standard: '挙上ウエイト',
-  perSide: 'バーベル換算',
-  bodyweight: '自重換算',
+  standard: 'ウエイト1つ',
+  perSide: 'ウエイト2つ',
+  bodyweight: '自重＋加重',
 };
 
+/** 同じ 10kg を書いたときに何として数えるか。選び直すと結果が変わるので、例で示す */
 export const LOAD_MODE_HINTS: Record<LoadMode, string> = {
-  standard: '記録した重量がそのまま負荷。バーベル・マシン・片手ずつのダンベル',
-  perSide: '左右に1つずつ持つ。ダンベル20kg×2 を バーベル40kg として計上します',
-  bodyweight: '体重を足して計上。懸垂・ディップス。重量欄は追加分',
+  standard: 'バー・マシン・片手ずつのダンベル。10kg と書けば 10kg として数えます',
+  perSide:
+    '左右に1つずつ同時に持つ種目。書くのは片方ぶんで、10kg なら 10×2 = 20kg として数えます（最高重量と推定1RMは書いた 10kg のまま）',
+  bodyweight: '懸垂・ディップス。重量欄は体重に足す追加分。体重68kgなら 10kg で 78kg',
 };
 
 export const LOAD_MODE_ORDER: LoadMode[] = ['standard', 'perSide', 'bodyweight'];

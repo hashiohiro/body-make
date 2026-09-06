@@ -162,7 +162,11 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
       kind={goalKind(ex)}
       goal={goalValue(ex)}
       factLeft={(usage.get(ex.id) ?? 0) > 0 ? `記録 ${usage.get(ex.id)}日` : '記録はまだありません'}
-      factRight={`${LOAD_MODE_LABELS[ex.loadMode]} ・ ${REP_UNIT_LABELS[ex.repUnit]}で数える`}
+      /*
+        負荷の数え方と回数の単位は出さない。**一覧で読むものではない。**
+        ふだんはカタログの既定で正しく、触るのは自作種目のときくらいなので、
+        全部の行に並べても読む量が増えるだけになる（変えるのは「設定」の中）。
+      */
       actions={
         ex.hidden ? (
           <>

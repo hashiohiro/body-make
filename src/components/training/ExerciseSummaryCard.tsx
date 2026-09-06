@@ -13,9 +13,9 @@ interface Props {
   goal?: string | null;
   /** 0〜1 の到達率。null ならメーターを出さない */
   progress?: number | null;
-  /** その画面が持つ事実。左が主、右が従 */
+  /** その画面が持つ事実。左が主、右が従（従は無くてもよい） */
   factLeft: ReactNode;
-  factRight: ReactNode;
+  factRight?: ReactNode;
   /** 下に並べる入口。画面ごとに違うのはここだけ */
   actions: ReactNode;
   /** 開いたときのフォーム（目標の編集・種目の詳細設定） */
@@ -60,7 +60,7 @@ export function ExerciseSummaryCard({
 
       <div className={s.goalFoot}>
         <span>{factLeft}</span>
-        <span>{factRight}</span>
+        {factRight != null && <span>{factRight}</span>}
       </div>
 
       <div className={s.itemActions}>{actions}</div>

@@ -235,9 +235,17 @@ export function buildExercisePoint(
    * トップセットに固定すれば、値の出どころが 1 セットに定まり、
    * たいていの場合レップ数も最小なので外挿も小さくなる。
    */
-  const oneRm = top?.counted
-    ? estimateOneRm(top.effectiveWeight, top.reps, exercise.rmDivisor)
-    : null;
+  /*
+   * **手に持つ重さの目盛りで出す。**
+   *
+   * 左右 2 つぶんに換算した重量から出すと、片手 10kg のサイドレイズに
+   * 「推定1RM 26.7kg」と出て、同じカードの「最高重量 10.0kg」と目盛りが食い違う。
+   * 1RM は「次に何 kg を持てそうか」を読む数字なので、書いた重量の側にそろえる。
+   * 挙上量と部位別の配分は動かした総量のままにする（そちらは足し算に使う）。
+   */
+  const rmWeight = exercise.loadMode === 'perSide' ? top?.weight : top?.effectiveWeight;
+  const oneRm =
+    top?.counted && rmWeight != null ? estimateOneRm(rmWeight, top.reps, exercise.rmDivisor) : null;
   const measured = oneRm != null && top?.reps === 1;
 
   /*

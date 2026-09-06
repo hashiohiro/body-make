@@ -647,7 +647,8 @@ describe('種目管理（設定タブ）', () => {
 
     // 出す事実はこの画面のもの（記録の量と数え方）。形は目標画面のカードと同じ
     expect(screen.getByText('記録 12日')).toBeTruthy();
-    expect(screen.getByText(/挙上ウエイト ・ 回で数える/)).toBeTruthy();
+    // 負荷の数え方と回数の単位は一覧に出さない（変えるのは「設定」の中）
+    expect(screen.queryByText(/ウエイト1つ/)).toBeNull();
 
     // 目標の値は必ず「目標」と書いてから出す（数字だけだと何の数字か読めない）
     expect(screen.queryByText('100kg')).toBeNull();
