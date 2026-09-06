@@ -1,6 +1,5 @@
 import { deltaTone, fmt, fmtDelta } from '../../lib/format';
 import { GROUP_LABELS, goalTypeLabel, isCardio } from '../../lib/exerciseCatalog';
-import { formatTopSet } from '../../lib/training';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { Exercise, ExercisePoint } from '../../types';
 import ui from '../../styles/ui.module.scss';
@@ -116,11 +115,14 @@ export function ExerciseCard({
           </>
         ) : (
           <>
-            {/* 推定1RM はこのカードにだけ出す */}
+            {/*
+              推定1RM はこのカードにだけ出す。**元にしたセットは添えない。**
+              その日のセットはすぐ下（編集）に並んでいて、どれが最大かは見れば分かる。
+              数字の横に「（60kg × 10 から）」まで置くと、1 行で読むものが増える。
+            */}
             {point?.oneRm != null && (
               <span>
                 推定1RM {fmt(point.oneRm)} kg{point.measured ? ' *' : ''}
-                {formatTopSet(point) && ` （${formatTopSet(point)} から）`}
               </span>
             )}
             <b>
@@ -135,17 +137,16 @@ export function ExerciseCard({
 
       {/*
         通算の最高。前回との差は上の行が持っているので、ここは通算で見る。
-        残りは入力の途中から出す（上の差分は volume が 0 のあいだ出ない）。
-        「あと」は挙上量に括り付ける。並べただけだと、どちらまでの残りか読めない
+
+        **残り（あと N kg）は出さない。**その日の合計はすぐ上の行にあり、
+        並べれば届いたかどうかは読める。差を書くと、打つたびに動く数字が
+        1 行に 2 つ並ぶ（前回比と残り）。
       */}
       {!cardio && (bestWeight != null || (best != null && best > 0)) && (
         <div className={s.exPrev}>
           {bestWeight != null && <span>最高重量 {fmt(bestWeight)} kg</span>}
           {best != null && best > 0 && (
-            <span>
-              最高挙上量 {Math.round(best).toLocaleString()} kg
-              {volume < best && `（あと ${Math.round(best - volume).toLocaleString()} kg）`}
-            </span>
+            <span>最高挙上量 {Math.round(best).toLocaleString()} kg</span>
           )}
         </div>
       )}

@@ -221,8 +221,8 @@ describe('トレ画面', () => {
     expect(screen.getAllByText(/1,140 kg/).length).toBeGreaterThan(0);
     // 推定1RM は種目カードにだけ出す。ベンチは分母 40 なので 60 × (1 + 10/40) = 75.0
     expect(screen.getByText(/推定1RM 75\.0 kg/)).toBeTruthy();
-    // 換算元のセットを併記する（外挿の大きさが読めるように）
-    expect(screen.getByText(/10 × 60kg から/)).toBeTruthy();
+    // 換算元のセットは併記しない。その日のセットは編集の面に並んでいる
+    expect(screen.queryByText(/から）/)).toBeNull();
   });
 
   it('書いたセットはすべて挙上量に数える（ウォームアップの区別を持たない）', () => {
@@ -265,7 +265,7 @@ describe('トレ画面', () => {
     expect(setRows().length).toBe(1);
   });
 
-  it('総重量の下に通算の最高重量・最高挙上量と、そこまでの残りを出す', async () => {
+  it('総重量の下に通算の最高重量・最高挙上量を出す', async () => {
     const { addDays, todayISO } = await import('../lib/date');
     const today = todayISO();
     // 過去最高（600）と前回（500）を別の日にして、前回ではなく通算の最高を見ていることを確かめる
@@ -281,16 +281,15 @@ describe('トレ画面', () => {
 
     // 最高重量は換算後ではなく、バーに載せた数字
     expect(screen.getByText('最高重量 60.0 kg')).toBeTruthy();
-    // まだ 1kg も積んでいない時点でも、目安として残り全量を出す
-    expect(screen.getByText('最高挙上量 600 kg（あと 600 kg）')).toBeTruthy();
-
-    typeSet(setRows()[0]!, '60', '7');
-    expect(screen.getByText('最高挙上量 600 kg（あと 180 kg）')).toBeTruthy();
-
-    // 届いたら残りは出さない。当日を最高値に含めると、入れた瞬間に必ず 0 になる
-    typeSet(setRows()[0]!, '60', '10');
     expect(screen.getByText('最高挙上量 600 kg')).toBeTruthy();
+
+    /*
+     * 残り（あと N kg）は出さない。その日の合計はすぐ上の行にあり、
+     * 並べれば届いたかどうかは読める。
+     */
+    typeSet(setRows()[0]!, '60', '7');
     expect(screen.queryByText(/あと /)).toBeNull();
+    expect(screen.getByText('最高挙上量 600 kg')).toBeTruthy();
   });
 
   it('✓ をもう一度押すとその日から外れる', () => {
