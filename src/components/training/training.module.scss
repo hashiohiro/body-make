@@ -798,6 +798,135 @@
   border-bottom: 1px solid var(--border);
 }
 
+/*
+ * 今週の量の 1 行（部位）。**1 部位 1 行に収める。**
+ *
+ * 名前・バー・数字・前回を同じ列位置にそろえるので、縦に目を滑らせて比べられる。
+ * ラベル（「今週のセット数」）を行ごとに書かないのは、6 回繰り返しても
+ * 読む価値があるのは最初の 1 回だけだから。単位はカードの見出しが持つ。
+ */
+.volRow {
+  display: grid;
+  /*
+   * **バーの幅は固定。**流動の列に置くと、隣の文字数（「記録なし」と「今日」、
+   * 「12.5 / 12」と「0 / —」）でバーの長さが行ごとに変わり、
+   * 埋まり具合ではなく文字数を見比べることになる。
+   * 数える対象が同じなら、目盛りの長さも同じでなければ比べられない。
+   */
+  grid-template-columns: 3.2em 88px minmax(0, 1fr) 4.4em auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  color: var(--ink);
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
+
+  /* 行の中では、バーの上下余白を持たせない（高さは行が決める） */
+  .meter {
+    margin: 0;
+  }
+}
+
+.volName {
+  font-size: 13px;
+  font-weight: 600;
+  @include truncate;
+}
+
+/* 単位はカードの見出しが持つ（行ごとに「セット」と書くと、そのぶんバーが痩せる） */
+.volValue {
+  text-align: right;
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  @include tabular;
+}
+
+/* バーを持たない行（有酸素）。名前の右をそのまま使う */
+.volWide {
+  grid-column: 2 / 4;
+  font-size: 12px;
+  color: var(--ink-2);
+  @include tabular;
+}
+
+.volStatus {
+  text-align: right;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--ink-muted);
+  @include tabular;
+}
+
+/*
+ * 種目の目標の 1 行。**2 段に分ける。**
+ * 名前と立て方は語で読むもの、いま → 目標 と到達率は数で読むもので、
+ * 1 行に混ぜると名前が数字に押されて切れる。
+ */
+.goalRow {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  color: var(--ink);
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
+}
+
+.goalRowHead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.goalRowName {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  @include truncate;
+}
+
+.goalRowBody {
+  display: grid;
+  /* 量の行と同じく、バーの幅は固定。値の長さでバーが伸び縮みしないようにする */
+  grid-template-columns: minmax(0, 1fr) 88px 3.6em;
+  align-items: center;
+  gap: 8px;
+
+  .meter {
+    margin: 0;
+  }
+}
+
+.goalRowValue {
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  @include tabular;
+}
+
+.goalRowPct {
+  text-align: right;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--ink-muted);
+  @include tabular;
+}
+
 /* 行の中の 1 段。名前と値だけを持ち、バーは持たない */
 .boardLine {
   display: flex;

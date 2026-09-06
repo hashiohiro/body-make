@@ -2744,7 +2744,7 @@ describe('目標画面', () => {
     // 一覧には出さない。決めるのは部位を開いた先
     expect(screen.queryByRole('button', { name: '標準 12' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: '胸の目標' }));
+    fireEvent.click(screen.getByRole('button', { name: '胸の今週の量' }));
     // 決めるのは 1 段先の面。表示部と押す場所を分ける
     fireEvent.click(screen.getByRole('button', { name: '部位目標を設定' }));
     fireEvent.click(screen.getByRole('button', { name: '標準 12' }));
@@ -2758,16 +2758,16 @@ describe('目標画面', () => {
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     // ほかの部位は動かさない（1 か所を開いているのに 6 か所が変わると驚く）
-    expect(screen.getByText('0 / 6 セット')).toBeTruthy();
-    // 目標を決めていない部位は、数値の横に「目標なし」と書く（一覧にバーは置かない）
-    expect(screen.getAllByText('0 セット（目標なし）')).toHaveLength(5);
+    expect(screen.getByText('0 / 6')).toBeTruthy();
+    // 決めていない部位は割る相手がないので、分母を「—」にしてバーも出さない
+    expect(screen.getAllByText('0 / —')).toHaveLength(5);
 
-    fireEvent.click(screen.getByRole('button', { name: '胸の目標' }));
+    fireEvent.click(screen.getByRole('button', { name: '胸の今週の量' }));
     fireEvent.click(screen.getByRole('button', { name: '部位目標を設定' }));
     fireEvent.click(screen.getByRole('button', { name: '決めない' }));
     fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expect(screen.getAllByText('0 セット（目標なし）')).toHaveLength(6);
+    expect(screen.getAllByText('0 / —')).toHaveLength(6);
   });
 
   it('種目の目標は目標画面で決め、その場から推移も見られる', () => {
@@ -2782,48 +2782,49 @@ describe('目標画面', () => {
 
     render(<Harness />);
 
-    // 決めるのも見るのも、その部位を開いた先で完結する
-    fireEvent.click(screen.getByRole('button', { name: '胸の目標' }));
-    expect(screen.getByText(/この部位の種目には、まだ目標がありません/)).toBeTruthy();
+    // 目標はカードから直接足す。部位を開く必要はない（部位は量の話）
+    expect(screen.getByText(/まだ目標がありません/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
     fireEvent.click(screen.getByRole('button', { name: /^ベンチプレス/ }));
     fireEvent.change(screen.getByLabelText(/ベンチプレス.*の目標$/), { target: { value: '100' } });
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
-    // その部位の目標として、同じダイアログの中に並ぶ。数字にはラベルを付ける
-    expect(screen.getByText('目標 100.0 kg')).toBeTruthy();
-    // カードの事実と、決めるときの材料の両方に「いま」が出る
-    expect(screen.getAllByText(/^いま /).length).toBeGreaterThan(0);
+    // 一覧の行には「いま → 目標」を並べる。片方だけでは近いのかどうか読めない
+    const row = screen.getByRole('button', { name: /^ベンチプレス.*の目標$/ });
+    expect(row.textContent).toContain('60.0 → 100.0 kg');
     // 到達率が出せないときも、何の値が出ていないのかは書く（記録が 3 セッション未満）
-    expect(screen.getByText('到達率 —')).toBeTruthy();
+    expect(row.textContent).toContain('—');
 
     /*
-     * 入口はマイ種目と同じ並び。開くときはカードの中で展開せず、
-     * 同じダイアログの面を差し替える（展開すると下の種目が押し下げられる）
+     * 行を押すと、その種目の目標を決める面が開く。
+     * 種目そのものの設定は、同じダイアログの面を差し替えて出す
      */
+    fireEvent.click(row);
+    const dlg = () => within(document.querySelector('dialog[open]')!);
+    expect(dlg().getByLabelText(/ベンチプレス.*の目標$/)).toBeTruthy();
+
     fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の設定/ }));
     expect(screen.getByText('補助的に使う部位')).toBeTruthy();
-    const dlg = () => within(document.querySelector('dialog')!);
-    expect(dlg().queryByText('今週のセット数')).toBeNull();
 
-    // 深い面では、右上が「閉じる」ではなく「‹ 戻る」になる（閉じるとダイアログごと消えてしまう）
+    // 深い面では、右上に「‹ 戻る」が並ぶ（閉じるとダイアログごと消えてしまう）
     fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
-    expect(dlg().getByText('今週のセット数')).toBeTruthy();
+    expect(dlg().getByLabelText(/ベンチプレス.*の目標$/)).toBeTruthy();
 
-    // 推移は重ねて出す。画面ごと移ると、閉じたときに開いていた部位へ戻れない
+    // 推移は重ねて出す。画面ごと移ると、閉じたときに開いていた種目へ戻れない
     fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移を見る/ }));
     expect(screen.getByText('元データ')).toBeTruthy();
 
-    // 閉じると、開いていた部位の面がそのまま残っている
+    // 閉じると、開いていた種目の面がそのまま残っている
     const trend = [...document.querySelectorAll('dialog')].find((d) =>
       d.textContent?.includes('元データ'),
     )!;
     fireEvent.click(within(trend).getByRole('button', { name: '閉じる' }));
     expect(screen.queryByText('元データ')).toBeNull();
-    expect(dlg().getByText('今週のセット数')).toBeTruthy();
+    expect(dlg().getByLabelText(/ベンチプレス.*の目標$/)).toBeTruthy();
   });
 
-  it('部位の行に、今週のセット数と種目の目標が名前つきで並ぶ', async () => {
+  it('量と目標を別のカードに分ける（部位と種目を混ぜない）', async () => {
     const { todayISO } = await import('../lib/date');
     seedData(['ex_bench'], {
       [todayISO()]: [
@@ -2843,32 +2844,35 @@ describe('目標画面', () => {
     }
     render(<Harness />);
 
-    // 同じ行に、その部位の量と種目の状態がそろう（2 枚のカードを往復しない）
+    /*
+     * **数える対象も時間軸も違うので、カードを分ける。**
+     * 部位（今週だけ・日曜に 0 へ戻る）と種目（週をまたいで積み上がる）を
+     * 同じ行に積むと、片方が毎週壊れて見える。
+     */
+    expect(screen.getByText('今週の量')).toBeTruthy();
+    expect(screen.getByText('種目の目標')).toBeTruthy();
+
+    // 量のカードの行は部位だけ。種目の話は入らない
+    const chestRow = screen.getByRole('button', { name: '胸の今週の量' });
+    expect(chestRow.textContent).toContain('2 / —');
+    expect(chestRow.textContent).not.toContain('到達');
     // ベンチは補助部位（肩・腕）にも積むので、前回の日はその 3 部位が今日になる
-    expect(screen.getByRole('button', { name: '胸の目標' }).textContent).toContain('2 セット');
-    // 「0日空き」は余裕があるようにも読めるので、いつやったかをそのまま書く
-    expect(screen.getAllByText('前回 今日')).toHaveLength(3);
+    expect(screen.getAllByText('今日')).toHaveLength(3);
 
-    // **時間軸の違うものは名前で見分けられるようにする。**
-    // 今週のセット数は日曜に 0 へ戻り、種目の目標は週をまたいで積み上がる
-    const chestRow = screen.getByRole('button', { name: '胸の目標' });
-    expect(chestRow.textContent).toContain('今週のセット数');
-    expect(chestRow.textContent).toContain('種目の目標');
-    // 目標を決めていない種目しかない部位は「未設定」（0/0 到達 とは書かない）
-    expect(chestRow.textContent).toContain('未設定');
-    // **一覧にゲージは置かない。**幅 0 のバーは、決めていないのか壊れているのか読めない
+    // 目標を決めれば、一覧の行にバーが出る（数字だけだと割り算をしないと分からない）
     expect(chestRow.querySelector('[class*="meterFill"]')).toBeNull();
-
-    // ゲージは決める場所（部位のダイアログ）にだけ置く
-    fireEvent.click(screen.getByRole('button', { name: '胸の目標' }));
-    // 決めるのは 1 段先の面。表示部と押す場所を分ける
+    fireEvent.click(chestRow);
     fireEvent.click(screen.getByRole('button', { name: '部位目標を設定' }));
     fireEvent.click(screen.getByRole('button', { name: '標準 12' }));
-    expect((document.querySelector('dialog [class*="meterFill"]') as HTMLElement).style.width).toBe(
-      `${(2 / 12) * 100}%`,
-    );
     fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
+    const bar = screen
+      .getByRole('button', { name: '胸の今週の量' })
+      .querySelector('[class*="meterFill"]') as HTMLElement;
+    expect(bar.style.width).toBe(`${(2 / 12) * 100}%`);
+
+    // 種目の目標は、部位を開かずにカードから足せる
     fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
     fireEvent.click(screen.getByRole('button', { name: /^ベンチプレス/ }));
     fireEvent.change(screen.getByLabelText(/ベンチプレス.*の目標$/), { target: { value: '100' } });
@@ -2877,7 +2881,7 @@ describe('目標画面', () => {
     expect(screen.getByText('0 / 1 到達')).toBeTruthy();
   });
 
-  it('週が替わって今週が 0 のときは、先週を添えて壊れていないことを示す', () => {
+  it('週が替わって今週が 0 でも、前回の日から壊れていないことが読める', () => {
     const today = todayISO();
     const thisStart = isoAdd(today, -new Date(`${today}T12:00:00`).getDay());
     // 先週やって、今週はまだ 0
@@ -2891,9 +2895,14 @@ describe('目標画面', () => {
     }
     render(<Harness />);
 
-    const chest = screen.getByRole('button', { name: '胸の目標' });
-    expect(chest.textContent).toContain('0 セット');
-    expect(chest.textContent).toContain('先週 1');
+    /*
+     * 今週は 0 でも「前回 3日前」が並んでいれば、週替わりで空になっただけだと読める。
+     * 先週の値まで添えると、1 行に時間軸の違う数字が 2 つ並ぶ。
+     */
+    const chest = screen.getByRole('button', { name: '胸の今週の量' });
+    expect(chest.textContent).toContain('0 / —');
+    expect(chest.textContent).toContain('日前');
+    expect(chest.textContent).not.toContain('先週');
   });
 });
 
@@ -3575,7 +3584,9 @@ describe('画面の位置（タブと下位画面）', () => {
     expect(screen.getByText(/目標体重を決めると/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'トレーニング' }));
-    expect(screen.getByText('トレーニングの目標')).toBeTruthy();
+    // 量（部位）と目標（種目）の 2 枚に分かれている
+    expect(screen.getByText('今週の量')).toBeTruthy();
+    expect(screen.getByText('種目の目標')).toBeTruthy();
   });
 });
 
@@ -3613,9 +3624,8 @@ describe('種目の目標を決める', () => {
     return <GoalsView body={body} domain="training" />;
   }
 
-  /** 部位を開いてから、その部位の種目に目標を足す（決める場所は部位の中） */
-  function openEditor(group = '胸', exercise = /^ベンチプレス/) {
-    fireEvent.click(screen.getByRole('button', { name: `${group}の目標` }));
+  /** 種目の目標のカードから、種目を選んで目標を決める */
+  function openEditor(exercise: RegExp = /^ベンチプレス/) {
     fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
     fireEvent.click(screen.getByRole('button', { name: exercise }));
   }
@@ -3679,7 +3689,7 @@ describe('種目の目標を決める', () => {
   it('秒で数える種目には、重量の目標を出さない', () => {
     seedExercises('ex_plank');
     render(<GoalsHarness />);
-    openEditor('体幹', /^プランク/);
+    openEditor(/^プランク/);
 
     // 重量を記録できない種目に、届きようのない目標を出さない
     const types = within(screen.getByRole('group', { name: /プランクの目標の種類/ }));
@@ -4008,7 +4018,7 @@ describe('有酸素', () => {
     });
     render(<GoalsHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '有酸素の目標' }));
+    fireEvent.click(screen.getByRole('button', { name: '有酸素の今週の量' }));
     const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
     expect(dialog.getByText('1回 / 30分')).toBeTruthy();
     // 部位目標（週のセット数）は持たない
@@ -4032,7 +4042,7 @@ describe('有酸素', () => {
     });
     render(<GoalsHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '有酸素の目標' }));
+    // 目標は種目のカードから。部位（量）の面は通らない
     fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
     fireEvent.click(screen.getByText('ランニング'));
 
