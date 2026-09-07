@@ -131,19 +131,6 @@ export function ExerciseSetEditor({
       </div>
 
       {/*
-        その日の合計と通算の最高を、**打っている面にも出す。**
-        「前回より重く」「最高に届くか」を確かめるために、いちいち閉じてカードへ
-        戻ることになっていた。カードと同じ部品なので、数字の出し方もそろう。
-      */}
-      <ExerciseTotals
-        exercise={exercise}
-        point={point}
-        previous={previous}
-        best={best}
-        bestWeight={bestWeight}
-      />
-
-      {/*
         **1 回で完結する種目は、行の道具立てを出さない。**
         連番も行の × も「何本目か」を扱うためのもので、通しで 1 回走る種目には要らない。
         残るのは入力欄 2 つだけになる（Exercise.repeated / カタログが既定を持つ）。
@@ -185,6 +172,22 @@ export function ExerciseSetEditor({
           readOnly={readOnly}
         />
       ))}
+
+      {/*
+        その日の合計と通算の最高を、**打っている面にも出す。**
+        「前回より重く」「最高に届くか」を確かめるために、いちいち閉じてカードへ
+        戻ることになっていた。カードと同じ部品なので、数字の出し方もそろう。
+
+        置き場所はセットの行の下——**カードと同じ並び**（セット → 合計 → 最高）にする。
+        打ち終わった行の続きに合計が出るので、1 セット足すたびに目が動く距離も短い。
+      */}
+      <ExerciseTotals
+        exercise={exercise}
+        point={point}
+        previous={previous}
+        best={best}
+        bestWeight={bestWeight}
+      />
 
       <div className={s.setActions}>
         {!readOnly && repeated && (
