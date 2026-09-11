@@ -10,6 +10,7 @@ import { useBodyData } from './hooks/useBodyData';
 import { usePersistentStorage } from './hooks/useStorageSafety';
 import { useTheme } from './hooks/useTheme';
 import { formatMDW, todayISO } from './lib/date';
+import { useToday } from './hooks/useToday';
 import { IS_DEMO } from './lib/env';
 import { ChartsView } from './views/ChartsView';
 import { GoalsView } from './views/GoalsView';
@@ -73,6 +74,14 @@ interface AppProps {
 export function App({ initial }: AppProps) {
   const body = useBodyData(initial);
   const [route, setRoute] = useState<Route>(routeFromHash);
+  /*
+   * いまの日付。前面に戻るたびに読み直す（`hooks/useToday`）。
+   *
+   * **見ている日（`date`）は動かさない。**勝手に別の日へ移ると、
+   * 打ちかけの欄が目の前から消える（深夜に前日ぶんを打っている最中がこれ）。
+   * 日が変わったことは、ヘッダの「今日」ボタンが出ることで分かる。
+   */
+  const today = useToday();
   const [date, setDate] = useState(todayISO);
   // ホーム・記録・目標・推移で共通。タブを移っても保つ
   const [domain, setDomain] = useState<Domain>('body');
@@ -178,9 +187,9 @@ export function App({ initial }: AppProps) {
               <h1 className={s.title}>{TITLES[route.tab]}</h1>
               {/* 記録タブでは日付そのものが操作対象なので、日付ナビをヘッダに出す */}
               {route.tab === 'records' ? (
-                <DateNav date={date} onChange={setDate} />
+                <DateNav date={date} today={today} onChange={setDate} />
               ) : (
-                <span className={s.today}>{formatMDW(todayISO())}</span>
+                <span className={s.today}>{formatMDW(today)}</span>
               )}
             </>
           )}

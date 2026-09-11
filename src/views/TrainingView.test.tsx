@@ -3573,7 +3573,7 @@ describe('プリセット（設定から見る・編集する）', () => {
 
 describe('日付ナビ', () => {
   it('今日を見ているときは「今日」ボタンを出さない', () => {
-    render(<DateNav date={todayISO()} onChange={() => {}} />);
+    render(<DateNav date={todayISO()} today={todayISO()} onChange={() => {}} />);
     expect(screen.queryByRole('button', { name: '今日' })).toBeNull();
   });
 
@@ -3584,7 +3584,7 @@ describe('日付ナビ', () => {
   it('先の日へも進める', async () => {
     const { addDays } = await import('../lib/date');
     const onChange = vi.fn();
-    render(<DateNav date={todayISO()} onChange={onChange} />);
+    render(<DateNav date={todayISO()} today={todayISO()} onChange={onChange} />);
 
     fireEvent.click(screen.getByLabelText('次の日'));
     expect(onChange).toHaveBeenCalledWith(addDays(todayISO(), 1));
@@ -3593,10 +3593,101 @@ describe('日付ナビ', () => {
   it('過去を見ているときだけ「今日」で戻れる', async () => {
     const { addDays } = await import('../lib/date');
     const onChange = vi.fn();
-    render(<DateNav date={addDays(todayISO(), -3)} onChange={onChange} />);
+    render(<DateNav date={addDays(todayISO(), -3)} today={todayISO()} onChange={onChange} />);
 
     fireEvent.click(screen.getByRole('button', { name: '今日' }));
     expect(onChange).toHaveBeenCalledWith(todayISO());
+  });
+
+  /*
+   * PWA は閉じずに背面へ回るだけなので、開いたまま日付をまたぐ。
+   * **見ている日は動かさない**（打ちかけの欄が目の前から消える）。
+   * 日が変わったことは「今日」ボタンが出ることで分かる。
+   */
+  it('前面に戻って日付が変わっていたら、「今日」ボタンが出る', () => {
+    const today = todayISO();
+    seedExercises('ex_bench');
+    window.location.hash = '#records';
+    render(<App initial={seeded} />);
+
+    // 開いた時点は今日を見ているので、ボタンは出ていない
+    expect(screen.queryByRole('button', { name: '今日' })).toBeNull();
+
+    // 背面に回っているあいだに日付が変わった
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(`${isoAdd(today, 1)}T09:00:00`));
+
+    fireEvent(document, new Event('visibilitychange'));
+
+    // 見ている日は動かさない。ボタンが出るだけ
+    expect((screen.getByLabelText('記録する日付') as HTMLInputElement).value).toBe(today);
+    expect(screen.getByRole('button', { name: '今日' })).toBeTruthy();
+
+    // 押せば新しい今日へ移る
+    fireEvent.click(screen.getByRole('button', { name: '今日' }));
+    expect((screen.getByLabelText('記録する日付') as HTMLInputElement).value).toBe(
+      isoAdd(today, 1),
+    );
+
+    vi.useRealTimers();
+  });
+
+  /*
+   * 導出は「今日」も見る（連続記録・記録率・部位ごとの最終実施日・今週のセット数）。
+   * **日が変わったら作り直す。**変わっていない週を使い回す仕組みなので、
+   * データが同じままだと前日の答えが残る（`useBodyData` が棚ごと捨てる）。
+   */
+  it('前面に戻ったら、今日から数える値も作り直す', () => {
+    const today = todayISO();
+    // 昨日やった＝いまは「昨日」。日が変われば「2日前」になる
+    seedData(['ex_bench'], {
+      [isoAdd(today, -1)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+    });
+    window.location.hash = '#goals';
+    render(<App initial={seeded} />);
+    fireEvent.click(screen.getByRole('button', { name: 'トレーニング' }));
+
+    // 「今週の量」の行に出す最終実施日は trainingStats（導出）が持っている
+    const chest = () => screen.getByRole('button', { name: '胸の今週の量' });
+    expect(chest().textContent).toContain('昨日');
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(`${isoAdd(today, 1)}T09:00:00`));
+    fireEvent(document, new Event('visibilitychange'));
+
+    expect(chest().textContent).toContain('2日前');
+    expect(chest().textContent).not.toContain('昨日');
+
+    vi.useRealTimers();
+  });
+
+  /*
+   * 回復は**見ている日から**数える（過去の日を開いたら、その日の回復を出す）。
+   * 日が変わっても、見ている日を動かさないかぎり中身は変わらない。
+   */
+  it('回復は見ている日から数える（前面に戻っても動かない）', () => {
+    const today = todayISO();
+    seedData(['ex_bench'], {
+      [isoAdd(today, -1)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+    });
+    window.location.hash = '#records';
+    render(<App initial={seeded} />);
+    fireEvent.click(screen.getByRole('button', { name: 'トレーニング' }));
+
+    const open = () => {
+      fireEvent.click(screen.getByRole('button', { name: '回復の状態を見る' }));
+      return within(document.querySelector('dialog[open]') as HTMLElement);
+    };
+    expect(open().getAllByText(/^昨日 /).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(`${isoAdd(today, 1)}T09:00:00`));
+    fireEvent(document, new Event('visibilitychange'));
+
+    // 見ている日はそのままなので「昨日」のまま。動かすのは「今日」を押したとき
+    expect(open().getAllByText(/^昨日 /).length).toBeGreaterThan(0);
+    vi.useRealTimers();
   });
 });
 

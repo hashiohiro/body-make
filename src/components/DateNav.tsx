@@ -1,9 +1,18 @@
-import { addDays, todayISO } from '../lib/date';
+import { addDays } from '../lib/date';
 import ui from '../styles/ui.module.scss';
 import s from './DateNav.module.scss';
 
 interface Props {
   date: string;
+  /**
+   * いまの日付。**渡された値を使う**（自分では読まない）。
+   *
+   * 描画のたびに `todayISO()` を呼んでも、再描画が起きなければ値は変わらない。
+   * PWA は閉じずに背面へ回るので、日が変わったことに気づけるのは
+   * 前面に戻ったときに読み直している側（`hooks/useToday`）だけ。
+   * その値をそのまま受け取ることで、「今日」ボタンの出方をそこに一致させる。
+   */
+  today: string;
   onChange: (date: string) => void;
 }
 
@@ -15,9 +24,7 @@ interface Props {
  * 以前は QuickEntry と TrainingView が同じものを別々に持っていて、
  * どちらの入力カードにも同じ 4 部品が載っていた。
  */
-export function DateNav({ date, onChange }: Props) {
-  const today = todayISO();
-
+export function DateNav({ date, today, onChange }: Props) {
   return (
     <div className={s.row}>
       <button

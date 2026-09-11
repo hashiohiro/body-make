@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useToday } from './useToday';
 import { emptyDay } from '../lib/derive';
 import { createDeriveCache, deriveAll } from '../lib/incremental';
 import { isCardio } from '../lib/exerciseCatalog';
@@ -144,6 +145,11 @@ export interface BodyData {
  * 記録が無い状態と見分けがつかなくなる。
  */
 export function useBodyData(initial: AppData): BodyData {
+  /*
+   * いまの日付。前面に戻るたびに読み直す（`useToday`）。
+   * ここで受け取るのは、日が変わったときに導出を作り直すため。
+   */
+  const today = useToday();
   const [data, setData] = useState<AppData>(initial);
   const [saveFailed, setSaveFailed] = useState(false);
 
@@ -179,7 +185,20 @@ export function useBodyData(initial: AppData): BodyData {
    * 中身は内容で引き当てるので、React が memo を捨てて計算し直しても答えは変わらない。
    */
   const cache = useRef(createDeriveCache());
-  const derived = useMemo(() => deriveAll(data, cache.current), [data]);
+  /*
+   * 導出は「今日」も見る（連続記録・記録率・回復・今週のセット数）。
+   * **日が変わったら作り直す。**変わっていない週を使い回す仕組みなので、
+   * データが同じままだと前日の答えが残る（前面に戻ったときに 1 日ぶんずれる）。
+   * 捨てるのは 1 日 1 回なので、作り直す費用は問題にならない。
+   */
+  const derivedFor = useRef(today);
+  const derived = useMemo(() => {
+    if (derivedFor.current !== today) {
+      cache.current = createDeriveCache();
+      derivedFor.current = today;
+    }
+    return deriveAll(data, cache.current);
+  }, [data, today]);
   const {
     daily,
     weeks,
