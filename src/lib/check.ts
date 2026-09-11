@@ -183,16 +183,20 @@ export function buildCheckHistory(
     exercisesAt.set(session.date, list);
 
     /*
-     * **回復は主部位のセット数だけで数える。補助部位は入れない。**
+     * **主部位 + 補助部位 × 係数。**週の配分（`buildWeeklySets`）と同じ数え方。
      *
-     * 週の配分（`buildWeeklySets`）は係数込みで数える。数え方が 2 つあるのは
-     * **疲労と配分が別の話**だから。配分は「どこをどれだけやったか」の話なので、
-     * ベンチで肩が半セットぶん働いたことを計上する意味がある。
-     * 回復は「明日その部位をやってよいか」で、補助で入ったぶんを直接やった疲労と
-     * 同じ重みで数えると、実際にはやれる日に空けろと言うことになる。
+     * 一度は主部位だけで数えていた。補助で入ったぶんを直接やった疲労と同じ重みで
+     * 数えると、実際にはやれる日に空けろと言うことになる、という理由で
+     * （記録22セッションの突き合わせで、警告が出ていたのにその部位をやっていた
+     * 件数が 10 → 3 に減った）。
      *
-     * 実際、記録22セッションで突き合わせると、警告が出ていたのにその部位を
-     * やっていた件数が 10 → 3 に減った（胸の日の翌日に腕、など）。
+     * **戻した。**補助部位は係数ぶんしか数えないので、もともと直接やった疲労と
+     * 同じ重みではない。ベンチの日に肩と腕が働いているのは事実で、
+     * それを 0 と数えるほうが実際から離れる。係数は種目ごとに利用者が決めたもので、
+     * こちらが発明した値でもない。
+     *
+     * 数え方を 1 つにしたので、同じ「何セット」が画面のどこでも同じ意味になる
+     * （配分の表は係数込み、回復は主部位だけ、を読み分けずに済む）。
      */
     const sets = emptyGroupSets();
     for (const point of session.exercises) {
@@ -200,7 +204,11 @@ export function buildCheckHistory(
       const muscle = muscleOf(point.group);
       if (muscle == null) continue;
       sets[muscle] += point.workSets;
+      for (const sub of point.subGroups) {
+        sets[sub.group] += point.workSets * sub.weight;
+      }
     }
+    for (const group of GROUP_ORDER) sets[group] = round1(sets[group]);
     groupSets.set(session.date, sets);
 
     const axial = list.filter((e) => e.axial);

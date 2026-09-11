@@ -134,8 +134,8 @@ export function RecoveryDialog({ open, onClose, date, history }: Props) {
             {muscles.map(row)}
             {/* 80 文字以内 */}
             <p className={ui.note}>
-              5セットまで翌日 / 6〜10セット中1日 /
-              11セット以上中2日。積み上げず、直近の1回で決めます。
+              5セットまで翌日 / 6〜10セット中1日 / 11セット以上中2日。
+              補助部位は係数ぶん（既定0.5）数えます。積み上げず、直近の1回で決めます。
             </p>
 
             <div className={ui.sectionLabel}>軸荷重種目</div>
