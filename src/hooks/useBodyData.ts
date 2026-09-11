@@ -533,7 +533,7 @@ export function useBodyData(initial: AppData): BodyData {
    * ID は同じなので新しく足すことはできず、何も起きないボタンになってしまう。
    * 「もう一度これを使う」と言われたのだから、記録も設定も目標も付いたまま戻す。
    *
-   * ただし **hidden を立てて渡されたときは、非表示のまま持つ。**
+   * ただし **`shelf` を `listed` 以外で渡されたときは、そのまま持つ。**
    * 記録画面から「マイ種目には入れない」と言われて足す種目のための道で、
    * 種目そのものは実体が要る（その日の記録が種目を参照している）。
    */
@@ -546,7 +546,10 @@ export function useBodyData(initial: AppData): BodyData {
         .map((e, i) => ({ ...e, order: prev.exercises.length + i }));
       const shown = prev.exercises.map((e) => {
         const arrived = incoming.get(e.id);
-        return e.hidden && arrived && !arrived.hidden ? { ...e, hidden: false } : e;
+        // 伏せてあった種目も、マイ種目に入れていなかった種目も、選ばれたら候補に戻す
+        return e.shelf !== 'listed' && arrived?.shelf === 'listed'
+          ? { ...e, shelf: 'listed' as const }
+          : e;
       });
       if (added.length === 0 && shown.every((e, i) => e === prev.exercises[i])) return prev;
       return { ...prev, exercises: [...shown, ...added] };

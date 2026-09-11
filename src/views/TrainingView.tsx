@@ -138,12 +138,14 @@ export function TrainingView({ body, date, readOnly }: Props) {
    * カタログから、その日に種目を足す。
    *
    * `keep` は「マイ種目にも残すか」。**聞くのはピッカーの仕事**で、ここは答えを書くだけ。
-   * 残さないと答えても、種目そのものは非表示で持つ。その日の記録が種目を参照して
-   * いるので、実体が無いと記録のほうが行き先を失う（sanitize が黙って落とす）。
-   * 非表示の種目はカタログにまた並ぶので、次に選べば同じ問いに戻る。
+   * 残さないと答えても、種目そのものは `adhoc` として持つ。その日の記録が種目を
+   * 参照しているので、実体が無いと記録のほうが行き先を失う（sanitize が黙って落とす）。
+   * `adhoc` はカタログにまた並ぶので、次に選べばマイ種目に入る。
+   * **伏せた種目（hidden）とは別の状態。**マイ種目の非表示欄には並ばない。
    */
   const addFromCatalog = (exercise: Exercise, keep: boolean) => {
-    addExercises([keep ? exercise : { ...exercise, hidden: true }]);
+    // 残さないと答えたものは adhoc。伏せたのではなく、そもそも入れていない状態
+    addExercises([keep ? exercise : { ...exercise, shelf: 'adhoc' as const }]);
     addDayExercise(date, exercise.id);
   };
 

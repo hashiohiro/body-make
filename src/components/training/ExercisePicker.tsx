@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { CatalogPicker } from './CatalogPicker';
+import { CustomExerciseForm } from './CustomExerciseForm';
 import { Modal } from '../Modal';
 import { useFabPosition } from './useFabPosition';
-import { EXERCISE_GROUP_ORDER, GROUP_LABELS } from '../../lib/exerciseCatalog';
+import { EXERCISE_GROUP_ORDER, GROUP_LABELS, isListed } from '../../lib/exerciseCatalog';
 import { ExerciseFilterBar, FILTER_THRESHOLD, matchesGroup } from './ExerciseFilterBar';
 import type { PresetOption } from './PresetCard';
 import type { Exercise, ExerciseGroup } from '../../types';
@@ -77,7 +78,7 @@ export function ExercisePicker({
    * ただし **その日にすでに入っているもの** は出す（プリセットから入ることがある）。
    * 出さないと、ここで外せず閉じてカードの × を探すことになる。
    */
-  const choices = exercises.filter((e) => !e.hidden || usedIds.has(e.id));
+  const choices = exercises.filter((e) => isListed(e) || usedIds.has(e.id));
   const narrowed = choices.filter((e) => matchesGroup(e, group));
 
   const close = () => {
@@ -164,6 +165,20 @@ export function ExercisePicker({
                 setPanel('keep');
               }}
             />
+
+            {/*
+              **カタログに無いと気づくのはここ。**設定タブを探しに行かせない
+              （行った先で足しても、記録画面へ戻ってもう一度選び直すことになる）。
+              作った種目はマイ種目に入り、そのままこの日にも入る。
+            */}
+            <CustomExerciseForm
+              exercises={exercises}
+              onCreate={(ex) => {
+                onAddFromCatalog(ex, true);
+                close();
+              }}
+            />
+
             <p className={ui.note}>
               削除と種目ごとの設定は、設定 &gt; トレーニング &gt; マイ種目 でまとめて行えます。
             </p>
@@ -269,11 +284,13 @@ export function ExercisePicker({
                   <div className={s.pickerList}>
                     {items.map((e) => {
                       const used = usedIds.has(e.id);
+                      // マイ種目に入れていない種目。その日に入っているときだけここに出る
+                      const adhoc = e.shelf === 'adhoc';
                       return (
                         <button
                           key={e.id}
                           type="button"
-                          className={s.pickerBtn}
+                          className={`${s.pickerBtn} ${adhoc ? s.pickerBtnAdhoc : ''}`}
                           aria-pressed={used}
                           // ✓ はトグル。押しても外れないと、間違えて入れたものを
                           // ここで取り消せず、閉じてカードの × を探すことになる
@@ -281,6 +298,7 @@ export function ExercisePicker({
                         >
                           {used ? '✓ ' : '＋ '}
                           {e.name}
+                          {adhoc && <span className={s.adhocTag}>未追加</span>}
                         </button>
                       );
                     })}

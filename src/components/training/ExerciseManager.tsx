@@ -2,17 +2,13 @@ import { useState } from 'react';
 import {
   EXERCISE_GROUP_ORDER,
   GROUP_LABELS,
-  LOAD_MODE_HINTS,
-  LOAD_MODE_LABELS,
-  LOAD_MODE_ORDER,
   REP_UNIT_LABELS,
-  emptyCheckValues,
   goalTypeLabel,
+  isListed,
 } from '../../lib/exerciseCatalog';
-import { FACTOR_RANGE, RM_DIVISOR_RANGE } from '../../lib/storage';
-import { DEFAULT_RM_DIVISOR } from '../../lib/training';
-import type { Exercise, ExerciseGroup, LoadMode, RepUnit, SessionPoint } from '../../types';
+import type { Exercise, ExerciseGroup, SessionPoint } from '../../types';
 import { CatalogPicker } from './CatalogPicker';
+import { CustomExerciseForm } from './CustomExerciseForm';
 import { ExerciseFilterBar, FILTER_THRESHOLD, matchesGroup } from './ExerciseFilterBar';
 import { ExerciseSettingsForm } from './ExerciseSettingsForm';
 import { GoalEditor } from './GoalEditor';
@@ -33,11 +29,6 @@ interface Props {
   sessions: readonly SessionPoint[];
 }
 
-function numOrNull(raw: string): number | null {
-  const n = Number(raw);
-  return raw.trim() === '' || !Number.isFinite(n) ? null : n;
-}
-
 /**
  * 目標の立て方と値。**目標タブの種目カードと同じ出し方にそろえる。**
  * 立て方はバッジ、値は「目標 100kg」。同じ種目を 2 画面で見るのに、形を変える理由がない。
@@ -53,21 +44,16 @@ function goalValue(exercise: Exercise): string | null {
   return `${goal.value}${unit}`;
 }
 
-const EMPTY_FORM = {
-  name: '',
-  group: 'chest' as ExerciseGroup,
-  // 既定のまま作れる値。触りたい人だけ「詳細設定」から変える
-  loadMode: 'standard' as LoadMode,
-  repUnit: 'reps' as RepUnit,
-  bodyweightFactor: null as number | null,
-  rmDivisor: DEFAULT_RM_DIVISOR,
-};
-
 /**
  * マイ種目（カタログから選んで手元に置いた種目）の追加・削除と、種目ごとの性質。
  *
- * 記録で選べるのはここにある種目だけで、カタログはその選択肢の一覧にすぎない。
- * 「種目を追加する」は、**マイ種目に足す**こと。
+ * **お気に入りのようなもので、使い方は人それぞれ。**
+ * ぜんぶ入れて使う人もいれば、日々やる種目はプリセットに持って、
+ * マイ種目には臨時のものだけを入れる人もいる。**揃っていないことを欠けとして扱わない**
+ * （足りない・未登録という言い方をしない／`Exercise.shelf` の `adhoc`）。
+ *
+ * カタログはその選択肢の一覧にすぎない。「種目を追加する」は、**マイ種目に足す**こと。
+ * 記録そのものはここに入っていない種目でも取れる（棚が `adhoc` になる）。
  *
  * 目標値はここに置かない。進捗を見ながら何度も変わるので目標タブが持つ。
  * 一覧には目標をタグとして出す。どの種目に目標があるかは、ここでも見えていたほうがいい。
@@ -78,11 +64,6 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
   const [editing, setEditing] = useState<string | null>(null);
   /** 目標を開いている種目。設定（詳細）とは同時に開かない */
   const [goalOf, setGoalOf] = useState<string | null>(null);
-  // 詳細設定のさらに内側。負荷の数え方・単位・換算の分母
-  // 自作フォームで聞くのは名前と部位だけ。残りは既定値で作れる
-  const [advanced, setAdvanced] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
-
   const openDetail = (ex: Exercise) => {
     setGoalOf(null);
     setEditing((cur) => (cur === ex.id ? null : ex.id));
@@ -93,8 +74,10 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
   const settingsExercise = editing ? (byId.get(editing) ?? null) : null;
 
   const sorted = [...exercises].sort((a, b) => a.order - b.order);
+  /** 件数の見出し用。絞り込みでは動かさない */
+  const shownAll = sorted.filter((e) => isListed(e));
   const filtered = sorted.filter((e) => matchesGroup(e, filter));
-  const shown = filtered.filter((e) => !e.hidden);
+  const shown = filtered.filter((e) => isListed(e));
   /*
    * 非表示も部位で切る。**絞り込みは一覧ぜんぶに掛かる。**
    *
@@ -102,34 +85,15 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
    * 「有酸素」で絞っているのに関係ない部位の非表示が下に並ぶ状態になっていた。
    * 絞り込みは「この部位の話だけにする」という指示なので、例外を作らない。
    */
-  const hiddenShown = filtered.filter((e) => e.hidden);
+  /*
+   * 伏せた種目だけ。**マイ種目に入れていない種目（adhoc）は並べない。**
+   * 1 日だけ試した種目やプリセットのためだけに足した種目は、
+   * 本人が伏せたものではないので「表示に戻す」と言える相手がいない
+   * （入れたいなら、カタログから選び直せば入る）。
+   */
+  const hiddenShown = filtered.filter((e) => e.shelf === 'hidden');
   /** 件数の見出しは一覧ぜんぶの話。絞り込みでは動かさない */
-  const hiddenAll = sorted.filter((e) => e.hidden);
-
-  const submit = () => {
-    const name = form.name.trim();
-    if (!name) return;
-    // 自作種目だけ randomUUID。カタログ由来は固定 ID なので入れ直しても過去ログが繋がる
-    onAdd([
-      {
-        id: crypto.randomUUID(),
-        name,
-        group: form.group,
-        subGroups: [],
-        loadMode: form.loadMode,
-        repUnit: form.repUnit,
-        bodyweightFactor: form.bodyweightFactor,
-        rmDivisor: form.rmDivisor,
-        goal: null,
-        order: exercises.length,
-        hidden: false,
-        // 構成チェックの値は持たせない。必要になったら種目の設定から入れる
-        ...emptyCheckValues(),
-      },
-    ]);
-    setForm(EMPTY_FORM);
-    setAdvanced(false);
-  };
+  const hiddenAll = sorted.filter((e) => e.shelf === 'hidden');
 
   const remove = (ex: Exercise) => {
     const days = usage.get(ex.id) ?? 0;
@@ -168,13 +132,13 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
         全部の行に並べても読む量が増えるだけになる（変えるのは「設定」の中）。
       */
       actions={
-        ex.hidden ? (
+        ex.shelf === 'hidden' ? (
           <>
             <button
               type="button"
               className={s.miniBtn}
               aria-label={`${ex.name}を表示に戻す`}
-              onClick={() => onUpdate({ ...ex, hidden: false })}
+              onClick={() => onUpdate({ ...ex, shelf: 'listed' })}
             >
               表示に戻す
             </button>
@@ -221,7 +185,7 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
               type="button"
               className={s.miniBtn}
               aria-label={`${ex.name}を非表示にする`}
-              onClick={() => onUpdate({ ...ex, hidden: true })}
+              onClick={() => onUpdate({ ...ex, shelf: 'hidden' })}
             >
               非表示
             </button>
@@ -244,8 +208,7 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
       <header className={ui.cardHeader}>
         <h2 className={ui.cardTitle}>マイ種目</h2>
         <span className={ui.hint}>
-          {sorted.length - hiddenAll.length}件 / 目標{' '}
-          {sorted.filter((e) => !e.hidden && e.goal != null).length}件
+          {shownAll.length}件 / 目標 {shownAll.filter((e) => e.goal != null).length}件
           {hiddenAll.length > 0 && ` / 非表示 ${hiddenAll.length}件`}
         </span>
       </header>
@@ -266,132 +229,7 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
         <div>
           <CatalogPicker exercises={exercises} onAdd={onAdd} />
 
-          <div className={s.newForm}>
-            <div className={s.pickerLabel}>カタログにない種目を作る</div>
-
-            <label className={s.newField}>
-              名前
-              <input
-                type="text"
-                value={form.name}
-                maxLength={40}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              />
-            </label>
-
-            <label className={s.newField}>
-              部位
-              <select
-                value={form.group}
-                onChange={(e) => setForm((f) => ({ ...f, group: e.target.value as ExerciseGroup }))}
-              >
-                {EXERCISE_GROUP_ORDER.map((g) => (
-                  <option key={g} value={g}>
-                    {GROUP_LABELS[g]}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className={ui.btnRow}>
-              <button
-                type="button"
-                className={`${ui.btn} ${ui.btnGhost} ${ui.btnSm}`}
-                aria-expanded={advanced}
-                onClick={() => setAdvanced((v) => !v)}
-              >
-                {advanced ? '詳細設定を閉じる' : '詳細設定'}
-              </button>
-            </div>
-
-            {advanced && (
-              <>
-                {/* 器具の名前ではなく、見れば分かる持ち方を選ばせる */}
-                <label className={s.newField}>
-                  負荷の数え方
-                  <select
-                    value={form.loadMode}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, loadMode: e.target.value as LoadMode }))
-                    }
-                  >
-                    {LOAD_MODE_ORDER.map((m) => (
-                      <option key={m} value={m}>
-                        {LOAD_MODE_LABELS[m]}
-                      </option>
-                    ))}
-                  </select>
-                  <small>{LOAD_MODE_HINTS[form.loadMode]}</small>
-                </label>
-
-                <label className={s.newField}>
-                  回数の単位
-                  <select
-                    value={form.repUnit}
-                    onChange={(e) => setForm((f) => ({ ...f, repUnit: e.target.value as RepUnit }))}
-                  >
-                    <option value="reps">回（レップ）</option>
-                    <option value="seconds">秒（プランクなど）</option>
-                  </select>
-                  <small>秒で数える種目は挙上量に計上しません（挙上量＝重量×レップ数のため）</small>
-                </label>
-
-                {form.loadMode === 'bodyweight' && (
-                  <label className={s.newField}>
-                    体重が乗る割合（懸垂 1.0 / 腕立て 0.65 など）
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step={0.05}
-                      min={FACTOR_RANGE[0]}
-                      max={FACTOR_RANGE[1]}
-                      placeholder="1"
-                      value={form.bodyweightFactor ?? ''}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, bodyweightFactor: numOrNull(e.target.value) }))
-                      }
-                    />
-                  </label>
-                )}
-
-                {form.repUnit === 'reps' && (
-                  <label className={s.newField}>
-                    1RM換算の分母（ベンチ 40 / スクワット・デッド 33.3 / 既定 30）
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step={0.1}
-                      min={RM_DIVISOR_RANGE[0]}
-                      max={RM_DIVISOR_RANGE[1]}
-                      value={form.rmDivisor}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          rmDivisor: numOrNull(e.target.value) ?? f.rmDivisor,
-                        }))
-                      }
-                    />
-                  </label>
-                )}
-              </>
-            )}
-
-            <div className={ui.btnRow}>
-              <button
-                type="button"
-                className={`${ui.btn} ${ui.btnPrimary} ${ui.btnSm}`}
-                disabled={form.name.trim() === ''}
-                onClick={submit}
-              >
-                追加
-              </button>
-            </div>
-
-            <p className={ui.note}>
-              名前と部位だけで作れます。触らなければ「そのまま重量」「回で数える」になり、
-              あとから各行の「設定」で変えられます。
-            </p>
-          </div>
+          <CustomExerciseForm exercises={exercises} onCreate={(ex) => onAdd([ex])} />
         </div>
       </Modal>
 

@@ -38,7 +38,7 @@ function ex(patch: Partial<Exercise> = {}): Exercise {
     rmDivisor: 30,
     goal: null,
     order: 0,
-    hidden: false,
+    shelf: 'listed',
     repeated: true,
     axial: false,
     minutesPerSet: null,
@@ -398,14 +398,16 @@ describe('サニタイズと移行', () => {
     const old = sanitizeData({
       exercises: [{ id: 'ex_bench', name: 'ベンチプレス', group: 'chest' }],
     });
-    expect(old.exercises[0]!.hidden).toBe(false);
+    // 棚を持たなかった頃のデータは、そのまま候補に出す
+    expect(old.exercises[0]!.shelf).toBe('listed');
 
     const hidden = sanitizeData({
       version: 5,
       exercises: [{ id: 'ex_bench', name: 'ベンチプレス', group: 'chest', hidden: true }],
       workouts: { '2026-03-01': [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }] },
     });
-    expect(hidden.exercises[0]!.hidden).toBe(true);
+    // hidden: boolean だけを持っていた頃のデータは、伏せてある扱いで引き取る
+    expect(hidden.exercises[0]!.shelf).toBe('hidden');
     // 非表示にしても記録は落とさない。落とすのは削除だけ
     expect(hidden.workouts['2026-03-01']).toHaveLength(1);
   });

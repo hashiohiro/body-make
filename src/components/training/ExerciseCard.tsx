@@ -48,6 +48,12 @@ export function ExerciseCard({
       <div className={s.exHead}>
         <span className={s.exName}>{exercise.name}</span>
         <span className={s.exTag}>{GROUP_LABELS[exercise.group]}</span>
+        {/*
+          マイ種目に入れていない種目。**記録としては他と同じに数える**が、
+          次に選ぶ場面（マイ種目から選ぶ・プリセット・目標）には出てこない。
+          出しておかないと、次の日に探して見つからないことになる。
+        */}
+        {exercise.shelf === 'adhoc' && <span className={s.adhocTag}>未追加</span>}
         {/* この種目をどうしたいか（維持 / 重量↑ / 挙上量↑ / 回数↑）。打ちながら分かるように */}
         {exercise.goal && (
           <span className={s.kindTag}>

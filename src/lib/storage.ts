@@ -15,6 +15,7 @@ import type {
   SessionExercise,
   SessionSet,
   Settings,
+  Shelf,
   SubGroup,
   ThemePref,
   Workouts,
@@ -314,10 +315,20 @@ function sanitizeExercise(raw: unknown, order: number, fromVersion: number): Exe
     rmDivisor: num(o.rmDivisor, RM_DIVISOR_RANGE[0], RM_DIVISOR_RANGE[1]) ?? 30,
     goal: sanitizeGoal(o),
     order: int(o.order, 0, 9999) ?? order,
-    // 既定は表示。キーが無いのは非表示を持たなかった頃のデータで、そのまま表示でよい
-    hidden: o.hidden === true,
+    /*
+     * 棚。既定は表示。
+     * `hidden: boolean` だけを持っていた頃のデータは、真なら伏せてある扱いにする。
+     * そのころ `adhoc` は記録できていないので、区別は付けられない（付けようがない）。
+     */
+    shelf: sanitizeShelf(o),
     ...checkFieldsOf(o, id, fromVersion),
   };
+}
+
+/** 棚。旧版（hidden: boolean）からの引き取りもここで済ませる */
+function sanitizeShelf(o: Record<string, unknown>): Shelf {
+  if (o.shelf === 'hidden' || o.shelf === 'adhoc' || o.shelf === 'listed') return o.shelf;
+  return o.hidden === true ? 'hidden' : 'listed';
 }
 
 /**

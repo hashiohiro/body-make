@@ -99,7 +99,7 @@ function full(data: AppData) {
     checkHistory: buildCheckHistory(sessions, data.exercises),
     trainingGoals: exerciseGoals(
       sessions,
-      data.exercises.filter((e) => !e.hidden),
+      data.exercises.filter((e) => e.shelf === 'listed'),
     ),
   };
 }

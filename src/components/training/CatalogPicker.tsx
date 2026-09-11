@@ -6,6 +6,7 @@ import {
   IMPLEMENT_LABELS,
   catalogId,
   fromCatalog,
+  isCatalogCandidate,
 } from '../../lib/exerciseCatalog';
 import type { CatalogEntry, Implement } from '../../lib/exerciseCatalog';
 import type { Exercise, ExerciseGroup } from '../../types';
@@ -71,6 +72,16 @@ interface Props {
    * 外さないと、入れたはずの種目がもう一度並ぶ。
    */
   usedIds?: ReadonlySet<string> | undefined;
+  /**
+   * すでに足し終えた種目。**消さずに ✓ で出す。**
+   *
+   * プリセットを組みながらカタログから足すときに使う。追加した種目はマイ種目へ
+   * 入るので、そのままだと候補から消えて「入ったのか」が分からない。
+   * 押し直せば外せる（呼び出し側が `onAdd` の相手を決める）。
+   */
+  selectedIds?: ReadonlySet<string> | undefined;
+  /** ✓ を押したときの呼び先。渡さなければ ✓ の行は押せない */
+  onToggle?: ((id: string) => void) | undefined;
 }
 
 /**
@@ -80,23 +91,27 @@ interface Props {
  * マイ種目の置き場所は設定のままだが、入口が設定にしか無いと、
  * 初めて記録タブを開いた人が「設定から追加してください」で行き止まる。
  */
-export function CatalogPicker({ exercises, onAdd, usedIds }: Props) {
+export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle }: Props) {
   const [filter, setFilter] = useState<CatalogFilter>('all');
   // 部位は主部位だけで絞る。一覧の見出しも主部位で切っているので、見え方が一致する
   const [group, setGroup] = useState<ExerciseGroup | 'all'>('all');
   /*
-   * 非表示にしてある種目は **まだ持っていない扱い** にして、ここに出す。
-   * 「追加済み」として伏せると、戻す道がマイ種目の非表示欄しか無くなる。
+   * 伏せてある種目（`hidden`）と、マイ種目に入れていない種目（`adhoc`）を、ここに出す。
+   * 伏せたものを「追加済み」として消すと、戻す道がマイ種目の非表示欄しか無くなる。
    * 選び直したら表示に戻る（useBodyData.addExercises）。
+   *
+   * **3 つとも見分けが付くようにする。**実体がまだ無い（印なし）／その日だけ使った
+   * （記録あり）／一度入れて伏せた（非表示）は別の状態で、押した結果も違う。
    */
-  const known = new Set(exercises.filter((e) => !e.hidden).map((e) => e.id));
-  const notAdded = CATALOG_CHOICES.filter(
-    (c) =>
-      !known.has(catalogId(c.entry, c.implement)) &&
-      !usedIds?.has(catalogId(c.entry, c.implement)) &&
-      matchesFilter(c, filter) &&
-      (group === 'all' || c.entry.group === group),
-  );
+  const known = new Set(exercises.filter((e) => !isCatalogCandidate(e)).map((e) => e.id));
+  const byId = new Map(exercises.map((e) => [e.id, e]));
+  const notAdded = CATALOG_CHOICES.filter((c) => {
+    const id = catalogId(c.entry, c.implement);
+    if (usedIds?.has(id)) return false;
+    // 足し終えたものは残す（消えると、入ったのかどうかが分からない）
+    if (known.has(id) && !selectedIds?.has(id)) return false;
+    return matchesFilter(c, filter) && (group === 'all' || c.entry.group === group);
+  });
   const filtered = filter !== 'all' || group !== 'all';
 
   return (
@@ -171,17 +186,39 @@ export function CatalogPicker({ exercises, onAdd, usedIds }: Props) {
             <div key={g} className={s.pickerGroup}>
               <div className={s.pickerLabel}>{GROUP_LABELS[g]}</div>
               <div className={s.pickerList}>
-                {items.map((c) => (
-                  <button
-                    key={catalogId(c.entry, c.implement)}
-                    type="button"
-                    className={s.pickerBtn}
-                    onClick={() => onAdd([fromCatalog(c.entry, exercises.length, c.implement)])}
-                  >
-                    ＋ {c.entry.name}
-                    {c.entry.implements && `（${IMPLEMENT_LABELS[c.implement]}）`}
-                  </button>
-                ))}
+                {items.map((c) => {
+                  const id = catalogId(c.entry, c.implement);
+                  const picked = selectedIds?.has(id) ?? false;
+                  /*
+                   * カタログに並ぶのは「マイ種目に入っていない」種目だけなので、
+                   * **その中での違い**を印にする。
+                   *
+                   *   （印なし）… 実体がまだ無い。初めて入れる
+                   *   記録あり  … その日だけ入れて使った種目（shelf: adhoc）。記録が繋がる
+                   *   非表示    … 一度入れて伏せた種目。押すと表示に戻る
+                   */
+                  const shelf = byId.get(id)?.shelf;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      className={s.pickerBtn}
+                      aria-pressed={picked}
+                      disabled={picked && onToggle == null}
+                      onClick={() =>
+                        picked
+                          ? onToggle?.(id)
+                          : onAdd([fromCatalog(c.entry, exercises.length, c.implement)])
+                      }
+                    >
+                      {picked ? '✓ ' : '＋ '}
+                      {c.entry.name}
+                      {c.entry.implements && `（${IMPLEMENT_LABELS[c.implement]}）`}
+                      {shelf === 'hidden' && <span className={s.catalogTag}>非表示</span>}
+                      {shelf === 'adhoc' && <span className={s.catalogTag}>記録あり</span>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           );

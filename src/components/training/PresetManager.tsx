@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { CatalogPicker } from './CatalogPicker';
+import { CustomExerciseForm } from './CustomExerciseForm';
 import { OrderList } from './OrderList';
 import { Modal } from '../Modal';
-import { EXERCISE_GROUP_ORDER, GROUP_LABELS, groupsOf } from '../../lib/exerciseCatalog';
+import { EXERCISE_GROUP_ORDER, GROUP_LABELS, groupsOf, isListed } from '../../lib/exerciseCatalog';
 import { PRESET_NAME_MAX } from '../../lib/storage';
 import type { Exercise, Preset } from '../../types';
 import ui from '../../styles/ui.module.scss';
@@ -18,7 +19,10 @@ interface PickDialogProps {
   selected: ReadonlySet<string>;
   label: string;
   onToggle: (id: string) => void;
-  /** カタログからマイ種目を増やす。ここに無い種目を入れたくなったときの逃げ道 */
+  /**
+   * カタログ（と自作）から種目を増やす。**マイ種目とこの組み合わせの両方に入れる。**
+   * マイ種目へ入れるだけだと、戻ってもう一度選び直すことになる。
+   */
   onAddExercises: (exercises: readonly Exercise[]) => void;
   onClose: () => void;
 }
@@ -47,12 +51,30 @@ function PickDialog({
   const [catalog, setCatalog] = useState(false);
 
   // 非表示は候補に出さない。すでに入っているものは、外せるように残す
-  const choices = items.filter((e) => !e.hidden || selected.has(e.id));
+  const choices = items.filter((e) => isListed(e) || selected.has(e.id));
 
   if (catalog) {
     return (
-      <Modal open title="マイ種目に追加" onClose={onClose} onBack={() => setCatalog(false)}>
-        <CatalogPicker exercises={items} onAdd={onAddExercises} />
+      <Modal open title="カタログから足す" onClose={onClose} onBack={() => setCatalog(false)}>
+        <div>
+          {/*
+            **カタログから選んだ種目は、マイ種目とこの組み合わせの両方に入る。**
+            マイ種目へ入れるだけだと、戻ってもう一度選び直すことになる。
+            入れ終わった種目は消さずに ✓ で残す（消えると入ったのか分からない）。
+          */}
+          {/* 黙って増やさない。マイ種目にも入ることは、押す前に書いておく */}
+          <p className={ui.note}>選んだ種目はマイ種目にも追加され、この組み合わせに入ります。</p>
+
+          <CatalogPicker
+            exercises={items}
+            selectedIds={selected}
+            onAdd={onAddExercises}
+            onToggle={onToggle}
+          />
+
+          {/* カタログにも無いときの逃げ道。作った種目もそのまま組み合わせに入る */}
+          <CustomExerciseForm exercises={items} onCreate={(ex) => onAddExercises([ex])} />
+        </div>
       </Modal>
     );
   }
@@ -61,7 +83,16 @@ function PickDialog({
     <Modal open title={`${label}に種目を足す`} onClose={onClose}>
       <div>
         {choices.length === 0 ? (
-          <p className={ui.note}>マイ種目がまだありません。</p>
+          /*
+           * マイ種目が空でも行き止まりにしない。**カタログから直接組める。**
+           * 以前は「＋ プリセットを作る」自体を押せなくして、
+           * 先に設定のマイ種目へ行かせていた（そこから戻る道が無かった）。
+           */
+          <p className={ui.emptyState}>
+            マイ種目がまだ空です。
+            <br />
+            カタログから選ぶと、マイ種目とこの組み合わせの両方に入ります。
+          </p>
         ) : (
           EXERCISE_GROUP_ORDER.map((group) => {
             const list = choices.filter((e) => e.group === group);
@@ -101,10 +132,10 @@ function PickDialog({
           */}
           <button
             type="button"
-            className={`${ui.btn} ${ui.btnSm}`}
+            className={`${ui.btn} ${choices.length === 0 ? ui.btnPrimary : ''} ${ui.btnSm}`}
             onClick={() => setCatalog(true)}
           >
-            ＋ マイ種目を増やす
+            ＋ カタログから足す
           </button>
         </div>
       </div>
@@ -163,12 +194,6 @@ export function PresetManager({
 
   const byId = new Map(exercises.map((e) => [e.id, e]));
   const nameOf = (id: string) => byId.get(id)?.name ?? '（削除された種目）';
-  /*
-   * プリセットを作れるかは **表示中の種目** で決まる。
-   * すでに保存してある組み合わせの中身は非表示になっても残す（掃除で消さない・設計 §2.2）。
-   */
-  const usable = exercises.filter((e) => !e.hidden);
-
   const trimmed = draft.trim().slice(0, PRESET_NAME_MAX);
   const taken = presets.some((p) => p.id !== renaming && p.name === trimmed);
 
@@ -239,11 +264,13 @@ export function PresetManager({
       {/* 作るのは一番上。溜まるほど、下に置くとスクロールを強いることになる */}
       {creating == null && (
         <div className={ui.btnRow}>
+          {/*
+            マイ種目が空でも押せる。**足す面からカタログへ行ける**ので、
+            ここで止めると行き止まりを作るだけになる（以前は押せなくしていた）。
+          */}
           <button
             type="button"
             className={`${ui.btn} ${presets.length === 0 ? ui.btnPrimary : ''}`}
-            // 足せる種目が 1 つも無ければ、名前だけ付けても何も入らない
-            disabled={usable.length === 0}
             onClick={() => {
               setCreating({ name: '', exerciseIds: [] });
               setPickingDraft(true);
@@ -252,12 +279,6 @@ export function PresetManager({
             ＋ プリセットを作る
           </button>
         </div>
-      )}
-
-      {usable.length === 0 && (
-        <p className={ui.note}>
-          先にマイ種目を追加してください（設定 &gt; トレーニング &gt; マイ種目）。
-        </p>
       )}
 
       {creating && (
@@ -327,7 +348,19 @@ export function PresetManager({
                       : [...creating.exerciseIds, id],
                   })
                 }
-                onAddExercises={onAddExercises}
+                /*
+                  カタログから足した種目は、**マイ種目とこの組み合わせの両方へ入れる。**
+                  マイ種目へ入れるだけだと、戻ってもう一度選び直すことになる。
+                */
+                onAddExercises={(added) => {
+                  onAddExercises(added);
+                  const ids = added
+                    .map((e) => e.id)
+                    .filter((id) => !creating.exerciseIds.includes(id));
+                  if (ids.length > 0) {
+                    setCreating({ ...creating, exerciseIds: [...creating.exerciseIds, ...ids] });
+                  }
+                }}
                 onClose={() => setPickingDraft(false)}
               />
             )}
@@ -444,7 +477,15 @@ export function PresetManager({
                           : [...preset.exerciseIds, id],
                       })
                     }
-                    onAddExercises={onAddExercises}
+                    onAddExercises={(added) => {
+                      onAddExercises(added);
+                      const ids = added
+                        .map((e) => e.id)
+                        .filter((id) => !preset.exerciseIds.includes(id));
+                      if (ids.length > 0) {
+                        onUpdate({ ...preset, exerciseIds: [...preset.exerciseIds, ...ids] });
+                      }
+                    }}
                     onClose={() => setPicking(null)}
                   />
                 )}

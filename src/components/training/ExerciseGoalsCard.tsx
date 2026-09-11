@@ -3,7 +3,12 @@ import { ExerciseDetailDialog } from './ExerciseDetailDialog';
 import { ExerciseSettingsForm } from './ExerciseSettingsForm';
 import { GoalEditor } from './GoalEditor';
 import { Modal } from '../Modal';
-import { EXERCISE_GROUP_ORDER, GROUP_LABELS, goalTypeLabel } from '../../lib/exerciseCatalog';
+import {
+  EXERCISE_GROUP_ORDER,
+  GROUP_LABELS,
+  goalTypeLabel,
+  isListed,
+} from '../../lib/exerciseCatalog';
 import { fmt, fmtPercent } from '../../lib/format';
 import { todayISO } from '../../lib/date';
 import { RECENT_DAYS, STALE_WEEKS } from '../../lib/training';
@@ -58,7 +63,7 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
 
   /** まだ目標を持たない種目。非表示の種目には足さない（一覧にも出ない） */
   const withoutGoal = exercises
-    .filter((e) => !e.hidden && e.goal == null)
+    .filter((e) => isListed(e) && e.goal == null)
     .sort((a, b) => {
       const ga = order.get(a.group) ?? 99;
       const gb = order.get(b.group) ?? 99;

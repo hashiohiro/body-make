@@ -21,11 +21,44 @@
  *   ボタン（押せる）  … 枠線あり・surface の地・ink-2
  * 揃えてしまうと、押せるものと押せないものが見分けられない
  */
-.exTag {
+/*
+ * 名前に添える小さな札。**3 つとも同じ器で、変えるのは色だけ。**
+ *
+ *   exTag    … 部位（事実）
+ *   kindTag  … 目標の立て方（決めたこと）
+ *   adhocTag … マイ種目に入れていない（状態の注意）
+ */
+.exTag,
+.kindTag,
+.goalTag,
+.adhocTag {
+  flex: none;
   padding: 2px 7px;
   border-radius: 999px;
   background: var(--surface-sunken);
   font-size: 10px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+/* 決めたことなので、事実（部位）よりは前に出す */
+.kindTag,
+.goalTag {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/*
+ * マイ種目に入れていない種目。
+ *
+ * **欠けではない。**マイ種目はお気に入りのようなもので、使い方は人それぞれ
+ * （日々の種目はプリセットに持って、マイ種目は臨時のものだけ、という置き方もある）。
+ * だから注意の色は使わない。塗りをやめて輪郭だけにして、
+ * 「事実の札（部位）」とは違うものだと形で示す。
+ */
+.adhocTag {
+  background: none;
+  border: 1px dashed var(--border);
   color: var(--ink-muted);
 }
 
@@ -277,6 +310,11 @@
   color: var(--ink-muted);
 }
 
+/* マイ種目に入れていない種目。輪郭を破線にして、入っているものと見分ける */
+.pickerBtnAdhoc {
+  border-style: dashed;
+}
+
 .pickerBtn {
   padding: 7px 11px;
   border: 1px solid var(--border);
@@ -385,6 +423,22 @@
     grid-column: 2;
     grid-row: 1 / span 2;
   }
+}
+
+/*
+ * カタログの行に添える印（記録あり / 非表示）。
+ *
+ * カタログに並ぶのは「マイ種目に入っていない」種目だけなので、
+ * **その中での違い**を示すためのもの。どれも欠けではないので、注意の色は使わず、
+ * 名前より弱く出す。
+ */
+.catalogTag {
+  margin-left: 5px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  font-size: 9px;
+  color: var(--ink-muted);
 }
 
 /* 係数は部位の従属なので、ピルを一段小さくして階層を付ける */

@@ -49,8 +49,8 @@ export const SUB_GROUP_WEIGHT_STEPS = [0.25, 0.5, 0.75, 1];
  */
 export type CatalogEntry = Omit<
   Exercise,
-  // hidden はマイ種目に置いてからの状態。カタログは選択肢の一覧なので持たない
-  'goal' | 'order' | 'repUnit' | 'subGroups' | 'axial' | 'minutesPerSet' | 'hidden' | 'repeated'
+  // shelf はマイ種目に置いてからの状態。カタログは選択肢の一覧なので持たない
+  'goal' | 'order' | 'repUnit' | 'subGroups' | 'axial' | 'minutesPerSet' | 'shelf' | 'repeated'
 > & {
   /** 繰り返して行う種目か。**既定は真**（筋トレはセットを重ねるのが前提） */
   repeated?: boolean;
@@ -1532,6 +1532,22 @@ export function fromCatalog(
     repUnit: entry.repUnit ?? 'reps',
     goal: null,
     order,
-    hidden: false,
+    shelf: 'listed',
   };
+}
+
+/** マイ種目の候補に出る種目か。これから組む場面はすべてこれで絞る */
+export function isListed(exercise: Pick<Exercise, 'shelf'>): boolean {
+  return exercise.shelf === 'listed';
+}
+
+/**
+ * カタログの候補に出る種目か。
+ *
+ * **まだ入れていない（`adhoc`）と、伏せてある（`hidden`）の両方を出す。**
+ * 伏せたものを「追加済み」として消すと、戻す道がマイ種目の非表示欄しか無くなる。
+ * 見分けは印で付ける（`hidden` にだけ「非表示」と添える）。
+ */
+export function isCatalogCandidate(exercise: Pick<Exercise, 'shelf'>): boolean {
+  return exercise.shelf !== 'listed';
 }

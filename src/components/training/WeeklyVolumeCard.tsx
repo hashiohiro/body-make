@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Modal } from '../Modal';
 import { NumericInput } from '../NumericInput';
-import { GROUP_LABELS, GROUP_ORDER, isCardio } from '../../lib/exerciseCatalog';
+import { GROUP_LABELS, GROUP_ORDER, isCardio, isListed } from '../../lib/exerciseCatalog';
 import { GROUP_GOAL_RANGE } from '../../lib/storage';
 import { addDays, formatMD, startOfWeek, todayISO } from '../../lib/date';
 import { formatSets } from '../../lib/training';
@@ -114,7 +114,7 @@ export function WeeklyVolumeCard({
     };
   });
 
-  const hasCardio = exercises.some((e) => isCardio(e.group) && !e.hidden);
+  const hasCardio = exercises.some((e) => isCardio(e.group) && isListed(e));
   const current = open == null || open === 'cardio' ? null : rows.find((r) => r.group === open)!;
 
   return (

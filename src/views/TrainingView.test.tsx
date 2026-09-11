@@ -2381,7 +2381,7 @@ describe('種目の足し方', () => {
     const stored = await storedData();
     expect(stored.workouts[todayISO()]?.[0]?.exerciseId).toBe('ex_bench');
     // 残すと答えたので、次からはマイ種目の候補に並ぶ
-    expect(stored.exercises[0]!.hidden).toBeFalsy();
+    expect(stored.exercises[0]!.shelf).toBe('listed');
   });
 
   /* 答えずに戻ったら、その種目は入れない */
@@ -2410,7 +2410,53 @@ describe('種目の足し方', () => {
 
     const stored = await storedData();
     expect(stored.workouts[todayISO()]?.[0]?.exerciseId).toBe('ex_bench');
-    expect(stored.exercises[0]!.hidden).toBe(true);
+    /*
+     * **伏せた（hidden）のではなく、そもそも入れていない（adhoc）。**
+     * 本人が伏せたものではないので、マイ種目の非表示欄には並ばない。
+     */
+    expect(stored.exercises[0]!.shelf).toBe('adhoc');
+  });
+
+  /*
+   * カタログに無いと気づくのはこの面。**設定タブを探しに行かせない**
+   * （行った先で足しても、記録画面へ戻ってもう一度選び直すことになる）。
+   */
+  it('カタログにない種目を、その場で作ってこの日に入れられる', async () => {
+    render(<Harness />);
+    openCatalog();
+
+    expect(screen.getByText('カタログにない種目を作る')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('名前'), { target: { value: '謎のマシン' } });
+    fireEvent.click(screen.getByRole('button', { name: '追加' }));
+
+    // 作ったら閉じる。マイ種目に残すかは聞かない（作った種目は残すのが前提）
+    expect(pickerOpen()).toBe(false);
+    expect(screen.getByRole('button', { name: '謎のマシンのセットを編集' })).toBeTruthy();
+
+    const stored = await storedData();
+    expect(stored.exercises.map((e) => e.name)).toEqual(['謎のマシン']);
+    expect(stored.workouts[todayISO()]?.[0]?.exerciseId).toBe(stored.exercises[0]!.id);
+  });
+
+  /*
+   * マイ種目に入れていない種目は、**記録としては他と同じに数える**が、
+   * 次に選ぶ場面には出てこない。それが分かるように印を出す。
+   */
+  it('マイ種目に入れていない種目には、その印を出す', () => {
+    render(<Harness />);
+    openCatalog();
+    fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
+    fireEvent.click(screen.getByRole('button', { name: 'この日だけ' }));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+
+    // その日のカード
+    const card = document.querySelector('[id^="ex-card-"]') as HTMLElement;
+    expect(within(card).getByText('未追加')).toBeTruthy();
+
+    // 「マイ種目から選ぶ」の候補（その日に入っているので出る）
+    openPicker();
+    const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
+    expect(dialog.getByText('未追加')).toBeTruthy();
   });
 
   /* 入れた種目をカタログにも残すと、同じ種目が二重に並ぶ */
@@ -3332,19 +3378,65 @@ describe('プリセット（設定から見る・編集する）', () => {
     // マイ種目に無い種目を入れたくなったとき、ここで行き止まらせない
     // （作りかけは画面を離れると消えるので、マイ種目の画面へ往復させられない）
     expect(screen.queryByText('＋ ディップス')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '＋ マイ種目を増やす' }));
+    fireEvent.click(screen.getByRole('button', { name: '＋ カタログから足す' }));
 
-    // ダイアログは重ねず、同じ面を差し替える。戻ると元の選ぶ面に戻る
+    /*
+     * **カタログから選んだ種目は、マイ種目とこの組み合わせの両方に入る。**
+     * マイ種目へ入れるだけだと、戻ってもう一度選び直すことになる。
+     * 入れ終わった種目は消さずに ✓ で残す（消えると入ったのか分からない）。
+     */
     fireEvent.click(screen.getByText('＋ ディップス'));
+    expect(screen.getByText('✓ ディップス')).toBeTruthy();
+
     fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
-
-    // 増えた種目はそのまま一覧に出る。プリセットに入れるのは選んでから
-    fireEvent.click(screen.getByText('＋ ディップス'));
     fireEvent.click(screen.getByRole('button', { name: 'このプリセットを作る' }));
 
     const stored = await storedData();
     expect(stored.presets[0]!.exerciseIds).toEqual(['ex_dips']);
     expect(stored.exercises.map((e: { id: string }) => e.id)).toContain('ex_dips');
+  });
+
+  /* マイ種目が空でも行き止まりにしない。カタログから直接組める */
+  it('マイ種目が空でも、カタログからプリセットを作れる', async () => {
+    render(<PresetHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
+    expect(screen.getByText(/マイ種目がまだ空です/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '＋ カタログから足す' }));
+    fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
+    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+
+    fireEvent.change(screen.getByLabelText('新しいプリセットの名前'), {
+      target: { value: '押す日' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'このプリセットを作る' }));
+
+    const stored = await storedData();
+    expect(stored.presets[0]!.exerciseIds).toEqual(['ex_bench']);
+    expect(stored.exercises.map((e: { id: string }) => e.id)).toEqual(['ex_bench']);
+  });
+
+  /* カタログにも無い種目は、その場で作れる（設定のマイ種目と同じフォーム） */
+  it('プリセットを作りながら、カタログにない種目も作れる', async () => {
+    render(<PresetHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
+    fireEvent.click(screen.getByRole('button', { name: '＋ カタログから足す' }));
+
+    expect(screen.getByText('カタログにない種目を作る')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('名前'), { target: { value: '謎のマシン' } });
+    fireEvent.click(screen.getByRole('button', { name: '追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+
+    fireEvent.change(screen.getByLabelText('新しいプリセットの名前'), {
+      target: { value: '押す日' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'このプリセットを作る' }));
+
+    const stored = await storedData();
+    expect(stored.exercises.map((e) => e.name)).toEqual(['謎のマシン']);
+    expect(stored.presets[0]!.exerciseIds).toEqual([stored.exercises[0]!.id]);
   });
 
   it('作りかけでも並びを入れ替えられる（作ったあとと同じ操作）', async () => {
@@ -3772,10 +3864,88 @@ describe('種目の表示 / 非表示', () => {
         CATALOG.find((c) => c.id === id)!,
         i,
       ),
-      hidden: hiddenIds.includes(id),
+      shelf: hiddenIds.includes(id) ? ('hidden' as const) : ('listed' as const),
     }));
     seedRaw({ version: 5, settings: {}, entries: {}, exercises, workouts: {} });
   }
+
+  /*
+   * 「一度入れて伏せた」と「そもそも入れていない」は別の状態。
+   * 前は 1 つの真偽値に押し込んでいたので、カタログで印を出し分けられず、
+   * その日だけ試した種目がマイ種目の非表示欄に並んでいた。
+   */
+  it('伏せた種目とマイ種目未追加は、カタログで見分けが付く', () => {
+    seedHidden(['ex_squat'], 'ex_squat');
+    render(<ManagerHarness />);
+
+    // 伏せた種目は非表示欄に並ぶ（本人が伏せたので、戻す相手がいる）
+    expect(screen.getByText(/非表示 1件/)).toBeTruthy();
+    expect(screen.getByLabelText('スクワットを表示に戻す')).toBeTruthy();
+
+    // カタログには印つきで出る。押せば表示に戻る
+    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
+    expect(dialog.getByText('＋ スクワット').textContent).toContain('非表示');
+    // 実体がまだ無い種目には印が付かない（初めて入れる）
+    expect(dialog.getByText('＋ レッグプレス').textContent).not.toContain('非表示');
+    expect(dialog.getByText('＋ レッグプレス').textContent).not.toContain('記録あり');
+  });
+
+  /*
+   * カタログに並ぶのは「マイ種目に入っていない」種目だけなので、
+   * その中での違いを印にする。押した結果が違う——初めて入れるのか、
+   * 記録が繋がるのか、伏せたものが戻るのか。
+   */
+  it('その日だけ使った種目は、カタログで「記録あり」と分かる', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      // 記録画面で「この日だけ」と答えて入れた種目に相当する
+      exercises: [
+        {
+          ...fromCatalog(
+            CATALOG.find((c) => c.id === 'ex_squat')!,
+            0,
+          ),
+          shelf: 'adhoc',
+        },
+      ],
+      workouts: { [todayISO()]: [{ exerciseId: 'ex_squat', sets: [{ weight: 60, reps: 10 }] }] },
+    });
+    render(<ManagerHarness />);
+
+    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
+    expect(dialog.getByText('＋ スクワット').textContent).toContain('記録あり');
+    // 伏せたわけではないので、そちらの印は出さない
+    expect(dialog.getByText('＋ スクワット').textContent).not.toContain('非表示');
+  });
+
+  it('マイ種目未追加の種目は、非表示欄に並べない', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      // 記録画面で「この日だけ」と答えて入れた種目に相当する
+      exercises: [
+        {
+          ...fromCatalog(
+            CATALOG.find((c) => c.id === 'ex_squat')!,
+            0,
+          ),
+          shelf: 'adhoc',
+        },
+      ],
+      workouts: { [todayISO()]: [{ exerciseId: 'ex_squat', sets: [{ weight: 60, reps: 10 }] }] },
+    });
+    render(<ManagerHarness />);
+
+    // 本人が伏せたものではないので「表示に戻す」と言える相手がいない
+    expect(screen.queryByText(/非表示 \d+件/)).toBeNull();
+    expect(screen.queryByLabelText('スクワットを表示に戻す')).toBeNull();
+    expect(screen.getByText(/^0件 \/ 目標 0件$/)).toBeTruthy();
+  });
 
   it('非表示にすると候補から外れ、記録は残る', () => {
     seedExercises('ex_lat_pulldown', 'ex_squat');

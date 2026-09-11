@@ -10,6 +10,7 @@ import type {
   WeekPoint,
 } from '../types';
 import { MA_WINDOW, computeProjection } from './derive';
+import { isListed } from './exerciseCatalog';
 import { addDays, formatMD, todayISO } from './date';
 import { buildCheckHistory } from './check';
 import type { CheckHistory, GroupSets } from './check';
@@ -418,7 +419,7 @@ function combineTraining(
      */
     trainingGoals: exerciseGoals(
       sessions,
-      exercises.filter((e) => !e.hidden),
+      exercises.filter((e) => isListed(e)),
     ),
   };
 }
