@@ -2488,7 +2488,7 @@ describe('ダイアログの戻り方', () => {
     expect(screen.getByRole('button', { name: '閉じる' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /^カタログから選ぶ/ }));
-    expect(screen.getByText(/^カタログから追加/)).toBeTruthy();
+    expect(screen.getByText(/^カタログ（/)).toBeTruthy();
 
     /*
      * 奥の面では「‹ 戻る」と「閉じる」を両方出す。
@@ -4400,14 +4400,98 @@ describe('種目の絞り込み（部位）', () => {
     expect(screen.getByText('スクワット')).toBeTruthy();
   });
 
-  /* 検索欄は置かない。部位で切れば一画面に収まる */
-  it('種目を検索する欄は置かない', () => {
+  /*
+   * 検索は**見出しの行に畳む。**以前は一覧の上に欄を常設していて、
+   * 使わない日も 1 行ぶん高さを取っていた（それを理由に一度やめた）。
+   * 変えたのは中身ではなく置き場所で、待機中の高さは 0。
+   */
+  it('検索は見出しに畳んであり、押すと開く', () => {
     seedMany();
     render(<ManagerHarness />);
-    expect(screen.queryByLabelText('種目を検索')).toBeNull();
 
+    // 待機中は欄を持たない。あるのは押す的だけ
+    expect(screen.queryByRole('searchbox')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '種目を検索' }));
+    expect(screen.getByRole('searchbox', { name: '種目を検索' })).toBeTruthy();
+  });
+
+  it('名前で探せる。ひらがなで打っている途中でも当たる', () => {
+    seedMany();
+    render(<ManagerHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '種目を検索' }));
+
+    // 変換前の「ぷらんく」で「プランク」に届く
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'ぷらんく' } });
+    expect(screen.getByText('プランク')).toBeTruthy();
+    expect(screen.queryByText('スクワット')).toBeNull();
+
+    /*
+     * 探しているあいだは部位で束ねない（見出しは読まれないまま場所だけ取る）。
+     * チップは出したまま——押す的であると同時に、いま何で絞っているかの表示なので
+     */
+    expect(document.querySelector('[class*="manageGroup"]')).toBeNull();
+    expect(screen.getByRole('group', { name: '部位で絞り込む' })).toBeTruthy();
+  });
+
+  /*
+   * ブラウザは type="search" の欄に × を付ける。それと「やめる」の × が
+   * 同じ形で並ぶと、押す前にどちらがどちらか分からない（CSS で内側を消してある）。
+   */
+  it('× は 1 つだけにする', () => {
+    seedMany();
+    render(<ManagerHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '種目を検索' }));
+
+    const box = screen.getByRole('searchbox').closest('span') as HTMLElement;
+    expect(within(box).getAllByRole('button')).toHaveLength(1);
+    expect(within(box).getByRole('button', { name: '検索をやめる' })).toBeTruthy();
+  });
+
+  it('やめると一覧が戻る', () => {
+    seedMany();
+    render(<ManagerHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '種目を検索' }));
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'ぷらんく' } });
+    expect(screen.queryByText('スクワット')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '検索をやめる' }));
+    expect(screen.getByText('スクワット')).toBeTruthy();
+    expect(screen.queryByRole('searchbox')).toBeNull();
+  });
+
+  it('検索と部位は同時に効く', () => {
+    seedMany();
+    render(<ManagerHarness />);
+
+    fireEvent.click(within(screen.getByRole('group', { name: '部位で絞り込む' })).getByText('胸'));
+    fireEvent.click(screen.getByRole('button', { name: '種目を検索' }));
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'ぷらんく' } });
+
+    // 胸で絞ったままなので、体幹のプランクには当たらない
+    expect(screen.getByText('このフィルターに合う種目はありません。')).toBeTruthy();
+  });
+
+  it('カタログでも同じように探せる', () => {
+    seedMany();
+    render(<ManagerHarness />);
     fireEvent.click(screen.getByText('＋ マイ種目に追加'));
-    expect(screen.queryByLabelText('種目を検索')).toBeNull();
+    const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
+
+    fireEvent.click(dialog.getByRole('button', { name: '種目を検索' }));
+    fireEvent.change(dialog.getByRole('searchbox'), { target: { value: 'でっど' } });
+    expect(screen.getByText(/^＋ デッドリフト/)).toBeTruthy();
+    expect(screen.queryByText(/^＋ 懸垂/)).toBeNull();
+  });
+
+  it('記録画面のピッカーでも同じように探せる', () => {
+    seedMany();
+    render(<Harness />);
+    openPicker();
+
+    fireEvent.click(screen.getByRole('button', { name: '種目を検索' }));
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'らんにんぐ' } });
+    expect(screen.getByText(/^＋ ランニング/)).toBeTruthy();
+    expect(screen.queryByText(/^＋ ベンチプレス/)).toBeNull();
   });
 
   it('記録画面のピッカーでも同じように絞り込める', () => {

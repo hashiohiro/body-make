@@ -9,6 +9,8 @@ import {
   isCatalogCandidate,
 } from '../../lib/exerciseCatalog';
 import type { CatalogEntry, Implement } from '../../lib/exerciseCatalog';
+import { matchRank, matchesQuery } from './ExerciseFilterBar';
+import { SearchToggle } from './SearchToggle';
 import type { Exercise, ExerciseGroup } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
@@ -95,6 +97,8 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
   const [filter, setFilter] = useState<CatalogFilter>('all');
   // 部位は主部位だけで絞る。一覧の見出しも主部位で切っているので、見え方が一致する
   const [group, setGroup] = useState<ExerciseGroup | 'all'>('all');
+  /** 名前で探す。90 種目あるので、目当てが決まっているときはこちらが速い */
+  const [query, setQuery] = useState('');
   /*
    * 伏せてある種目（`hidden`）と、マイ種目に入れていない種目（`adhoc`）を、ここに出す。
    * 伏せたものを「追加済み」として消すと、戻す道がマイ種目の非表示欄しか無くなる。
@@ -110,13 +114,62 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
     if (usedIds?.has(id)) return false;
     // 足し終えたものは残す（消えると、入ったのかどうかが分からない）
     if (known.has(id) && !selectedIds?.has(id)) return false;
-    return matchesFilter(c, filter) && (group === 'all' || c.entry.group === group);
+    return (
+      matchesFilter(c, filter) &&
+      (group === 'all' || c.entry.group === group) &&
+      // 器具の接尾辞は付けずに、名前そのもので照合する（「ベンチ」で両方に当たる）
+      matchesQuery(c.entry.name, query)
+    );
   });
-  const filtered = filter !== 'all' || group !== 'all';
+  const searching = query.trim() !== '';
+  const filtered = filter !== 'all' || group !== 'all' || searching;
+  /* 打っている最中の並び。前方一致を先に出し、同じ近さならカタログの並びのまま */
+  const hits = searching
+    ? [...notAdded].sort((a, b) => matchRank(a.entry.name, query) - matchRank(b.entry.name, query))
+    : notAdded;
+
+  /**
+   * カタログの 1 件。**束ねた一覧でも、探した結果でも同じものを出す。**
+   *
+   * 印はカタログに並ぶものどうしの違いを示す。
+   *   （印なし）… 実体がまだ無い。初めて入れる
+   *   記録あり  … その日だけ入れて使った種目（shelf: adhoc）。記録が繋がる
+   *   非表示    … 一度入れて伏せた種目。押すと表示に戻る
+   *
+   * 探した結果では、束ねる見出しが無いので部位も行に添える。
+   */
+  const pill = (c: CatalogChoice) => {
+    const id = catalogId(c.entry, c.implement);
+    const picked = selectedIds?.has(id) ?? false;
+    const shelf = byId.get(id)?.shelf;
+    return (
+      <button
+        key={id}
+        type="button"
+        className={s.pickerBtn}
+        aria-pressed={picked}
+        disabled={picked && onToggle == null}
+        onClick={() =>
+          picked ? onToggle?.(id) : onAdd([fromCatalog(c.entry, exercises.length, c.implement)])
+        }
+      >
+        {picked ? '✓ ' : '＋ '}
+        {c.entry.name}
+        {c.entry.implements && `（${IMPLEMENT_LABELS[c.implement]}）`}
+        {searching && <span className={s.catalogTag}>{GROUP_LABELS[c.entry.group]}</span>}
+        {shelf === 'hidden' && <span className={s.catalogTag}>非表示</span>}
+        {shelf === 'adhoc' && <span className={s.catalogTag}>記録あり</span>}
+      </button>
+    );
+  };
 
   return (
     <div className={s.pickerGroup}>
-      <div className={s.pickerLabel}>カタログから追加（{notAdded.length}件）</div>
+      <div className={s.catalogHead}>
+        <span className={s.pickerLabel}>カタログ（{notAdded.length}件）</span>
+        {/* 見出しの行に畳む。使わない日に高さを取らせない（SearchToggle） */}
+        <SearchToggle query={query} onQuery={setQuery} label="種目を検索" />
+      </div>
 
       {/*
         絞り込みは出しっぱなしにする。畳んでいた頃は、開くのに 1 回・選ぶのに 1 回で
@@ -178,6 +231,12 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
             ? 'このフィルターに合う種目はありません。'
             : 'カタログの種目はすべて追加済みです。'}
         </p>
+      ) : searching ? (
+        /*
+          **探しているあいだは部位で束ねない。**名前で当てに行っているので、
+          部位の見出しは読まれないまま場所だけ取る。どの部位かは行の右に添える。
+        */
+        <div className={s.pickerList}>{hits.map(pill)}</div>
       ) : (
         EXERCISE_GROUP_ORDER.map((g) => {
           const items = notAdded.filter((c) => c.entry.group === g);
@@ -185,41 +244,7 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
           return (
             <div key={g} className={s.pickerGroup}>
               <div className={s.pickerLabel}>{GROUP_LABELS[g]}</div>
-              <div className={s.pickerList}>
-                {items.map((c) => {
-                  const id = catalogId(c.entry, c.implement);
-                  const picked = selectedIds?.has(id) ?? false;
-                  /*
-                   * カタログに並ぶのは「マイ種目に入っていない」種目だけなので、
-                   * **その中での違い**を印にする。
-                   *
-                   *   （印なし）… 実体がまだ無い。初めて入れる
-                   *   記録あり  … その日だけ入れて使った種目（shelf: adhoc）。記録が繋がる
-                   *   非表示    … 一度入れて伏せた種目。押すと表示に戻る
-                   */
-                  const shelf = byId.get(id)?.shelf;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      className={s.pickerBtn}
-                      aria-pressed={picked}
-                      disabled={picked && onToggle == null}
-                      onClick={() =>
-                        picked
-                          ? onToggle?.(id)
-                          : onAdd([fromCatalog(c.entry, exercises.length, c.implement)])
-                      }
-                    >
-                      {picked ? '✓ ' : '＋ '}
-                      {c.entry.name}
-                      {c.entry.implements && `（${IMPLEMENT_LABELS[c.implement]}）`}
-                      {shelf === 'hidden' && <span className={s.catalogTag}>非表示</span>}
-                      {shelf === 'adhoc' && <span className={s.catalogTag}>記録あり</span>}
-                    </button>
-                  );
-                })}
-              </div>
+              <div className={s.pickerList}>{items.map(pill)}</div>
             </div>
           );
         })

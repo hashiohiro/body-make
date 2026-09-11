@@ -4,7 +4,14 @@ import { CustomExerciseForm } from './CustomExerciseForm';
 import { Modal } from '../Modal';
 import { useFabPosition } from './useFabPosition';
 import { EXERCISE_GROUP_ORDER, GROUP_LABELS, isListed } from '../../lib/exerciseCatalog';
-import { ExerciseFilterBar, FILTER_THRESHOLD, matchesGroup } from './ExerciseFilterBar';
+import {
+  ExerciseFilterBar,
+  FILTER_THRESHOLD,
+  matchRank,
+  matchesGroup,
+  matchesQuery,
+} from './ExerciseFilterBar';
+import { SearchToggle } from './SearchToggle';
 import type { PresetOption } from './PresetCard';
 import type { Exercise, ExerciseGroup } from '../../types';
 import ui from '../../styles/ui.module.scss';
@@ -72,6 +79,8 @@ export function ExercisePicker({
   /** カタログで選んだ種目。マイ種目に残すかを答えてもらうまで、まだ入れない */
   const [pending, setPending] = useState<Exercise | null>(null);
   const [group, setGroup] = useState<ExerciseGroup | 'all'>('all');
+  /** 名前で探す。打ちはじめたら、部位の見出しをやめて平たい候補に差し替える */
+  const [query, setQuery] = useState('');
 
   /*
    * 非表示の種目は候補に出さない。
@@ -79,7 +88,13 @@ export function ExercisePicker({
    * 出さないと、ここで外せず閉じてカードの × を探すことになる。
    */
   const choices = exercises.filter((e) => isListed(e) || usedIds.has(e.id));
-  const narrowed = choices.filter((e) => matchesGroup(e, group));
+  // 検索とチップは AND。「腕で絞ってからカールを探す」がそのまま通る
+  const narrowed = choices.filter((e) => matchesGroup(e, group) && matchesQuery(e.name, query));
+  const searching = query.trim() !== '';
+  /* 打っている最中の並び。前方一致を先に出し、同じ近さなら元の並びのまま */
+  const hits = searching
+    ? [...narrowed].sort((a, b) => matchRank(a.name, query) - matchRank(b.name, query))
+    : narrowed;
 
   const close = () => {
     setOpen(false);
@@ -91,6 +106,31 @@ export function ExercisePicker({
      * 探すための状態であって、この画面の設定ではない。
      */
     setGroup('all');
+    setQuery('');
+  };
+
+  /** 候補の 1 件。束ねた一覧でも、探した結果でも同じものを出す */
+  const pill = (e: Exercise) => {
+    const used = usedIds.has(e.id);
+    // マイ種目に入れていない種目。その日に入っているときだけここに出る
+    const adhoc = e.shelf === 'adhoc';
+    return (
+      <button
+        key={e.id}
+        type="button"
+        className={`${s.pickerBtn} ${adhoc ? s.pickerBtnAdhoc : ''}`}
+        aria-pressed={used}
+        // ✓ はトグル。押しても外れないと、間違えて入れたものを
+        // ここで取り消せず、閉じてカードの × を探すことになる
+        onClick={() => onToggle(e.id)}
+      >
+        {used ? '✓ ' : '＋ '}
+        {e.name}
+        {/* 束ねる見出しが無いので、探した結果では部位も行に添える */}
+        {searching && <span className={s.catalogTag}>{GROUP_LABELS[e.group]}</span>}
+        {adhoc && <span className={s.adhocTag}>未追加</span>}
+      </button>
+    );
   };
 
   const menuItem = (id: Panel, name: string, hint: string) => (
@@ -268,44 +308,38 @@ export function ExercisePicker({
         ) : (
           <div>
             {choices.length > FILTER_THRESHOLD && (
-              <ExerciseFilterBar group={group} onGroup={setGroup} exercises={choices} />
+              <>
+                {/* 見出しの行に畳む。使わない日に高さを取らせない（SearchToggle） */}
+                <div className={s.catalogHead}>
+                  <span className={s.pickerLabel}>マイ種目（{choices.length}件）</span>
+                  <SearchToggle query={query} onQuery={setQuery} label="種目を検索" />
+                </div>
+                <ExerciseFilterBar group={group} onGroup={setGroup} exercises={choices} />
+              </>
             )}
 
             {narrowed.length === 0 && (
               <p className={ui.emptyState}>このフィルターに合う種目はありません。</p>
             )}
 
-            {EXERCISE_GROUP_ORDER.map((g) => {
-              const items = narrowed.filter((e) => e.group === g);
-              if (items.length === 0) return null;
-              return (
-                <div key={g} className={s.pickerGroup}>
-                  <div className={s.pickerLabel}>{GROUP_LABELS[g]}</div>
-                  <div className={s.pickerList}>
-                    {items.map((e) => {
-                      const used = usedIds.has(e.id);
-                      // マイ種目に入れていない種目。その日に入っているときだけここに出る
-                      const adhoc = e.shelf === 'adhoc';
-                      return (
-                        <button
-                          key={e.id}
-                          type="button"
-                          className={`${s.pickerBtn} ${adhoc ? s.pickerBtnAdhoc : ''}`}
-                          aria-pressed={used}
-                          // ✓ はトグル。押しても外れないと、間違えて入れたものを
-                          // ここで取り消せず、閉じてカードの × を探すことになる
-                          onClick={() => onToggle(e.id)}
-                        >
-                          {used ? '✓ ' : '＋ '}
-                          {e.name}
-                          {adhoc && <span className={s.adhocTag}>未追加</span>}
-                        </button>
-                      );
-                    })}
+            {/*
+              **探しているあいだは部位で束ねない。**名前で当てに行っているので、
+              部位の見出しは読まれないまま場所だけ取る。どの部位かは行の右に添える。
+            */}
+            {searching ? (
+              <div className={s.pickerList}>{hits.map(pill)}</div>
+            ) : (
+              EXERCISE_GROUP_ORDER.map((g) => {
+                const items = narrowed.filter((e) => e.group === g);
+                if (items.length === 0) return null;
+                return (
+                  <div key={g} className={s.pickerGroup}>
+                    <div className={s.pickerLabel}>{GROUP_LABELS[g]}</div>
+                    <div className={s.pickerList}>{items.map(pill)}</div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         )}
       </Modal>

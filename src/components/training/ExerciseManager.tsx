@@ -9,7 +9,14 @@ import {
 import type { Exercise, ExerciseGroup, SessionPoint } from '../../types';
 import { CatalogPicker } from './CatalogPicker';
 import { CustomExerciseForm } from './CustomExerciseForm';
-import { ExerciseFilterBar, FILTER_THRESHOLD, matchesGroup } from './ExerciseFilterBar';
+import {
+  ExerciseFilterBar,
+  FILTER_THRESHOLD,
+  matchRank,
+  matchesGroup,
+  matchesQuery,
+} from './ExerciseFilterBar';
+import { SearchToggle } from './SearchToggle';
 import { ExerciseSettingsForm } from './ExerciseSettingsForm';
 import { GoalEditor } from './GoalEditor';
 import { ExerciseSummaryCard } from './ExerciseSummaryCard';
@@ -61,6 +68,8 @@ function goalValue(exercise: Exercise): string | null {
 export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, sessions }: Props) {
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<ExerciseGroup | 'all'>('all');
+  /** 名前で探す。打ちはじめたら、部位の見出しをやめて平たい候補に差し替える */
+  const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   /** 目標を開いている種目。設定（詳細）とは同時に開かない */
   const [goalOf, setGoalOf] = useState<string | null>(null);
@@ -76,7 +85,13 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
   const sorted = [...exercises].sort((a, b) => a.order - b.order);
   /** 件数の見出し用。絞り込みでは動かさない */
   const shownAll = sorted.filter((e) => isListed(e));
-  const filtered = sorted.filter((e) => matchesGroup(e, filter));
+  const searching = query.trim() !== '';
+  // 検索とチップは AND。「腕で絞ってからカールを探す」がそのまま通る
+  const filtered = sorted.filter((e) => matchesGroup(e, filter) && matchesQuery(e.name, query));
+  /* 打っている最中の並び。前方一致を先に出し、同じ近さなら元の並びのまま */
+  const hits = searching
+    ? [...filtered].sort((a, b) => matchRank(a.name, query) - matchRank(b.name, query))
+    : filtered;
   const shown = filtered.filter((e) => isListed(e));
   /*
    * 非表示も部位で切る。**絞り込みは一覧ぜんぶに掛かる。**
@@ -207,10 +222,16 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
     <section className={ui.card}>
       <header className={ui.cardHeader}>
         <h2 className={ui.cardTitle}>マイ種目</h2>
-        <span className={ui.hint}>
-          {shownAll.length}件 / 目標 {shownAll.filter((e) => e.goal != null).length}件
-          {hiddenAll.length > 0 && ` / 非表示 ${hiddenAll.length}件`}
-        </span>
+        {/* 検索を開いているあいだは、件数の代わりに欄が入る（行は増やさない） */}
+        {!searching && (
+          <span className={ui.hint}>
+            {shownAll.length}件 / 目標 {shownAll.filter((e) => e.goal != null).length}件
+            {hiddenAll.length > 0 && ` / 非表示 ${hiddenAll.length}件`}
+          </span>
+        )}
+        {sorted.length > FILTER_THRESHOLD && (
+          <SearchToggle query={query} onQuery={setQuery} label="種目を検索" />
+        )}
       </header>
 
       {/* 追加は一番上。登録済みが増えるほど、下に置くとスクロールを強いることになる */}
@@ -243,20 +264,25 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
 
           {/*
             部位ごとに見出しを付ける。並び替えを持たないので、探し方は「何番目か」ではなく
-            「どの部位か」になる。見出しは主部位で切る（一覧の絞り込みと同じ切り方）
+            「どの部位か」になる。見出しは主部位で切る（一覧の絞り込みと同じ切り方）。
+
+            **探しているあいだは束ねない。**名前で当てに行っているので、
+            部位の見出しは読まれないまま場所だけ取る。
           */}
-          {EXERCISE_GROUP_ORDER.map((group) => {
-            const items = shown.filter((ex) => ex.group === group);
-            if (items.length === 0) return null;
+          {searching
+            ? hits.filter((ex) => isListed(ex)).map(card)
+            : EXERCISE_GROUP_ORDER.map((group) => {
+                const items = shown.filter((ex) => ex.group === group);
+                if (items.length === 0) return null;
 
-            return (
-              <div key={group}>
-                <div className={s.manageGroup}>{GROUP_LABELS[group]}</div>
+                return (
+                  <div key={group}>
+                    <div className={s.manageGroup}>{GROUP_LABELS[group]}</div>
 
-                {items.map(card)}
-              </div>
-            );
-          })}
+                    {items.map(card)}
+                  </div>
+                );
+              })}
 
           {filtered.length === 0 && (
             <p className={ui.emptyState}>このフィルターに合う種目はありません。</p>

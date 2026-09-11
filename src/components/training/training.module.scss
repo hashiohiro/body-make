@@ -425,6 +425,121 @@
   }
 }
 
+/* 見出しと、そこに畳んだ検索。行を増やさないための組 */
+.catalogHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+
+  .pickerLabel {
+    flex: 1;
+    min-width: 0;
+    margin-bottom: 0;
+  }
+}
+
+/*
+ * 見出しの行に畳んだ検索。**待機中はアイコンだけ。**
+ * 一覧の上に欄を常設していた頃は、使わない日も 1 行ぶん高さを取っていた。
+ */
+.searchBtn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink-2);
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* 開いたら、見出しの行をそのまま欄にする（行は増やさない） */
+.searchBox {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.searchField {
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink);
+  /* 16px 未満だと iOS が focus のたびに画面を拡大する */
+  font-size: 16px;
+
+  /*
+   * ブラウザが付ける × を消す。**同じ形の × が 2 つ並ぶ。**
+   * 内側の × は語を消すだけ、外側の × は検索そのものをやめる、という違いが
+   * 形から読めない。語だけ消しても一覧は全件に戻るので、やめるのと結果が同じ。
+   * だから残すのは外側の 1 つにする。
+   */
+  &::-webkit-search-cancel-button,
+  &::-webkit-search-decoration {
+    appearance: none;
+    display: none;
+  }
+}
+
+.searchClose {
+  flex: none;
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-size: 16px;
+  line-height: 1;
+}
+
+/*
+ * 検索の結果。**部位で束ねず、平たく並べる。**
+ * 打っている最中は部位の見出しを読まない。どの部位かは行の右に小さく添える。
+ */
+.hitRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: var(--ink);
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
+
+  &[aria-pressed='true'] {
+    color: var(--accent);
+  }
+}
+
+.hitName {
+  flex: 1;
+  min-width: 0;
+  @include truncate;
+}
+
 /*
  * カタログの行に添える印（記録あり / 非表示）。
  *
