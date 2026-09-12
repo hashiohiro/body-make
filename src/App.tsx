@@ -4,6 +4,7 @@ import { TabBar } from './components/TabBar';
 import type { TabId } from './components/TabBar';
 import type { AppData, Domain } from './types';
 import { DemoNotice } from './components/DemoNotice';
+import { Segmented } from './components/Segmented';
 import { StorageAlert } from './components/StorageAlert';
 import { Toast, useToast } from './components/Toast';
 import { useBodyData } from './hooks/useBodyData';
@@ -17,7 +18,6 @@ import { GoalsView } from './views/GoalsView';
 import { HomeView } from './views/HomeView';
 import { RecordsView } from './views/RecordsView';
 import { SETTINGS_SECTIONS, SettingsView, settingsTitle } from './views/SettingsView';
-import ui from './styles/ui.module.scss';
 import s from './App.module.scss';
 
 const TITLES: Record<TabId, string> = {
@@ -201,24 +201,15 @@ export function App({ initial }: AppProps) {
           トレーニングを見続けたい人が毎回押し直すことになる
         */}
         {route.tab !== 'settings' && (
-          <div className={ui.segmented} role="group" aria-label="表示する記録">
-            {(
-              [
-                ['body', '体組成'],
-                ['training', 'トレーニング'],
-              ] as [Domain, string][]
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className={ui.segment}
-                aria-pressed={domain === id}
-                onClick={() => changeDomain(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="表示する記録"
+            value={domain}
+            options={[
+              { id: 'body', label: '体組成' },
+              { id: 'training', label: 'トレーニング' },
+            ]}
+            onChange={changeDomain}
+          />
         )}
       </header>
 

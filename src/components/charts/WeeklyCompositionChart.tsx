@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useElementWidth } from '../../hooks/useElementWidth';
+import { insideRect, useDismiss } from '../../hooks/useDismiss';
 import { formatMD } from '../../lib/date';
 import type { WeekPoint } from '../../types';
-import { linearScale, niceScale, roundedTopRect, tickDecimals } from './scales';
+import { bandLayout, linearScale, niceScale, roundedTopRect, tickDecimals } from './scales';
+import { YAxis } from './YAxis';
 import s from './charts.module.scss';
 
 interface Props {
@@ -19,7 +21,12 @@ const SEGMENT_GAP = 2;
 
 export function WeeklyCompositionChart({ weeks, height = 250 }: Props) {
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
+  /** プロットの矩形。外を触ったかどうかは**ここ**で判定する */
+  const plotRef = useRef<SVGRectElement>(null);
   const [active, setActive] = useState<number | null>(null);
+
+  // 指では pointerleave が来ないので、外を触るか Esc で閉じられるようにする
+  useDismiss(active != null, () => setActive(null), insideRect(plotRef));
 
   const rows = useMemo(() => weeks.filter((w) => w.leanMass != null && w.fatMass != null), [weeks]);
 
@@ -35,12 +42,13 @@ export function WeeklyCompositionChart({ weeks, height = 250 }: Props) {
   const y = linearScale([scale.min, scale.max], [MARGIN.top + plotH, MARGIN.top]);
   const decimals = tickDecimals(scale.step);
 
-  const band = rows.length > 0 ? Math.min(plotW / rows.length, MAX_BAND) : plotW;
-  const barW = Math.min(MAX_BAR, band * 0.6);
-  // 上限に当たったぶんは全体を中央へ寄せる
-  const originX = MARGIN.left + (plotW - band * rows.length) / 2;
-  const bandX = (i: number) => originX + band * i;
-  const barX = (i: number) => bandX(i) + (band - barW) / 2;
+  const { band, barW, bandX, barX } = bandLayout(
+    rows.length,
+    plotW,
+    MARGIN.left,
+    MAX_BAND,
+    MAX_BAR,
+  );
 
   const labelEvery = rows.length <= 8;
 
@@ -83,26 +91,25 @@ export function WeeklyCompositionChart({ weeks, height = 250 }: Props) {
           >
             <title>週平均の体組成（除脂肪体重と体脂肪量の積み上げ）</title>
 
-            {scale.ticks.map((tick) => (
-              <g key={tick}>
-                <line
-                  className={s.grid}
-                  x1={MARGIN.left}
-                  x2={MARGIN.left + plotW}
-                  y1={y(tick)}
-                  y2={y(tick)}
-                />
-                <text
-                  className={s.tickLabel}
-                  x={MARGIN.left - 7}
-                  y={y(tick)}
-                  textAnchor="end"
-                  dy="0.32em"
-                >
-                  {tick.toFixed(decimals)}
-                </text>
-              </g>
-            ))}
+            <YAxis
+              ticks={scale.ticks}
+              y={y}
+              left={MARGIN.left}
+              right={MARGIN.left + plotW}
+              format={(tick) => tick.toFixed(decimals)}
+            />
+
+            {/* 外を触ったかどうかを決めるだけの矩形。触れる的は棒ごとに持つ */}
+            <rect
+              ref={plotRef}
+              data-plot=""
+              x={MARGIN.left}
+              y={MARGIN.top}
+              width={plotW}
+              height={plotH}
+              fill="none"
+              pointerEvents="none"
+            />
 
             {rows.map((week, i) => {
               const lean = week.leanMass ?? 0;

@@ -20,17 +20,11 @@
   margin-bottom: 9px;
   font-size: 12px;
   color: var(--ink-2);
-}
 
-.copy {
-  margin-left: auto;
-  padding: 3px 7px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
-  font-size: 10px;
-  color: var(--ink-2);
-  min-height: 0;
+  /* 「前回値」は右端へ。ラベルの隣に置くと、押す的がラベルの一部に見える */
+  > button {
+    margin-left: auto;
+  }
 }
 
 .field + .field {
@@ -48,26 +42,17 @@
   flex: 1;
   width: 100%;
   min-width: 0;
-  min-height: 42px;
+  min-height: var(--tap-field);
   padding: 8px 4px;
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
   background: var(--surface);
-  font-size: 16px; // 16px 未満だと iOS がフォーカス時にズームする
+  @include field-text;
   font-weight: 600;
   text-align: center;
   @include tabular;
 
-  &::-webkit-outer-spin-button,
-  &::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  &[type='number'] {
-    -moz-appearance: textfield;
-    appearance: textfield;
-  }
+  @include field-number;
 }
 
 .summary {

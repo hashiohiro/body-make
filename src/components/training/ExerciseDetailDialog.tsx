@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
+import { ChipGroup } from '../ChipGroup';
+import { DataTable } from '../DataTable';
+import { Meter } from '../Meter';
 import { Modal } from '../Modal';
 import { TimeSeriesChart } from '../charts/TimeSeriesChart';
 import type { ChartSeries, SeriesPoint } from '../charts/TimeSeriesChart';
 import { GROUP_LABELS, countsReps, isCardio } from '../../lib/exerciseCatalog';
 import { addDays, formatMD, isoToTime, startOfWeek, todayISO } from '../../lib/date';
-import { deltaTone, fmt, fmtDelta } from '../../lib/format';
+import { deltaTone, fmt, fmtDelta, fmtVolume } from '../../lib/format';
 import {
   buildWeeklySets,
   exerciseHistory,
@@ -15,10 +18,9 @@ import {
 } from '../../lib/training';
 import { METRICS, baselineOf, lastOf } from './metrics';
 import type { Exercise, MuscleGroup, SessionPoint } from '../../types';
+import { TONE_CLASS } from '../tone';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
-
-const TONE_CLASS = { good: ui.good, bad: ui.bad, flat: ui.flat } as const;
 
 interface Props {
   open: boolean;
@@ -186,19 +188,7 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
   return (
     <Modal open={open} title={exercise.name} onClose={onClose}>
       <div>
-        <div className={`${ui.chipRow} ${s.filterRow}`} role="group" aria-label="指標">
-          {metrics.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className={ui.chip}
-              aria-pressed={metric.id === m.id}
-              onClick={() => setMetricId(m.id)}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+        <ChipGroup options={metrics} value={metric.id} onChange={setMetricId} label="指標" tight />
 
         <div className={s.statRow}>
           <span className={s.statLabel}>過去最大</span>
@@ -224,9 +214,7 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
 
         {progress != null && (
           <>
-            <div className={s.meter}>
-              <div className={s.meterFill} style={{ width: `${Math.round(progress * 100)}%` }} />
-            </div>
+            <Meter value={progress} label="目標までの進捗" block />
             <div className={s.statSub}>
               <span>目標 {weightTarget} kg まで</span>
               <span style={{ marginLeft: 'auto' }}>{Math.round(progress * 100)}%</span>
@@ -294,12 +282,10 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
               return (
                 <div key={row.group} className={s.groupRow}>
                   <span>{GROUP_LABELS[row.group]}</span>
-                  <span className={s.groupBarTrack}>
-                    <span
-                      className={s.groupBarFill}
-                      style={{ width: `${total > 0 ? Math.min(1, row.sets / total) * 100 : 0}%` }}
-                    />
-                  </span>
+                  <Meter
+                    value={total > 0 ? row.sets / total : 0}
+                    label={`${GROUP_LABELS[row.group]}の割合`}
+                  />
                   <span className={s.groupValue}>
                     <b>{formatSets(row.sets)}</b> / {formatSets(total)}
                   </span>
@@ -322,43 +308,31 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
           <span>{history.length}日ぶん</span>
         </div>
 
-        <div className={ui.tableScroll}>
-          <table className={ui.table}>
-            <thead>
-              <tr>
-                <th scope="col">日付</th>
-                <th scope="col">トップセット</th>
-                <th scope="col">セット</th>
-                <th scope="col">挙上量</th>
-                <th scope="col">推定1RM</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...history].reverse().map((h) => (
-                <tr key={h.date}>
-                  <th scope="row">{formatMD(h.date)}</th>
-                  <td>{formatTopSet(h.point) ?? '—'}</td>
-                  <td>{h.point.workSets}</td>
-                  <td>
-                    {h.point.volume > 0 ? (
-                      `${Math.round(h.point.volume).toLocaleString()} kg`
-                    ) : (
-                      <span className={ui.cellEmpty}>—</span>
-                    )}
-                  </td>
-                  <td>
-                    {h.point.oneRm == null ? (
-                      <span className={ui.cellEmpty}>—</span>
-                    ) : (
-                      // 挙上量と同じく重さなので、こちらにも単位を付ける
-                      `${fmt(h.point.oneRm)} kg${h.point.measured ? ' *' : ''}`
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* 表そのものが目的の面なので、畳まない（summary を渡さない） */}
+        <DataTable columns={['日付', 'トップセット', 'セット', '挙上量', '推定1RM']}>
+          {[...history].reverse().map((h) => (
+            <tr key={h.date}>
+              <th scope="row">{formatMD(h.date)}</th>
+              <td>{formatTopSet(h.point) ?? '—'}</td>
+              <td>{h.point.workSets}</td>
+              <td>
+                {h.point.volume > 0 ? (
+                  `${fmtVolume(h.point.volume)} kg`
+                ) : (
+                  <span className={ui.cellEmpty}>—</span>
+                )}
+              </td>
+              <td>
+                {h.point.oneRm == null ? (
+                  <span className={ui.cellEmpty}>—</span>
+                ) : (
+                  // 挙上量と同じく重さなので、こちらにも単位を付ける
+                  `${fmt(h.point.oneRm)} kg${h.point.measured ? ' *' : ''}`
+                )}
+              </td>
+            </tr>
+          ))}
+        </DataTable>
       </div>
     </Modal>
   );

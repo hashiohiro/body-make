@@ -1,12 +1,21 @@
 import { useState } from 'react';
 import { CatalogPicker } from './CatalogPicker';
 import { CustomExerciseForm } from './CustomExerciseForm';
+import { ExercisePickList } from './ExercisePickList';
 import { OrderList } from './OrderList';
 import { Modal } from '../Modal';
-import { EXERCISE_GROUP_ORDER, GROUP_LABELS, groupsOf, isListed } from '../../lib/exerciseCatalog';
+import { useConfirm } from '../ConfirmDialog';
+import { removePresetRequest } from './presetConfirm';
+import { GROUP_LABELS, groupsOf, isListed } from '../../lib/exerciseCatalog';
 import { PRESET_NAME_MAX } from '../../lib/storage';
 import type { Exercise, Preset } from '../../types';
+import { CardHeader } from '../CardHeader';
+import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
+import { Tag } from '../Tag';
+import { MiniButton } from '../MiniButton';
+import { NameEntryRow } from '../NameEntryRow';
+import { Pill } from '../Pill';
 import s from './training.module.scss';
 
 /** 作りかけのプリセットを、掴んでいる相手として指すための名前（Preset.id と混ざらない） */
@@ -94,34 +103,28 @@ function PickDialog({
             カタログから選ぶと、マイ種目とこの組み合わせの両方に入ります。
           </p>
         ) : (
-          EXERCISE_GROUP_ORDER.map((group) => {
-            const list = choices.filter((e) => e.group === group);
-            if (list.length === 0) return null;
-            return (
-              <div key={group} className={s.pickerGroup}>
-                <div className={s.pickerLabel}>{GROUP_LABELS[group]}</div>
-                <div className={s.pickerList}>
-                  {list.map((e) => {
-                    const used = selected.has(e.id);
-                    return (
-                      <button
-                        key={e.id}
-                        type="button"
-                        className={s.pickerBtn}
-                        aria-pressed={used}
-                        // 最後の 1 つを外すのは削除と同じ意味になるので、ここでは受け付けない
-                        disabled={used && selected.size === 1}
-                        onClick={() => onToggle(e.id)}
-                      >
-                        {used ? '✓ ' : '＋ '}
-                        {e.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })
+          /* 選ぶ面はどこも同じ組み（検索・部位チップ・部位ごとの見出し） */
+          <ExercisePickList
+            items={choices}
+            heading="マイ種目"
+            renderItem={(e, searching) => {
+              const used = selected.has(e.id);
+              return (
+                <Pill
+                  key={e.id}
+                  pressed={used}
+                  // 最後の 1 つを外すのは削除と同じ意味になるので、ここでは受け付けない
+                  disabled={used && selected.size === 1}
+                  onClick={() => onToggle(e.id)}
+                >
+                  {used ? '✓ ' : '＋ '}
+                  {e.name}
+                  {/* 束ねる見出しが無いので、探した結果では部位も行に添える */}
+                  {searching && <Tag>{GROUP_LABELS[e.group]}</Tag>}
+                </Pill>
+              );
+            }}
+          />
         )}
 
         <div className={ui.btnRow}>
@@ -130,13 +133,13 @@ function PickDialog({
             作りかけのプリセットは画面を離れると消えるので、なおさら戻ってこられない。
             記録画面のピッカーと同じで、入口だけ出して管理の場所は動かさない。
           */}
-          <button
-            type="button"
-            className={`${ui.btn} ${choices.length === 0 ? ui.btnPrimary : ''} ${ui.btnSm}`}
+          <Button
+            tone={choices.length === 0 ? 'primary' : undefined}
+            size="sub"
             onClick={() => setCatalog(true)}
           >
             ＋ カタログから足す
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>
@@ -190,6 +193,7 @@ export function PresetManager({
   const [moving, setMoving] = useState<{ owner: string; exerciseId: string } | null>(null);
   /** 作りかけのプリセット。決まるまで保存しない */
   const [creating, setCreating] = useState<{ name: string; exerciseIds: string[] } | null>(null);
+  const [ask, confirmDialog] = useConfirm();
   const [pickingDraft, setPickingDraft] = useState(false);
 
   const byId = new Map(exercises.map((e) => [e.id, e]));
@@ -200,23 +204,20 @@ export function PresetManager({
   const newName = creating ? creating.name.trim().slice(0, PRESET_NAME_MAX) : '';
   const newTaken = presets.some((p) => p.name === newName);
 
-  const remove = (preset: Preset) => {
-    // 記録は消えないが、付けた名前と組み合わせは戻せない（記録画面の削除と同じ作法）
-    if (confirm(`プリセット「${preset.name}」を削除します。\n元に戻せません。`)) {
-      onRemove(preset.id);
-    }
-  };
+  // 聞き方は記録画面のプリセットと同じ（presetConfirm）
+  const remove = (preset: Preset) => ask(removePresetRequest(preset, () => onRemove(preset.id)));
 
   const drop = (preset: Preset, exerciseId: string) => {
+    // 最後の 1 つを外すのは、プリセットを消すのと同じこと。そう書いて聞く
     if (preset.exerciseIds.length === 1) {
-      if (
-        confirm(
-          `「${nameOf(exerciseId)}」を外すと種目が無くなります。\n` +
-            `プリセット「${preset.name}」ごと削除します。元に戻せません。`,
-        )
-      ) {
-        onRemove(preset.id);
-      }
+      ask({
+        title: 'プリセットごと削除しますか？',
+        subject: preset.name,
+        note: `「${nameOf(exerciseId)}」を外すと種目が無くなります。記録は消えません。`,
+        confirmLabel: 'プリセットごと削除',
+        destructive: true,
+        onConfirm: () => onRemove(preset.id),
+      });
       return;
     }
     onUpdate({ ...preset, exerciseIds: preset.exerciseIds.filter((id) => id !== exerciseId) });
@@ -256,10 +257,7 @@ export function PresetManager({
 
   return (
     <section className={ui.card}>
-      <header className={ui.cardHeader}>
-        <h2 className={ui.cardTitle}>プリセット</h2>
-        <span className={ui.hint}>{presets.length}件</span>
-      </header>
+      <CardHeader title="プリセット" hint={<>{presets.length}件</>} />
 
       {/* 作るのは一番上。溜まるほど、下に置くとスクロールを強いることになる */}
       {creating == null && (
@@ -268,52 +266,33 @@ export function PresetManager({
             マイ種目が空でも押せる。**足す面からカタログへ行ける**ので、
             ここで止めると行き止まりを作るだけになる（以前は押せなくしていた）。
           */}
-          <button
-            type="button"
-            className={`${ui.btn} ${presets.length === 0 ? ui.btnPrimary : ''}`}
+          <Button
+            tone={presets.length === 0 ? 'primary' : undefined}
             onClick={() => {
               setCreating({ name: '', exerciseIds: [] });
               setPickingDraft(true);
             }}
           >
             ＋ プリセットを作る
-          </button>
+          </Button>
         </div>
       )}
 
       {creating && (
         <div className={s.presetBlock}>
-          <div className={s.presetSave}>
-            <input
-              type="text"
-              className={s.presetInput}
-              value={creating.name}
-              maxLength={PRESET_NAME_MAX}
-              placeholder="押す日"
-              aria-label="新しいプリセットの名前"
-              onChange={(e) => setCreating({ ...creating, name: e.target.value })}
-            />
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-label="このプリセットを作る"
-              disabled={newName === '' || newTaken || creating.exerciseIds.length === 0}
-              onClick={() => {
-                onCreate(creating.name, creating.exerciseIds);
-                setCreating(null);
-              }}
-            >
-              ✓
-            </button>
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-label="作るのをやめる"
-              onClick={() => setCreating(null)}
-            >
-              ×
-            </button>
-          </div>
+          <NameEntryRow
+            value={creating.name}
+            onChange={(name) => setCreating({ ...creating, name })}
+            label="新しいプリセットの名前"
+            commitLabel="このプリセットを作る"
+            cancelLabel="作るのをやめる"
+            disabled={newName === '' || newTaken || creating.exerciseIds.length === 0}
+            onCommit={() => {
+              onCreate(creating.name, creating.exerciseIds);
+              setCreating(null);
+            }}
+            onCancel={() => setCreating(null)}
+          />
 
           {newTaken && <p className={ui.note}>同じ名前のプリセットがあります。</p>}
 
@@ -367,14 +346,13 @@ export function PresetManager({
 
             {moving?.owner === DRAFT ? null : (
               <div className={ui.btnRow}>
-                <button
-                  type="button"
-                  className={`${ui.btn} ${ui.btnSm}`}
-                  aria-label="新しいプリセットに種目を足す"
+                <Button
+                  size="sub"
+                  label="新しいプリセットに種目を足す"
                   onClick={() => setPickingDraft(true)}
                 >
                   ＋ 種目を足す
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -392,61 +370,37 @@ export function PresetManager({
         : presets.map((preset) => (
             <div key={preset.id} className={s.presetBlock}>
               {renaming === preset.id ? (
-                <div className={s.presetSave}>
-                  <input
-                    type="text"
-                    className={s.presetInput}
-                    value={draft}
-                    maxLength={PRESET_NAME_MAX}
-                    aria-label={`${preset.name}の新しい名前`}
-                    onChange={(e) => setDraft(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className={s.miniBtn}
-                    aria-label="この名前にする"
-                    disabled={trimmed === '' || taken}
-                    onClick={() => {
-                      onUpdate({ ...preset, name: draft });
-                      setRenaming(null);
-                    }}
-                  >
-                    ✓
-                  </button>
-                  <button
-                    type="button"
-                    className={s.miniBtn}
-                    aria-label="名前の変更をやめる"
-                    onClick={() => setRenaming(null)}
-                  >
-                    ×
-                  </button>
-                </div>
+                <NameEntryRow
+                  value={draft}
+                  onChange={setDraft}
+                  label={`${preset.name}の新しい名前`}
+                  commitLabel="この名前にする"
+                  cancelLabel="名前の変更をやめる"
+                  disabled={trimmed === '' || taken}
+                  onCommit={() => {
+                    onUpdate({ ...preset, name: draft });
+                    setRenaming(null);
+                  }}
+                  onCancel={() => setRenaming(null)}
+                />
               ) : (
                 <div className={s.presetRow}>
                   <span className={s.presetName}>{preset.name}</span>
                   <span className={s.presetGroups}>{groupsOf(exercises, preset.exerciseIds)}</span>
                   <span className={s.presetCount}>{preset.exerciseIds.length}種目</span>
 
-                  <button
-                    type="button"
-                    className={s.miniBtn}
-                    aria-label={`${preset.name}の名前を変更`}
+                  <MiniButton
+                    label={`${preset.name}の名前を変更`}
                     onClick={() => {
                       setDraft(preset.name);
                       setRenaming(preset.id);
                     }}
                   >
                     ✎
-                  </button>
-                  <button
-                    type="button"
-                    className={s.miniBtn}
-                    aria-label={`${preset.name}を削除`}
-                    onClick={() => remove(preset)}
-                  >
+                  </MiniButton>
+                  <MiniButton label={`${preset.name}を削除`} onClick={() => remove(preset)}>
                     ×
-                  </button>
+                  </MiniButton>
                 </div>
               )}
 
@@ -492,14 +446,13 @@ export function PresetManager({
 
                 {moving?.owner === preset.id ? null : (
                   <div className={ui.btnRow}>
-                    <button
-                      type="button"
-                      className={`${ui.btn} ${ui.btnSm}`}
-                      aria-label={`${preset.name}に種目を足す`}
+                    <Button
+                      size="sub"
+                      label={`${preset.name}に種目を足す`}
                       onClick={() => setPicking(preset.id)}
                     >
                       ＋ 種目を足す
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -514,6 +467,8 @@ export function PresetManager({
         いつやるかとセット数が決まって初めて出せるので、記録画面で確認できます （設定 &gt;
         トレーニング &gt; トレーニング種目のレビュー で有効にしたときだけ出ます）。
       </p>
+
+      {confirmDialog}
     </section>
   );
 }

@@ -100,11 +100,12 @@ function sanitizeGroupGoals(raw: unknown): GroupGoals {
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-function num(value: unknown, min: number, max: number): number | null {
+function num(value: unknown, min: number, max: number, decimals = 1): number | null {
   const n = typeof value === 'string' ? Number(value) : value;
   if (typeof n !== 'number' || !Number.isFinite(n)) return null;
   if (n < min || n > max) return null;
-  return Math.round(n * 10) / 10;
+  const unit = 10 ** decimals;
+  return Math.round(n * unit) / unit;
 }
 
 /** レップのように小数を許さない値。四捨五入してから値域を見る */
@@ -263,13 +264,9 @@ function sanitizeGoal(o: Record<string, unknown>): ExerciseTarget | null {
   return legacy == null ? null : { type: 'weight', value: legacy };
 }
 
-/** 主部位と重複するもの・未知の値・重複は落とす */
-/** num() は小数第 1 位までなので 0.25 が潰れる。係数だけ第 2 位まで見る */
+/** 係数は小数第 2 位まで見る。1 位で丸めると 0.25 や 0.65 が潰れる */
 function subWeight(value: unknown): number | null {
-  const n = typeof value === 'string' ? Number(value) : value;
-  if (typeof n !== 'number' || !Number.isFinite(n)) return null;
-  if (n < SUB_GROUP_WEIGHT_RANGE[0] || n > SUB_GROUP_WEIGHT_RANGE[1]) return null;
-  return Math.round(n * 100) / 100;
+  return num(value, SUB_GROUP_WEIGHT_RANGE[0], SUB_GROUP_WEIGHT_RANGE[1], 2);
 }
 
 function sanitizeRepUnit(raw: unknown): RepUnit {
@@ -311,7 +308,8 @@ function sanitizeExercise(raw: unknown, order: number, fromVersion: number): Exe
     subGroups: sanitizeSubGroups(o.subGroups, group),
     loadMode: sanitizeLoadMode(o),
     repUnit: sanitizeRepUnit(o.repUnit),
-    bodyweightFactor: num(o.bodyweightFactor, FACTOR_RANGE[0], FACTOR_RANGE[1]),
+    // 係数なので第 2 位まで（ヒントに出している 0.65 が 0.7 に潰れていた）
+    bodyweightFactor: num(o.bodyweightFactor, FACTOR_RANGE[0], FACTOR_RANGE[1], 2),
     rmDivisor: num(o.rmDivisor, RM_DIVISOR_RANGE[0], RM_DIVISOR_RANGE[1]) ?? 30,
     goal: sanitizeGoal(o),
     order: int(o.order, 0, 9999) ?? order,

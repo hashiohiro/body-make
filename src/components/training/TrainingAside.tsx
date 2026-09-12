@@ -1,3 +1,4 @@
+import { sameSet } from '../../lib/array';
 import { useState } from 'react';
 import { Modal } from '../Modal';
 import { PresetCard } from './PresetCard';
@@ -15,13 +16,6 @@ interface Props {
   onAdd: (exerciseIds: readonly string[]) => void;
   onSave: (name: string, exerciseIds: readonly string[]) => void;
   onRemove: (id: string) => void;
-}
-
-/** 並びは違っても、同じ種目の組み合わせなら同じものとして扱う（PresetCard と同じ判定） */
-function sameSet(a: readonly string[], b: readonly string[]): boolean {
-  if (a.length !== b.length) return false;
-  const set = new Set(a);
-  return b.every((id) => set.has(id));
 }
 
 /**

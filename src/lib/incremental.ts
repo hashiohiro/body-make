@@ -1,3 +1,4 @@
+import { findLastIndex } from './array';
 import type {
   AppData,
   DailyPoint,
@@ -183,12 +184,6 @@ function empty(data: AppData): Derived {
 /* ------------------------------------------------------------------ *
  * 合成（体組成）
  * ------------------------------------------------------------------ */
-
-/** 後ろから探す。`Array.prototype.findLastIndex` は対象環境を上げないと使えない */
-function findLastIndex<T>(list: readonly T[], hit: (item: T) => boolean): number {
-  for (let i = list.length - 1; i >= 0; i--) if (hit(list[i]!)) return i;
-  return -1;
-}
 
 function combineBody(
   built: readonly BodyWeek[],

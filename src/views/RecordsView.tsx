@@ -7,6 +7,8 @@ import { formatMD, weekdayJa } from '../lib/date';
 import { fmt } from '../lib/format';
 import type { BodyData } from '../hooks/useBodyData';
 import type { Domain } from '../types';
+import { CardHeader } from '../components/CardHeader';
+import { Button } from '../components/Button';
 import ui from '../styles/ui.module.scss';
 import s from './RecordsView.module.scss';
 
@@ -104,10 +106,7 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
       />
 
       <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>記録一覧</h2>
-          <span className={ui.hint}>タップで編集</span>
-        </header>
+        <CardHeader title="記録一覧" hint={<>タップで編集</>} />
 
         {rows.length === 0 ? (
           <p className={ui.emptyState}>まだ記録がありません。</p>
@@ -154,13 +153,13 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
               一覧は最近を眺めるためのものとして扱う。
             */}
             {rest > 0 && (
-              <button
-                type="button"
-                className={`${ui.btn} ${ui.btnGhost} ${s.more}`}
+              <Button
+                tone="ghost"
                 onClick={() => setLimit((n) => n + MORE_ROWS)}
+                className={s.more}
               >
                 さらに{Math.min(rest, MORE_ROWS)}日ぶん見る<small>残り {rest}日</small>
-              </button>
+              </Button>
             )}
           </div>
         )}

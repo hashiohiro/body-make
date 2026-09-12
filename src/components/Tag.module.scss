@@ -1,0 +1,39 @@
+/*
+ * 名前に添える小さな札。**器は 1 つで、変えるのは色と輪郭だけ。**
+ * 折り返さない（`flex: none`）のは、名前の右で 2 行に割れると札に見えないため。
+ *
+ * **名前との間隔は持たない。**置かれるのは行（flex の gap がある）かピルの中
+ * （`Pill` が間隔を持つ）のどちらかで、札の側で足すと行では二重になる。
+ */
+.tag {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* 事実（部位・器具・記録あり）。読むものであって、押し分ける手がかりではない */
+.fact {
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+}
+
+/* 本人が決めたこと（目標の立て方・目標の値）。事実より前に出す */
+.chosen {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/*
+ * いまの状態への断り（マイ種目に未追加・非表示）。
+ *
+ * **欠けではないので、注意の色は使わない。**マイ種目はお気に入りのようなもので、
+ * 入っていないことは間違いではない。塗りをやめて輪郭だけにして、
+ * 事実の札とは違うものだと形で示す。
+ */
+.state {
+  background: none;
+  border: 1px dashed var(--border);
+  color: var(--ink-muted);
+}

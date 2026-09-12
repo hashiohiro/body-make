@@ -1,0 +1,21 @@
+/*
+ * 行に添える小さな操作。
+ * **指で狙える下限（32px）をここで担保する**——行ごとに書くと、
+ * 狭い行に合わせて小さく作ってしまう。
+ */
+.mini {
+  flex: none;
+  min-width: var(--tap-row);
+  min-height: var(--tap-row);
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1;
+
+  &:disabled {
+    opacity: 0.4;
+  }
+}

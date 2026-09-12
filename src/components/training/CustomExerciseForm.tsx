@@ -1,22 +1,17 @@
 import { useState } from 'react';
-import {
-  EXERCISE_GROUP_ORDER,
-  GROUP_LABELS,
-  LOAD_MODE_HINTS,
-  LOAD_MODE_LABELS,
-  LOAD_MODE_ORDER,
-  emptyCheckValues,
-} from '../../lib/exerciseCatalog';
-import { FACTOR_RANGE, RM_DIVISOR_RANGE } from '../../lib/storage';
+import { EXERCISE_GROUP_ORDER, GROUP_LABELS, emptyCheckValues } from '../../lib/exerciseCatalog';
+import { ExerciseCalcFields } from './ExerciseCalcFields';
+import { newId } from '../../lib/id';
+import { Select } from '../Select';
+import { TextField } from '../TextField';
 import { DEFAULT_RM_DIVISOR } from '../../lib/training';
 import type { Exercise, ExerciseGroup, LoadMode, RepUnit } from '../../types';
+import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
-function numOrNull(raw: string): number | null {
-  const n = Number(raw);
-  return raw.trim() === '' || !Number.isFinite(n) ? null : n;
-}
+/** 種目名の上限。一覧で枠を割らない長さ（プリセット名より少し長く取る） */
+const NAME_MAX = 40;
 
 const EMPTY_FORM = {
   name: '',
@@ -48,12 +43,22 @@ export function CustomExerciseForm({ exercises, onCreate }: Props) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [advanced, setAdvanced] = useState(false);
 
+  const name = form.name.trim();
+  /*
+   * 同じ名前は作らせない。**プリセットと同じ作法。**
+   * 黙って 2 つ並べると、一覧（マイ種目・目標・移行の候補・プリセットの中身）で
+   * どちらがどちらか分からなくなる。手がかりは名前と部位しかない。
+   *
+   * 見ているのは自分の持ちもの（非表示・臨時のものも含む）。伏せた種目と同じ名前でも
+   * 一覧では見分けられないので、出ていないからといって許すわけにはいかない。
+   */
+  const taken = exercises.some((e) => e.name === name);
+
   const submit = () => {
-    const name = form.name.trim();
-    if (!name) return;
+    if (!name || taken) return;
     // 自作種目だけ randomUUID。カタログ由来は固定 ID なので入れ直しても過去ログが繋がる
     onCreate({
-      id: crypto.randomUUID(),
+      id: newId(),
       name,
       group: form.group,
       subGroups: [],
@@ -77,119 +82,44 @@ export function CustomExerciseForm({ exercises, onCreate }: Props) {
 
       <label className={s.newField}>
         名前
-        <input
-          type="text"
+        {/* 追加のボタンは部位と詳細設定の下にある。打ち終わりに Enter でそのまま作れる */}
+        <TextField
           value={form.name}
-          maxLength={40}
-          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          maxLength={NAME_MAX}
+          onChange={(value) => setForm((f) => ({ ...f, name: value }))}
+          onCommit={name === '' || taken ? undefined : submit}
         />
       </label>
 
       <label className={s.newField}>
         部位
-        <select
+        <Select
           value={form.group}
-          onChange={(e) => setForm((f) => ({ ...f, group: e.target.value as ExerciseGroup }))}
-        >
-          {EXERCISE_GROUP_ORDER.map((g) => (
-            <option key={g} value={g}>
-              {GROUP_LABELS[g]}
-            </option>
-          ))}
-        </select>
+          options={EXERCISE_GROUP_ORDER.map((g) => ({ id: g, label: GROUP_LABELS[g] }))}
+          onChange={(group) => setForm((f) => ({ ...f, group }))}
+        />
       </label>
 
       <div className={ui.btnRow}>
-        <button
-          type="button"
-          className={`${ui.btn} ${ui.btnGhost} ${ui.btnSm}`}
-          aria-expanded={advanced}
-          onClick={() => setAdvanced((v) => !v)}
-        >
+        <Button tone="ghost" size="sub" expanded={advanced} onClick={() => setAdvanced((v) => !v)}>
           {advanced ? '詳細設定を閉じる' : '詳細設定'}
-        </button>
+        </Button>
       </div>
 
       {advanced && (
-        <>
-          {/* 器具の名前ではなく、見れば分かる持ち方を選ばせる */}
-          <label className={s.newField}>
-            負荷の数え方
-            <select
-              value={form.loadMode}
-              onChange={(e) => setForm((f) => ({ ...f, loadMode: e.target.value as LoadMode }))}
-            >
-              {LOAD_MODE_ORDER.map((m) => (
-                <option key={m} value={m}>
-                  {LOAD_MODE_LABELS[m]}
-                </option>
-              ))}
-            </select>
-            <small>{LOAD_MODE_HINTS[form.loadMode]}</small>
-          </label>
-
-          <label className={s.newField}>
-            回数の単位
-            <select
-              value={form.repUnit}
-              onChange={(e) => setForm((f) => ({ ...f, repUnit: e.target.value as RepUnit }))}
-            >
-              <option value="reps">回（レップ）</option>
-              <option value="seconds">秒（プランクなど）</option>
-            </select>
-            <small>秒で数える種目は挙上量に計上しません（挙上量＝重量×レップ数のため）</small>
-          </label>
-
-          {form.loadMode === 'bodyweight' && (
-            <label className={s.newField}>
-              体重が乗る割合（懸垂 1.0 / 腕立て 0.65 など）
-              <input
-                type="number"
-                inputMode="decimal"
-                step={0.05}
-                min={FACTOR_RANGE[0]}
-                max={FACTOR_RANGE[1]}
-                placeholder="1"
-                value={form.bodyweightFactor ?? ''}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, bodyweightFactor: numOrNull(e.target.value) }))
-                }
-              />
-            </label>
-          )}
-
-          {form.repUnit === 'reps' && (
-            <label className={s.newField}>
-              1RM換算の分母（ベンチ 40 / スクワット・デッド 33.3 / 既定 30）
-              <input
-                type="number"
-                inputMode="decimal"
-                step={0.1}
-                min={RM_DIVISOR_RANGE[0]}
-                max={RM_DIVISOR_RANGE[1]}
-                value={form.rmDivisor}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    rmDivisor: numOrNull(e.target.value) ?? f.rmDivisor,
-                  }))
-                }
-              />
-            </label>
-          )}
-        </>
+        <ExerciseCalcFields
+          value={form}
+          onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+        />
       )}
 
       <div className={ui.btnRow}>
-        <button
-          type="button"
-          className={`${ui.btn} ${ui.btnPrimary} ${ui.btnSm}`}
-          disabled={form.name.trim() === ''}
-          onClick={submit}
-        >
+        <Button tone="primary" size="sub" disabled={name === '' || taken} onClick={submit}>
           追加
-        </button>
+        </Button>
       </div>
+
+      {taken && <p className={ui.note}>同じ名前の種目があります（非表示のものも含みます）。</p>}
 
       <p className={ui.note}>
         名前と部位だけで作れます。触らなければ「ウエイト1つ」「回で数える」になり、

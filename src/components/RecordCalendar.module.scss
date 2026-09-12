@@ -10,7 +10,7 @@
 
 .navBtn {
   min-width: 40px;
-  min-height: 36px;
+  min-height: var(--tap-sub);
   border: 0;
   background: none;
   color: var(--ink-2);

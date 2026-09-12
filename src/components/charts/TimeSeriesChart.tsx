@@ -1,8 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useElementWidth } from '../../hooks/useElementWidth';
+import { insideRect, useDismiss } from '../../hooks/useDismiss';
 import { formatMD, formatMDW, toISO } from '../../lib/date';
 import { linePath, linearScale, niceScale, pickTimeTicks, tickDecimals } from './scales';
+import { YAxis } from './YAxis';
 import s from './charts.module.scss';
 
 export interface SeriesPoint {
@@ -81,31 +83,15 @@ export function TimeSeriesChart({
   const [tipW, setTipW] = useState(128);
 
   /*
-   * **プロットの外を触ったら選択を解く。**
+   * **プロットの外を触ったら選択を解く**（`useDismiss`）。
    *
    * 指を離しても残すようにしたぶん、放っておくと消す手段が無くなる。
    * 別のグラフを触ったときもそちらが選ばれてこちらは消える（同時に 2 つ出さない）。
-   * 捕捉フェーズで見るのは、内側のハンドラが動く前に外かどうかを決めたいため。
    *
-   * **判定は「包んでいる要素の中か」ではなく、プロットの矩形そのもの。**
-   * 包む div で見ると、軸ラベルや上下の余白——見た目にはグラフの外——を触っても
-   * 残ってしまう。読む人にとっての「グラフ」は、点と線が乗っている範囲のほう。
+   * 判定はプロットの矩形（`hitRef`）そのもの。包む div で見ると、軸ラベルや
+   * 上下の余白——見た目にはグラフの外——を触っても残ってしまう。
    */
-  useEffect(() => {
-    if (active == null) return;
-    const onDown = (e: PointerEvent) => {
-      const rect = hitRef.current?.getBoundingClientRect();
-      const inside =
-        rect != null &&
-        e.clientX >= rect.left &&
-        e.clientX <= rect.right &&
-        e.clientY >= rect.top &&
-        e.clientY <= rect.bottom;
-      if (!inside) setActive(null);
-    };
-    document.addEventListener('pointerdown', onDown, true);
-    return () => document.removeEventListener('pointerdown', onDown, true);
-  }, [active]);
+  useDismiss(active != null, () => setActive(null), insideRect(hitRef));
 
   // 中身で幅が変わるので測る。同じ値なら state を触らない（再描画を呼ばない）
   useLayoutEffect(() => {
@@ -240,26 +226,13 @@ export function TimeSeriesChart({
           >
             <title>{ariaLabel}</title>
 
-            {yScaleInfo.ticks.map((tick) => (
-              <g key={tick}>
-                <line
-                  className={s.grid}
-                  x1={MARGIN.left}
-                  x2={MARGIN.left + plotW}
-                  y1={y(tick)}
-                  y2={y(tick)}
-                />
-                <text
-                  className={s.tickLabel}
-                  x={MARGIN.left - 7}
-                  y={y(tick)}
-                  textAnchor="end"
-                  dy="0.32em"
-                >
-                  {tick.toFixed(decimals)}
-                </text>
-              </g>
-            ))}
+            <YAxis
+              ticks={yScaleInfo.ticks}
+              y={y}
+              left={MARGIN.left}
+              right={MARGIN.left + plotW}
+              format={(tick) => tick.toFixed(decimals)}
+            />
 
             <line
               className={s.axis}

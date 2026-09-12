@@ -15,74 +15,11 @@
   letter-spacing: 0.01em;
 }
 
-/*
- * 丸ピルの描き分け。
- *   バッジ（読むだけ）… 枠線なし・沈んだ地・ink-muted
- *   ボタン（押せる）  … 枠線あり・surface の地・ink-2
- * 揃えてしまうと、押せるものと押せないものが見分けられない
- */
-/*
- * 名前に添える小さな札。**3 つとも同じ器で、変えるのは色だけ。**
- *
- *   exTag    … 部位（事実）
- *   kindTag  … 目標の立て方（決めたこと）
- *   adhocTag … マイ種目に入れていない（状態の注意）
- */
-.exTag,
-.kindTag,
-.goalTag,
-.adhocTag {
-  flex: none;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: var(--surface-sunken);
-  font-size: 10px;
-  color: var(--ink-muted);
-  white-space: nowrap;
-}
-
-/* 決めたことなので、事実（部位）よりは前に出す */
-.kindTag,
-.goalTag {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-/*
- * マイ種目に入れていない種目。
- *
- * **欠けではない。**マイ種目はお気に入りのようなもので、使い方は人それぞれ
- * （日々の種目はプリセットに持って、マイ種目は臨時のものだけ、という置き方もある）。
- * だから注意の色は使わない。塗りをやめて輪郭だけにして、
- * 「事実の札（部位）」とは違うものだと形で示す。
- */
-.adhocTag {
-  background: none;
-  border: 1px dashed var(--border);
-  color: var(--ink-muted);
-}
-
-/* 通算の数字の下。そこから詳細へ掘り下げる動線 */
 /* カード右上の操作（順番を変える・この日から外す）。まとめて右に寄せる */
 .exHeadBtns {
   display: flex;
   gap: 6px;
   margin-left: auto;
-
-  .exRemove {
-    margin-left: 0;
-  }
-}
-
-.exRemove {
-  margin-left: auto;
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
-  font-size: 10px;
-  color: var(--ink-2);
-  min-height: 0;
 }
 
 .prev {
@@ -97,13 +34,13 @@
 }
 
 .prevBtn {
+  min-height: var(--tap-row);
   padding: 4px 9px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
   font-size: 11px;
   color: var(--ink-2);
-  min-height: 0;
 }
 
 /* ---- セット行 ---- */
@@ -160,6 +97,7 @@
 /* 加重を開くための小さな逃げ道。既定の入力欄には出さない */
 .weightToggle {
   flex: none;
+  min-height: var(--tap-row);
   padding: 0 12px;
   border: 1px dashed var(--border);
   border-radius: var(--radius-xs);
@@ -196,30 +134,20 @@
 .input {
   width: 100%;
   min-width: 0;
-  min-height: 42px;
+  min-height: var(--tap-field);
   padding: 8px 2px;
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
   background: var(--surface);
-  font-size: 16px; // 16px 未満だと iOS がフォーカス時にズームする
+  @include field-text;
   font-weight: 600;
   text-align: center;
   @include tabular;
-
-  &::-webkit-outer-spin-button,
-  &::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  &[type='number'] {
-    -moz-appearance: textfield;
-    appearance: textfield;
-  }
+  @include field-number;
 }
 
 .rowBtn {
-  min-height: 34px;
+  min-height: var(--tap-row);
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
@@ -237,8 +165,10 @@
 
 .addSet {
   width: 100%;
+  min-height: var(--tap-sub);
   margin-top: 8px;
-  padding: 9px;
+  /* 上下は 8px。これで段（--tap-sub）にちょうど収まる */
+  padding: 8px 9px;
   border: 1px dashed var(--border);
   border-radius: var(--radius-xs);
   background: transparent;
@@ -310,32 +240,6 @@
   color: var(--ink-muted);
 }
 
-/* マイ種目に入れていない種目。輪郭を破線にして、入っているものと見分ける */
-.pickerBtnAdhoc {
-  border-style: dashed;
-}
-
-.pickerBtn {
-  padding: 7px 11px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-sunken);
-  font-size: 12px;
-  color: var(--ink);
-  min-height: 0;
-
-  /* 選択中は他のトグルと同じアクセント。記号を足さなくても選択が分かる */
-  &[aria-pressed='true'] {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-
-  &:disabled {
-    opacity: 0.4;
-  }
-}
-
 /*
  * ＋ を押して最初に出る面。**どこから足すか**を 3 つから選ぶ。
  *
@@ -383,13 +287,6 @@
 }
 
 /* 何について聞かれているか。問いは見出しにあるので、ここは種目の名前だけ */
-.keepName {
-  margin: 2px 0 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
 /*
  * プリセットを「入れる」ためだけの行。行ぜんたいが押せる。
  * プリセットのカード（PresetCard）を使い回さないのは、あちらが
@@ -430,7 +327,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 30px;
+  min-height: var(--tap-row);
 
   .pickerLabel {
     flex: 1;
@@ -447,8 +344,8 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: var(--tap-row);
+  height: var(--tap-row);
   margin-left: auto;
   padding: 0;
   border: 1px solid var(--border);
@@ -471,17 +368,20 @@
   gap: 4px;
 }
 
+/*
+ * 見出しの行に畳んだ検索の欄。**打つ欄だが、行の操作と同じ段に乗せる**——
+ * 見出しの行に置くものなので、打つ欄の高さ（40px）にすると行が伸びる。
+ */
 .searchField {
   flex: 1;
   min-width: 0;
-  min-height: 30px;
-  padding: 4px 10px;
+  min-height: var(--tap-row);
+  padding: 3px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
   background: var(--surface);
   color: var(--ink);
-  /* 16px 未満だと iOS が focus のたびに画面を拡大する */
-  font-size: 16px;
+  @include field-text;
 
   /*
    * ブラウザが付ける × を消す。**同じ形の × が 2 つ並ぶ。**
@@ -498,76 +398,14 @@
 
 .searchClose {
   flex: none;
-  width: 28px;
-  min-height: 28px;
+  width: var(--tap-row);
+  min-height: var(--tap-row);
   padding: 0;
   border: 0;
   background: none;
   color: var(--ink-2);
   font-size: 16px;
   line-height: 1;
-}
-
-/*
- * 検索の結果。**部位で束ねず、平たく並べる。**
- * 打っている最中は部位の見出しを読まない。どの部位かは行の右に小さく添える。
- */
-.hitRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 9px 2px;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  background: none;
-  text-align: left;
-  font-size: 13px;
-  color: var(--ink);
-
-  &:last-of-type {
-    border-bottom: 0;
-  }
-
-  &[aria-pressed='true'] {
-    color: var(--accent);
-  }
-}
-
-.hitName {
-  flex: 1;
-  min-width: 0;
-  @include truncate;
-}
-
-/*
- * カタログの行に添える印（記録あり / 非表示）。
- *
- * カタログに並ぶのは「マイ種目に入っていない」種目だけなので、
- * **その中での違い**を示すためのもの。どれも欠けではないので、注意の色は使わず、
- * 名前より弱く出す。
- */
-.catalogTag {
-  margin-left: 5px;
-  padding: 1px 5px;
-  border-radius: 999px;
-  background: var(--surface-sunken);
-  font-size: 9px;
-  color: var(--ink-muted);
-}
-
-/* 係数は部位の従属なので、ピルを一段小さくして階層を付ける */
-.stepBtn {
-  padding: 4px 9px;
-  font-size: 11px;
-}
-
-/* 記録一覧の行を開いたときの中身 */
-.sessionDetail {
-  margin: 2px 0 10px;
-  padding: 10px 11px;
-  border-radius: var(--radius-s);
-  background: var(--surface-sunken);
 }
 
 /*
@@ -627,33 +465,9 @@
   }
 }
 
-/* チップが横に溢れると、スクロールに気づかず選択肢を見落とす。折り返して全部見せる */
-/*
- * 絞り込みのチップ行。**出しっぱなしにするぶん、一段小さくする。**
- *
- * ここのチップは読むためではなく押し分けるためのもので、語も短い（胸・背中・脚…）。
- * 一覧のチップ（ui.chip）と同じ大きさで 2 段並べると、種目がそのぶん下へ流れる。
- */
-.filterRow {
-  margin-top: 10px;
-  gap: 4px;
-  flex-wrap: wrap;
-  overflow-x: visible;
-
-  > button {
-    min-height: 0;
-    padding: 4px 9px;
-    font-size: 11px;
-  }
-}
-
-/* 検索欄と部位チップの組。組の外側の余白はここが持つ */
+/* 部位チップの外側の余白（マイ種目の一覧の上）。中の詰めは ChipGroup が持つ */
 .filterBar {
   margin-top: 12px;
-
-  .filterRow {
-    margin-top: 6px;
-  }
 }
 
 /*
@@ -662,18 +476,6 @@
  */
 .filters {
   margin: 10px 0 12px;
-
-  .pickerLabel {
-    margin: 8px 0 4px;
-
-    & + .filterRow + .pickerLabel {
-      margin-top: 8px;
-    }
-  }
-
-  .filterRow {
-    margin: 0;
-  }
 }
 
 /* 今週どの曜日にやったか。日数だけでは分からない */
@@ -723,25 +525,6 @@
   @include tabular;
 }
 
-/*
- * バーは span で書かれることもある。インライン要素には height も width も効かないので、
- * 中身が描かれずトラックだけが残る（＝色が付かない）。タグに依存させない
- */
-.groupBarTrack {
-  display: block;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--surface-sunken);
-  overflow: hidden;
-}
-
-.groupBarFill {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--s-lean);
-}
-
 .groupValue {
   text-align: right;
 
@@ -750,10 +533,6 @@
     font-weight: 640;
     color: var(--ink);
   }
-}
-
-.groupRowOff {
-  color: var(--ink-muted);
 }
 
 .coverCount {
@@ -765,12 +544,6 @@
   }
 }
 
-/*
- * 種目別の推移の一覧。切り替えずに全種目の形を見比べるための行。
- *
- * 種目名・数値・折れ線を 1 行に横並べすると、折れ線に 50px ほどしか回らず
- * 形が潰れる。見比べるための図なので、幅は折れ線に全部渡して 2 段にする。
- */
 /* ダイアログの中の小見出し。カードのヘッダより軽く、区切りとしてだけ働く */
 .dialogHead {
   display: flex;
@@ -900,43 +673,6 @@
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
-/* 部位の行。タップで種目ごとの内訳を開く */
-/*
- * 目標ボードの部位 1 行。2 段に分ける。
- *   上 … 部位名と、今週のセット数 / 目標
- *   下 … 量のメーターと、その部位の種目目標の状態
- * 横に 4 つ並べると、スマホ幅で数字が潰れる
- */
-.boardRow {
-  display: grid;
-  gap: 5px;
-  width: 100%;
-  padding: 11px 2px;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  background: none;
-  text-align: left;
-  color: var(--ink);
-
-  &:active {
-    background: var(--accent-soft);
-    border-radius: var(--radius-xs);
-  }
-}
-
-.boardHead {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.boardName {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
 /*
  * 部位を開いた面の概要行。**区切り線は引かない。**
  * 部位目標のかたまりは「今週のセット数 → メーター → 注記 → 設定ボタン」まで続くので、
@@ -948,7 +684,7 @@
   gap: 12px;
   /*
    * メーターとの間隔は **種目カードと同じ 8px**。
-   * `.statRow` と同じく下マージンを 2px にして、`.meter` の上マージン 8px と相殺させる。
+   * `.statRow` と同じく下マージンを 2px にして、`Meter` の `block`（上 8px）と相殺させる。
    * padding で空けると相殺が効かず、部位側だけ間隔が広くなる。
    */
   margin: 10px 0 2px;
@@ -957,16 +693,6 @@
   > span:last-child {
     margin-left: auto;
   }
-}
-
-/*
- * 部位目標のかたまりの終わり。ここで初めて線を引き、種目の目標と分ける。
- * 線のあとに余白を取る。線に見出しが貼り付くと、切れ目として読めない
- */
-.groupSummaryEnd {
-  padding-bottom: 12px;
-  margin-bottom: 18px;
-  border-bottom: 1px solid var(--border);
 }
 
 /*
@@ -1003,11 +729,6 @@
 
   &:last-of-type {
     border-bottom: 0;
-  }
-
-  /* 行の中では、バーの上下余白を持たせない（高さは行が決める） */
-  .meter {
-    margin: 0;
   }
 }
 
@@ -1083,10 +804,6 @@
   grid-template-columns: 112px minmax(0, 1fr) 32px;
   align-items: center;
   gap: 8px;
-
-  .meter {
-    margin: 0;
-  }
 }
 
 .goalRowValue {
@@ -1106,31 +823,11 @@
   @include tabular;
 }
 
-/* 行の中の 1 段。名前と値だけを持ち、バーは持たない */
-.boardLine {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 12px;
-}
-
-/* 何を数えているかの名前。**時間軸はこの名前の中に入れる** */
-.boardLabel {
-  flex: none;
-  font-size: 11px;
-  color: var(--ink-muted);
-}
-
 .boardValue {
   margin-left: auto;
   text-align: right;
   color: var(--ink-2);
   @include tabular;
-}
-
-/* 今週が 0 のときだけ添える先週の値。主役ではないので落とす */
-.boardRef {
-  color: var(--ink-muted);
 }
 
 /* 開くことの合図。設定のカテゴリ一覧と同じ記号を使う */
@@ -1139,15 +836,6 @@
   font-size: 17px;
   line-height: 1;
   color: var(--ink-muted);
-}
-
-/* 見出しの右。最終実施からの日数（メーターと同じ行に置かないので幅は固定しない） */
-.boardStatus {
-  flex: none;
-  font-size: 11px;
-  white-space: nowrap;
-  color: var(--ink-muted);
-  @include tabular;
 }
 
 /*
@@ -1175,22 +863,6 @@
   @include tabular;
 }
 
-.meter {
-  display: block;
-  height: 6px;
-  margin: 8px 0 4px;
-  border-radius: 999px;
-  background: var(--surface-sunken);
-  overflow: hidden;
-}
-
-.meterFill {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--s-lean);
-}
-
 /* 一覧の部位の見出し。並び替えを持たないので、探し方は「何番目か」ではなく「どの部位か」 */
 .manageGroup {
   margin: 16px 0 2px;
@@ -1199,7 +871,6 @@
   color: var(--ink-muted);
 }
 
-/* 固定幅にすると文字が見切れたりカードをはみ出すので、比率で収める */
 /* ---- 種目の目標を決めるフォーム ---- */
 
 .goalForm {
@@ -1228,9 +899,9 @@
   visibility: hidden;
 }
 
-/* 「目標を外す」が出ていないときの場所取り。ボタン（btnSm）と同じ高さ */
+/* 「目標を外す」が出ていないときの場所取り。ボタン（btnSm）と同じ段 */
 .goalRemoveEmpty {
-  min-height: 36px;
+  min-height: var(--tap-sub);
 }
 
 /*
@@ -1242,31 +913,28 @@
   min-height: 3.3em;
 }
 
-/* 決める値なので、フォームの中でいちばん大きく出す */
+/*
+ * 目標の値。**箱は他の打つ欄と同じ。**
+ *
+ * 以前は 48px・22px で「フォームの中でいちばん大きく」出していたが、
+ * マイ種目から目標を開くと、同じ行から開く設定の選ぶ欄（44px・16px）と
+ * 並べて見ることになり、**欄だけが大きく浮いていた**。
+ * 決める値であることは、太さと中央寄せで足りる。
+ */
 .goalValue {
   flex: 1;
   min-width: 0;
-  min-height: 48px;
+  min-height: var(--tap-field);
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
   background: var(--surface);
   color: var(--ink);
-  font-size: 22px;
   font-weight: 640;
   text-align: center;
   @include tabular;
-
-  &::-webkit-outer-spin-button,
-  &::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  &[type='number'] {
-    -moz-appearance: textfield;
-    appearance: textfield;
-  }
+  @include field-text;
+  @include field-number;
 }
 
 .goalUnit {
@@ -1289,19 +957,6 @@
   }
 }
 
-.miniBtn {
-  flex: none;
-  min-width: 32px;
-  min-height: 32px;
-  padding: 0 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
-  background: var(--surface);
-  color: var(--ink-2);
-  font-size: 11px;
-  line-height: 1;
-}
-
 .newForm {
   display: grid;
   gap: 8px;
@@ -1320,49 +975,19 @@
 
   input,
   select {
-    min-height: 40px;
+    min-height: var(--tap-field);
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: var(--radius-xs);
     background: var(--surface);
     color: var(--ink);
-    font-size: 16px;
+    @include field-text;
+    @include field-number;
   }
-}
 
-/* ---- セッション結果表 ---- */
-
-.summaryTop {
-  display: grid;
-  gap: 4px;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-.summaryMain {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--ink-2);
-  @include tabular;
-
-  b {
-    font-size: 20px;
-    font-weight: 640;
-    color: var(--ink);
+  select {
+    @include field-select;
   }
-}
-
-.summaryPrev {
-  margin-left: auto;
-}
-
-.summaryMeta {
-  font-size: 11px;
-  color: var(--ink-muted);
-  @include tabular;
 }
 
 /* ---- 目標画面 ---- */
@@ -1377,16 +1002,19 @@
 /*
  * 種目を追加する丸ボタン。記録画面の右下に固定する。
  *
- * タブバーの上に乗せ、内容の列（最大 720px）の右端にそろえる。
+ * タブバーの上に乗せ、内容の列（`--content-w`）の右端にそろえる。
  * 画面の端に貼り付けると、広い画面で本文からいちばん遠い場所に置くことになる。
+ *
+ * 幅はトークンから引く。**同じ式を JS も持つ**（`useFabPosition` の inset）ので、
+ * 数字を書くとドラッグで動かしたあとの位置だけ古い幅に残る。
  */
 .fab {
   position: fixed;
   z-index: 25;
-  right: max(16px, calc(50vw - 360px + 16px));
+  right: max(16px, calc(50vw - var(--content-w) / 2 + 16px));
   bottom: calc(var(--tab-h) + 16px + env(safe-area-inset-bottom));
-  width: 56px;
-  height: 56px;
+  width: var(--fab-size);
+  height: var(--fab-size);
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -1447,18 +1075,6 @@
   min-width: 0;
   font-size: 12px;
   color: var(--ink-2);
-}
-
-.presetInput {
-  flex: 1;
-  min-width: 0;
-  min-height: 40px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 16px;
 }
 
 /* ---- プリセットの編集（設定側） ---- */
@@ -1534,7 +1150,7 @@
 .orderSlot {
   display: block;
   width: 100%;
-  min-height: 32px;
+  min-height: var(--tap-row);
   margin: 2px 0;
   padding: 4px 0;
   border: 1px solid var(--accent);
@@ -1634,14 +1250,6 @@
   white-space: nowrap;
 }
 
-/* --- 回復 --------------------------------------------------------- */
-.recoverySummary {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--ink-muted);
-  text-align: right;
-}
-
 .recoveryRow {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) 56px;
@@ -1686,10 +1294,6 @@
   overflow-wrap: anywhere;
 }
 
-/*
- * 補助（回復・プリセット）の帯。
- * カードで積むと種目カードまでのスクロールが伸びるので、1 行にまとめる。
- */
 /*
  * 補助の帯。**1 枚のカードの中で仕切るのをやめて、押せる札を 2 枚並べる。**
  *
@@ -1752,8 +1356,9 @@
  * タブバー + 28px しか無いので、その差ぶんをここで足す（56 + 16 + 16 − 28 ≒ 60px）。
  * 画面ごと広げないのは、ボタンの無い画面に理由の無い空きを作らないため。
  */
+/* ＋ ボタンのぶんの余白。ボタンの大きさに従う（4px は影のぶん） */
 .fabSpace {
-  height: 60px;
+  height: calc(var(--fab-size) + 4px);
 }
 
 /* セットを打つ入口。読むための入口（推移・目標）と並ぶので、こちらを主にする */

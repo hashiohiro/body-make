@@ -4,9 +4,21 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 /** 置き場所。**端末ごとの都合**なので記録には混ぜず、別のキーで持つ */
 const KEY = 'bodymake.fab.v1';
 
-/** 画面の端からの余白。ワイド画面では中央寄せの本文に合わせる（.fab の CSS と同じ式） */
+/** 縁からの余白。本文の左右の padding と同じ（`.app`） */
+const EDGE = 16;
+
+/**
+ * 画面の端からの余白。ワイド画面では中央寄せの本文の縁に合わせる。
+ *
+ * **本文の幅はトークンから読む**（`--content-w`）。同じ数字を CSS と JS の両方に
+ * 書いていたので、幅を変えた日に ＋ ボタンだけ元の位置に残る形だった
+ * （`tabHeight()` が `--tab-h` を読むのと同じ作法）。
+ */
 function inset(): number {
-  return Math.max(16, window.innerWidth / 2 - 360 + 16);
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--content-w');
+  const content = Number.parseFloat(raw);
+  const half = Number.isFinite(content) ? content / 2 : 360;
+  return Math.max(EDGE, window.innerWidth / 2 - half + EDGE);
 }
 
 /**
@@ -25,7 +37,12 @@ function tabHeight(): number {
   return Number.isFinite(n) ? n : 56;
 }
 
-const SIZE = 56;
+/** ＋ ボタンの大きさ。CSS と同じ数字を持たないよう、トークンから読む */
+function fabSize(): number {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--fab-size');
+  const n = Number.parseFloat(raw);
+  return Number.isFinite(n) ? n : 56;
+}
 /** これ以上動いたらドラッグ。押しただけの指のぶれで場所が変わらないように */
 const DRAG_THRESHOLD = 8;
 
@@ -38,7 +55,7 @@ export interface FabPosition {
 function clampBottom(bottom: number): number {
   // 下はタブバーの上、上は画面の上端まで。どちらもボタンが隠れない位置で止める
   const min = tabHeight() + 8;
-  const max = Math.max(min, window.innerHeight - SIZE - 8);
+  const max = Math.max(min, window.innerHeight - fabSize() - 8);
   return Math.min(max, Math.max(min, bottom));
 }
 

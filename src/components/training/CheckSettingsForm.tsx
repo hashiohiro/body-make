@@ -2,6 +2,9 @@ import { NumericInput } from '../NumericInput';
 import { describeKey } from '../../lib/check';
 import { MINUTES_PER_SET_RANGE, SESSION_MINUTES_RANGE } from '../../lib/storage';
 import type { CheckSettings, Exercise } from '../../types';
+import { CardHeader } from '../CardHeader';
+import { Pill } from '../Pill';
+import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
@@ -34,15 +37,13 @@ export function CheckSettingsForm({
       <section className={ui.card}>
         <div className={ui.formRow}>
           <label id="check-enabled">レビューを表示する</label>
-          <button
-            type="button"
-            className={s.pickerBtn}
-            aria-pressed={checks.enabled}
-            aria-labelledby="check-enabled"
+          <Pill
+            pressed={checks.enabled}
+            label="レビューを表示する"
             onClick={() => onUpdate({ enabled: !checks.enabled })}
           >
             {checks.enabled ? 'オン' : 'オフ'}
-          </button>
+          </Pill>
         </div>
         <p className={ui.note}>
           オンにすると、記録画面にレビューが出ます。
@@ -56,9 +57,7 @@ export function CheckSettingsForm({
       {checks.enabled && (
         <>
           <section className={ui.card}>
-            <header className={ui.cardHeader}>
-              <h2 className={ui.cardTitle}>セッションの長さ</h2>
-            </header>
+            <CardHeader title="セッションの長さ" />
 
             <div className={s.checkFields}>
               <label className={s.newField}>
@@ -95,10 +94,7 @@ export function CheckSettingsForm({
           </section>
 
           <section className={ui.card}>
-            <header className={ui.cardHeader}>
-              <h2 className={ui.cardTitle}>許容済み</h2>
-              <span className={ui.hint}>{suppressed.length}件</span>
-            </header>
+            <CardHeader title="許容済み" hint={<>{suppressed.length}件</>} />
 
             {suppressed.length === 0 ? (
               <p className={ui.emptyState}>
@@ -110,14 +106,14 @@ export function CheckSettingsForm({
               suppressed.map((key) => (
                 <div key={key} className={s.suppressRow}>
                   <span className={s.suppressName}>{describeKey(key, exercises)}</span>
-                  <button
-                    type="button"
-                    className={`${ui.btn} ${ui.btnGhost} ${ui.btnSm}`}
-                    aria-label={`${describeKey(key, exercises)}の許容を取り消す`}
+                  <Button
+                    tone="ghost"
+                    size="sub"
+                    label={`${describeKey(key, exercises)}の許容を取り消す`}
                     onClick={() => onUnsuppress(key)}
                   >
                     戻す
-                  </button>
+                  </Button>
                 </div>
               ))
             )}

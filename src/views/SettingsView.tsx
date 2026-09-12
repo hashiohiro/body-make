@@ -1,5 +1,6 @@
-import { Fragment, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Modal } from '../components/Modal';
+import { useConfirm } from '../components/ConfirmDialog';
 import { CheckSettingsForm } from '../components/training/CheckSettingsForm';
 import { ExerciseManager } from '../components/training/ExerciseManager';
 import { PresetManager } from '../components/training/PresetManager';
@@ -14,7 +15,9 @@ import { IS_DEMO } from '../lib/env';
 import { SEED_SOURCE } from '../lib/seed';
 import { THEME_OPTIONS } from '../lib/themes';
 import type { BodyData } from '../hooks/useBodyData';
-import type { ThemePref } from '../types';
+import { CardHeader } from '../components/CardHeader';
+import { Button } from '../components/Button';
+import { Select } from '../components/Select';
 import ui from '../styles/ui.module.scss';
 import s from './SettingsView.module.scss';
 
@@ -117,6 +120,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
    * 取り消すつもりで押した人のデータが混ざるので、選ばせる面をこちらで持つ。
    */
   const [pending, setPending] = useState<{ result: ImportResult; found: string } | null>(null);
+  const [ask, confirmDialog] = useConfirm();
 
   const handleImport = async (file: File) => {
     try {
@@ -153,35 +157,23 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
         </p>
 
         <div className={ui.btnRow}>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnPrimary}`}
-            onClick={() => runImport('merge')}
-          >
+          <Button tone="primary" onClick={() => runImport('merge')}>
             いまの記録に足す
-          </button>
+          </Button>
         </div>
         <p className={ui.note}>同じ日付は読み込んだファイルの値で上書きし、それ以外は残します。</p>
 
         <div className={ui.btnRow}>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
-            onClick={() => runImport('replace')}
-          >
+          <Button tone="danger" onClick={() => runImport('replace')}>
             いまの記録を置き換える
-          </button>
+          </Button>
         </div>
         <p className={ui.note}>いまの記録は消えます。元に戻せません。</p>
 
         <div className={ui.btnRow}>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnGhost}`}
-            onClick={() => setPending(null)}
-          >
+          <Button tone="ghost" onClick={() => setPending(null)}>
             やめる
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>
@@ -295,42 +287,30 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
   return (
     <>
       <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>表示</h2>
-        </header>
+        <CardHeader title="表示" />
         <div className={ui.formRow}>
           <label htmlFor="theme">テーマ</label>
-          <select
+          {/* 端末に従うものと、配色を名指しで選ぶものの境目に線を引く */}
+          <Select
             id="theme"
             value={settings.theme}
-            onChange={(e) => updateSettings({ theme: e.target.value as ThemePref })}
-          >
-            {THEME_OPTIONS.map((theme) =>
-              theme.id === 'system' ? (
-                // 端末に従うものと、配色を名指しで選ぶものの境目。
-                // option で線を引くと 1 行ぶんの高さを取るので hr にする
-                // （古いブラウザは無視するだけで、選択肢は壊れない）
-                <Fragment key={theme.id}>
-                  <option value={theme.id}>{theme.label}</option>
-                  <hr />
-                </Fragment>
-              ) : (
-                <option key={theme.id} value={theme.id}>
-                  {theme.label}
-                </option>
-              ),
-            )}
-          </select>
+            options={THEME_OPTIONS}
+            dividerAfter="system"
+            onChange={(theme) => updateSettings({ theme })}
+          />
         </div>
       </section>
 
       <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>データ</h2>
-          <span className={ui.hint}>
-            体組成 {Object.keys(data.entries).length}日 / トレ {Object.keys(data.workouts).length}日
-          </span>
-        </header>
+        <CardHeader
+          title="データ"
+          hint={
+            <>
+              体組成 {Object.keys(data.entries).length}日 / トレ {Object.keys(data.workouts).length}
+              日
+            </>
+          }
+        />
 
         {/*
           いま何バイト使っているかを出す。上限は端末の空き容量から決まるので**決め打たない**。
@@ -356,9 +336,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
 
         <div className={s.groupLabel}>バックアップ</div>
         <div className={ui.btnRow}>
-          <button
-            type="button"
-            className={ui.btn}
+          <Button
             onClick={() => {
               exportJson(data);
               // ホームの促し（components/SafetyNotices.tsx）は、この日付を起点にする
@@ -366,14 +344,17 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
             }}
           >
             JSONで書き出し
-          </button>
-          <button type="button" className={ui.btn} onClick={() => fileRef.current?.click()}>
-            JSONから読み込み
-          </button>
+          </Button>
+          <Button onClick={() => fileRef.current?.click()}>JSONから読み込み</Button>
         </div>
 
         {importModal}
 
+        {/*
+          ファイル選択だけは素の input のまま。**見えない的**（`hidden`）で、
+          押すのは上のボタン。見た目も打つ作法も持たないので、部品にすると
+          包むだけの層が増える。アプリ中でここ 1 か所。
+        */}
         <input
           ref={fileRef}
           type="file"
@@ -388,32 +369,40 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
 
         <div className={s.groupLabel}>削除</div>
         <div className={ui.btnRow}>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
-            onClick={() => {
-              if (
-                confirm('体組成とトレーニングの実績を削除します。種目は残ります。元に戻せません。')
-              ) {
-                clearRecords();
-                onToast('実績データを削除しました');
-              }
-            }}
+          <Button
+            tone="danger"
+            onClick={() =>
+              ask({
+                title: '実績データを削除しますか？',
+                note: '体組成とトレーニングの記録が消えます。種目・プリセット・目標は残ります。元に戻せません。',
+                confirmLabel: '記録を削除',
+                destructive: true,
+                onConfirm: () => {
+                  clearRecords();
+                  onToast('実績データを削除しました');
+                },
+              })
+            }
           >
             実績データを削除
-          </button>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
-            onClick={() => {
-              if (confirm('種目を含むすべてを削除します。元に戻せません。よろしいですか？')) {
-                clearAll();
-                onToast('すべて削除しました');
-              }
-            }}
+          </Button>
+          <Button
+            tone="danger"
+            onClick={() =>
+              ask({
+                title: 'すべて削除しますか？',
+                note: '記録・種目・プリセット・目標を含めて全部消えます。元に戻せません。',
+                confirmLabel: 'すべて削除',
+                destructive: true,
+                onConfirm: () => {
+                  clearAll();
+                  onToast('すべて削除しました');
+                },
+              })
+            }
           >
             すべて削除
-          </button>
+          </Button>
         </div>
 
         <p className={ui.note}>
@@ -422,10 +411,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
       </section>
 
       <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>このアプリについて</h2>
-          <span className={ui.hint}>v{__APP_VERSION__}</span>
-        </header>
+        <CardHeader title="このアプリについて" hint={<>v{__APP_VERSION__}</>} />
 
         <div className={ui.formRow}>
           <label>バージョン</label>
@@ -453,6 +439,8 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
           )}
         </p>
       </section>
+
+      {confirmDialog}
     </>
   );
 }

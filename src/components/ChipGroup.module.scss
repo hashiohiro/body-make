@@ -1,0 +1,35 @@
+/* 何を選ぶ行かの見出し。行が 2 つ以上あるときだけ出す（種目ピッカーの pickerLabel と同じ器） */
+.label {
+  margin-bottom: 5px;
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+/*
+ * 詰めた見た目。**一覧の上に重ねる絞り込みで使う。**
+ *
+ * ここのチップは読むためではなく押し分けるためのもので、語も短い（胸・背中・脚…）。
+ * 一覧と同じ大きさで 2 段並べると、中身がそのぶん下へ流れる。
+ * 横に流さず折り返すのも同じ理由で、隠れたチップを探しに行かせない。
+ */
+.tight {
+  margin-top: 10px;
+  gap: 4px;
+  flex-wrap: wrap;
+  overflow-x: visible;
+
+  > button {
+    min-height: var(--tap-tight);
+    /* 段（--tap-tight）に収まる上下。Pill の small とそろえる */
+    padding: 3px 9px;
+    font-size: 11px;
+  }
+}
+
+/*
+ * 組と組のあいだ。**見出しと行のあいだより広く取る。**
+ * 同じなら、どの見出しがどの行のものか読めない（カタログの 器具 / 部位）。
+ */
+.tight + .label {
+  margin-top: 12px;
+}

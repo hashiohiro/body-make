@@ -1,20 +1,17 @@
 import { useState } from 'react';
 import { CatalogPicker } from './CatalogPicker';
+import { ChoicePanel } from '../ChoicePanel';
 import { CustomExerciseForm } from './CustomExerciseForm';
+import { ExercisePickList } from './ExercisePickList';
 import { Modal } from '../Modal';
 import { useFabPosition } from './useFabPosition';
-import { EXERCISE_GROUP_ORDER, GROUP_LABELS, isListed } from '../../lib/exerciseCatalog';
-import {
-  ExerciseFilterBar,
-  FILTER_THRESHOLD,
-  matchRank,
-  matchesGroup,
-  matchesQuery,
-} from './ExerciseFilterBar';
-import { SearchToggle } from './SearchToggle';
+import { GROUP_LABELS, isListed } from '../../lib/exerciseCatalog';
 import type { PresetOption } from './PresetCard';
-import type { Exercise, ExerciseGroup } from '../../types';
+import type { Exercise } from '../../types';
+import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
+import { Tag } from '../Tag';
+import { Pill } from '../Pill';
 import s from './training.module.scss';
 
 interface Props {
@@ -78,9 +75,6 @@ export function ExercisePicker({
   const [panel, setPanel] = useState<Panel>('menu');
   /** カタログで選んだ種目。マイ種目に残すかを答えてもらうまで、まだ入れない */
   const [pending, setPending] = useState<Exercise | null>(null);
-  const [group, setGroup] = useState<ExerciseGroup | 'all'>('all');
-  /** 名前で探す。打ちはじめたら、部位の見出しをやめて平たい候補に差し替える */
-  const [query, setQuery] = useState('');
 
   /*
    * 非表示の種目は候補に出さない。
@@ -88,38 +82,29 @@ export function ExercisePicker({
    * 出さないと、ここで外せず閉じてカードの × を探すことになる。
    */
   const choices = exercises.filter((e) => isListed(e) || usedIds.has(e.id));
-  // 検索とチップは AND。「腕で絞ってからカールを探す」がそのまま通る
-  const narrowed = choices.filter((e) => matchesGroup(e, group) && matchesQuery(e.name, query));
-  const searching = query.trim() !== '';
-  /* 打っている最中の並び。前方一致を先に出し、同じ近さなら元の並びのまま */
-  const hits = searching
-    ? [...narrowed].sort((a, b) => matchRank(a.name, query) - matchRank(b.name, query))
-    : narrowed;
 
   const close = () => {
     setOpen(false);
     setPanel('menu');
     setPending(null);
     /*
-     * 絞り込みは開くたびに白紙に戻す。
-     * 前に「腕」で絞ったまま次の日に開くと、種目が減ったように見える。
+     * 絞り込みは開くたびに白紙に戻る。**面ごと捨てるので、状態を持たなくてよい**
+     * （`ExercisePickList` が自分で持っていて、閉じると外れる）。
+     * 前に「腕」で絞ったまま次の日に開くと、種目が減ったように見える——
      * 探すための状態であって、この画面の設定ではない。
      */
-    setGroup('all');
-    setQuery('');
   };
 
   /** 候補の 1 件。束ねた一覧でも、探した結果でも同じものを出す */
-  const pill = (e: Exercise) => {
+  const pill = (e: Exercise, searching: boolean) => {
     const used = usedIds.has(e.id);
     // マイ種目に入れていない種目。その日に入っているときだけここに出る
     const adhoc = e.shelf === 'adhoc';
     return (
-      <button
+      <Pill
         key={e.id}
-        type="button"
-        className={`${s.pickerBtn} ${adhoc ? s.pickerBtnAdhoc : ''}`}
-        aria-pressed={used}
+        pressed={used}
+        dashed={adhoc}
         // ✓ はトグル。押しても外れないと、間違えて入れたものを
         // ここで取り消せず、閉じてカードの × を探すことになる
         onClick={() => onToggle(e.id)}
@@ -127,9 +112,9 @@ export function ExercisePicker({
         {used ? '✓ ' : '＋ '}
         {e.name}
         {/* 束ねる見出しが無いので、探した結果では部位も行に添える */}
-        {searching && <span className={s.catalogTag}>{GROUP_LABELS[e.group]}</span>}
-        {adhoc && <span className={s.adhocTag}>未追加</span>}
-      </button>
+        {searching && <Tag>{GROUP_LABELS[e.group]}</Tag>}
+        {adhoc && <Tag kind="state">未追加</Tag>}
+      </Pill>
     );
   };
 
@@ -235,34 +220,29 @@ export function ExercisePicker({
            * OK / キャンセルで聞くと、どちらがどちらの結果なのかを文から
            * 読み取らせることになる。押す言葉に結果を書く。
            */
-          <div>
-            <p className={s.keepName}>{pending?.name}</p>
-            <div className={ui.btnRow}>
-              <button
-                type="button"
-                className={`${ui.btn} ${ui.btnPrimary}`}
-                onClick={() => {
+          <ChoicePanel
+            subject={pending?.name}
+            choices={[
+              {
+                label: 'マイ種目に追加',
+                tone: 'primary',
+                onSelect: () => {
                   if (pending) onAddFromCatalog(pending, true);
                   setPending(null);
                   setPanel('catalog');
-                }}
-              >
-                マイ種目に追加
-              </button>
-              <button
-                type="button"
-                className={ui.btn}
-                onClick={() => {
+                },
+              },
+              {
+                label: 'この日だけ',
+                onSelect: () => {
                   if (pending) onAddFromCatalog(pending, false);
                   setPending(null);
                   setPanel('catalog');
-                }}
-              >
-                この日だけ
-              </button>
-            </div>
-            <p className={ui.note}>どちらでも、この日には入ります。</p>
-          </div>
+                },
+              },
+            ]}
+            note="どちらでも、この日には入ります。"
+          />
         ) : panel === 'presets' ? (
           presets.length === 0 ? (
             <p className={ui.emptyState}>
@@ -302,51 +282,14 @@ export function ExercisePicker({
               カタログから、自分がやる種目を選んでください。
             </p>
             <div className={ui.btnRow}>
-              <button
-                type="button"
-                className={`${ui.btn} ${ui.btnPrimary}`}
-                onClick={() => setPanel('catalog')}
-              >
+              <Button tone="primary" onClick={() => setPanel('catalog')}>
                 ＋ カタログから選ぶ
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
-          <div>
-            {choices.length > FILTER_THRESHOLD && (
-              <>
-                {/* 見出しの行に畳む。使わない日に高さを取らせない（SearchToggle） */}
-                <div className={s.catalogHead}>
-                  <span className={s.pickerLabel}>マイ種目（{choices.length}件）</span>
-                  <SearchToggle query={query} onQuery={setQuery} label="種目を検索" />
-                </div>
-                <ExerciseFilterBar group={group} onGroup={setGroup} exercises={choices} />
-              </>
-            )}
-
-            {narrowed.length === 0 && (
-              <p className={ui.emptyState}>このフィルターに合う種目はありません。</p>
-            )}
-
-            {/*
-              **探しているあいだは部位で束ねない。**名前で当てに行っているので、
-              部位の見出しは読まれないまま場所だけ取る。どの部位かは行の右に添える。
-            */}
-            {searching ? (
-              <div className={s.pickerList}>{hits.map(pill)}</div>
-            ) : (
-              EXERCISE_GROUP_ORDER.map((g) => {
-                const items = narrowed.filter((e) => e.group === g);
-                if (items.length === 0) return null;
-                return (
-                  <div key={g} className={s.pickerGroup}>
-                    <div className={s.pickerLabel}>{GROUP_LABELS[g]}</div>
-                    <div className={s.pickerList}>{items.map(pill)}</div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+          /* 選ぶ面はどこも同じ組み（検索・部位チップ・部位ごとの見出し） */
+          <ExercisePickList items={choices} heading="マイ種目" renderItem={pill} />
         )}
       </Modal>
     </>

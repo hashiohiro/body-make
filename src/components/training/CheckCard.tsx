@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { CheckWarnings } from './CheckWarnings';
 import { checkDay, estimateTime, visibleWarnings, type CheckHistory } from '../../lib/check';
 import type { CheckSettings, Exercise, SessionExercise } from '../../types';
+import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
@@ -74,10 +75,7 @@ export function CheckCard({
       */}
       {warnings.length > 0 && (
         <section className={ui.card}>
-          <header className={ui.cardHeader}>
-            <h2 className={ui.cardTitle}>レビュー</h2>
-            <span className={ui.hint}>{warnings.length}件</span>
-          </header>
+          <CardHeader title="レビュー" hint={<>{warnings.length}件</>} />
 
           <CheckWarnings warnings={warnings} onSuppress={onSuppress} />
         </section>

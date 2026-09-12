@@ -4,12 +4,16 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialog';
 import { ExerciseManager } from '../components/training/ExerciseManager';
+import { ExerciseSettingsForm } from '../components/training/ExerciseSettingsForm';
 import { PresetManager } from '../components/training/PresetManager';
 import { App } from '../App';
 import { BadgeGrid } from '../components/BadgeGrid';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { DateNav } from '../components/DateNav';
 import { ChartsView } from './ChartsView';
 import { TimeSeriesChart } from '../components/charts/TimeSeriesChart';
+import { EnergyBalanceChart } from '../components/charts/EnergyBalanceChart';
+import { WeeklyCompositionChart } from '../components/charts/WeeklyCompositionChart';
 import { GoalsView } from './GoalsView';
 import { RecordsView } from './RecordsView';
 import {
@@ -25,7 +29,8 @@ import { useBodyData } from '../hooks/useBodyData';
 import { useTheme } from '../hooks/useTheme';
 import { formatMD, startOfWeek, todayISO } from '../lib/date';
 import { CATALOG, fromCatalog } from '../lib/exerciseCatalog';
-import type { AppData, Domain, ThemePref } from '../types';
+import type { AppData, Domain, Exercise, ThemePref, WeekPoint } from '../types';
+import type { EnergyPoint } from '../lib/energy';
 import { emptyData, flushSave, loadData, resetStorageForTests, sanitizeData } from '../lib/storage';
 import { buildSessions } from '../lib/training';
 import { clearAllRecords, resetDbForTests } from '../lib/db';
@@ -114,6 +119,57 @@ function pickerOpen(): boolean {
 }
 
 const dialogOpen = pickerOpen;
+
+/**
+ * 確認の面（`ConfirmDialog`）。
+ *
+ * **「やめる」を持つ、いちばん内側のダイアログ**で見分ける。確認は重ねて出るし、
+ * 呼び出し側の面（プリセットの一覧など）の中に置かれるので、
+ * 「最後のダイアログ」では別の面（セット入力など）を掴むことがある。
+ */
+function confirmBox(): HTMLElement | null {
+  const boxes = [...document.querySelectorAll('dialog[open]')].filter(
+    (d) => within(d as HTMLElement).queryAllByRole('button', { name: 'やめる' }).length > 0,
+  );
+  return (boxes[boxes.length - 1] as HTMLElement) ?? null;
+}
+
+/** 確認が出ているか */
+function asking(): boolean {
+  return confirmBox() != null;
+}
+
+function topDialog() {
+  const box = confirmBox();
+  if (box == null) throw new Error('確認の面が出ていない');
+  return within(box);
+}
+
+/** 確認に答える（進む側のボタンを押す） */
+function answer(name: string | RegExp) {
+  fireEvent.click(topDialog().getByRole('button', { name }));
+}
+
+/** 確認をやめる */
+function decline() {
+  fireEvent.click(topDialog().getByRole('button', { name: 'やめる' }));
+}
+
+/**
+ * 目標の数値欄。**ダイアログの見出しと同じ名前**（「〇〇の目標」）なので、
+ * 入力欄だけを拾う。見出しは `aria-labelledby` で面の名前になっている。
+ */
+function goalFields(pattern: RegExp): HTMLInputElement[] {
+  return screen
+    .queryAllByLabelText(pattern)
+    .filter((el): el is HTMLInputElement => el.tagName === 'INPUT');
+}
+
+function goalField(pattern: RegExp): HTMLInputElement {
+  const [field] = goalFields(pattern);
+  if (field == null) throw new Error(`目標の欄が見つからない: ${pattern}`);
+  return field;
+}
 
 /** テスト内で日付をずらす。lib/date の addDays と同じ（同期で使いたいのでここに置く） */
 function isoAdd(iso: string, days: number): string {
@@ -253,9 +309,8 @@ describe('トレ画面', () => {
 
     typeSet(setRows()[0]!, '60', '10');
     // 打ってある行なので確認が入る
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(screen.getByLabelText('1セット目を削除'));
-    confirmSpy.mockRestore();
+    answer('1セット目を削除');
 
     // 行は消えるが、種目そのものは頼まれていないので消さない
     expect(screen.queryByLabelText(/1セット目の重量/)).toBeNull();
@@ -305,11 +360,10 @@ describe('トレ画面', () => {
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(1);
 
     // 入れ間違いをその場で取り消せる。閉じてカードの × を探させない
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(screen.getByText(/✓ ベンチプレス/));
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
     // 何も入力していなければ失うものが無いので確認しない
-    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(asking()).toBe(false);
     // 続けて選べるよう開いたまま
     expect(pickerOpen()).toBe(true);
 
@@ -322,10 +376,9 @@ describe('トレ画面', () => {
 
     openPicker();
     fireEvent.click(screen.getByText(/✓ ベンチプレス/));
-    expect(confirmSpy).toHaveBeenCalledOnce();
+    expect(asking()).toBe(true);
+    answer('セットごと外す');
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
-
-    confirmSpy.mockRestore();
   });
 
   it('外すのを取り消したらその日に残る', () => {
@@ -338,11 +391,10 @@ describe('トレ画面', () => {
     typeSet(setRows()[0]!, '60', '10');
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     openPicker();
     fireEvent.click(screen.getByText(/✓ ベンチプレス/));
+    decline();
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(1);
-    confirmSpy.mockRestore();
   });
 
   it('種目は続けて複数選べる', () => {
@@ -784,11 +836,9 @@ describe('種目管理（設定タブ）', () => {
     expect(screen.getByText(/^2件 \/ 目標/)).toBeTruthy();
 
     // 記録の無い種目は失うものが無いので確認しない
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(screen.getByLabelText('ベンチプレス（バーベル）を削除'));
     expect(screen.getByText(/^1件 \/ 目標/)).toBeTruthy();
-    expect(confirmSpy).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
+    expect(asking()).toBe(false);
   });
 });
 
@@ -861,6 +911,26 @@ describe('設定（カテゴリ別の画面遷移）', () => {
     fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の設定/ }));
     expect(screen.getByText('補助的に使う部位')).toBeTruthy();
     expect(screen.queryByLabelText(/ベンチプレス.*の目標の種類/)).toBeNull();
+  });
+
+  /*
+   * 元に戻せない削除も、聞き方はアプリの中で 1 つ（`ConfirmDialog`）。
+   * ブラウザの「OK / キャンセル」に乗せると、いちばん危ない操作のボタンだけ
+   * アプリの側で語を決められないことになる。
+   */
+  it('元に戻せない削除も、アプリの面で聞く', () => {
+    render(<SettingsHarness section="general" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'すべて削除' }));
+    const box = topDialog();
+    expect(box.getByRole('heading', { name: 'すべて削除しますか？' })).toBeTruthy();
+    expect(box.getByText(/元に戻せません/)).toBeTruthy();
+    expect(box.getByRole('button', { name: 'すべて削除' })).toBeTruthy();
+
+    // やめれば面が閉じるだけ
+    decline();
+    expect(asking()).toBe(false);
+    expect(screen.getByRole('button', { name: 'すべて削除' })).toBeTruthy();
   });
 
   it('一般に表示・データ・このアプリについてがまとまる', () => {
@@ -1079,6 +1149,99 @@ describe('グラフの「いま」の点', () => {
       />,
     );
     expect(rings()).toHaveLength(0);
+  });
+});
+
+/*
+ * 棒グラフの吹き出しは、**指で閉じられること**を見る。
+ *
+ * もとは `onPointerLeave` だけを持っていて、マウスでは閉じるがタップでは閉じなかった
+ * （指では pointerleave が来ない）。スマホで読む面なので、実質「閉じられない」状態だった。
+ * 閉じ方は 4 か所（実績バッジ・推移・カロリー収支・週平均の体組成）で同じ（`useDismiss`）。
+ */
+describe('棒グラフの吹き出しの閉じ方', () => {
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      value: 360,
+    });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
+  });
+
+  const weeks: WeekPoint[] = [0, 1, 2].map((i) => ({
+    start: `2026-01-0${4 + i * 7}`,
+    end: `2026-01-${10 + i * 7}`,
+    label: `W0${i + 1}`,
+    time: Date.parse(`2026-01-0${4 + i * 7}`),
+    weight: 70 - i,
+    weightDelta: i === 0 ? null : -1,
+    bodyFat: 20 - i,
+    bodyFatDelta: i === 0 ? null : -1,
+    fatMass: 14 - i,
+    leanMass: 56,
+    days: 7,
+  }));
+
+  const energy: EnergyPoint[] = [0, 1].map((i) => ({
+    key: `e${i}`,
+    label: `W0${i + 1}`,
+    from: '2026-01-04',
+    to: '2026-01-17',
+    days: 7,
+    weightDelta: i === 0 ? -0.5 : 0.3,
+    fatDelta: -0.4,
+    kcalWeight: i === 0 ? -550 : 330,
+    kcalFat: -440,
+  }));
+
+  const tip = () => document.querySelector('[class*="_tipOn_"]');
+
+  /** プロットの矩形。jsdom は 0 を返すので、外と中を分けられる値にして渡す */
+  function stubPlotRect() {
+    const plot = document.querySelector('[data-plot]')!;
+    plot.getBoundingClientRect = () => ({ left: 40, top: 20, right: 350, bottom: 200 }) as DOMRect;
+  }
+
+  /** 棒を 1 本タップして吹き出しを出す */
+  function openTip() {
+    const bands = [...document.querySelectorAll('[class*="_hit_"]')];
+    fireEvent.pointerDown(bands[0]!);
+    expect(tip()).toBeTruthy();
+    stubPlotRect();
+  }
+
+  it('週平均の体組成は、外を触ると閉じる', () => {
+    render(<WeeklyCompositionChart weeks={weeks} />);
+    openTip();
+
+    // プロットの中（棒の並び）を触っているあいだは残す
+    fireEvent.pointerDown(document.body, { clientX: 120, clientY: 100 });
+    expect(tip()).toBeTruthy();
+
+    fireEvent.pointerDown(document.body, { clientX: 5, clientY: 300 });
+    expect(tip()).toBeNull();
+  });
+
+  it('週平均の体組成は、Esc でも閉じる', () => {
+    render(<WeeklyCompositionChart weeks={weeks} />);
+    openTip();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(tip()).toBeNull();
+  });
+
+  it('カロリー収支も同じように閉じる', () => {
+    render(<EnergyBalanceChart points={energy} />);
+    openTip();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(tip()).toBeNull();
+
+    openTip();
+    fireEvent.pointerDown(document.body, { clientX: 5, clientY: 300 });
+    expect(tip()).toBeNull();
   });
 });
 
@@ -1992,6 +2155,100 @@ describe('部位別セット数の目標', () => {
   });
 });
 
+/*
+ * 数値を打つ欄の作法は**アプリ中で 1 つ**（`useNumericField`）。
+ *
+ * 打っている途中の値を確定させないのが肝。1RM換算の分母（値域 20〜60）を
+ * 30 から 40 へ直すとき、「4」の時点で確定してしまうと、そのまま離れた人の
+ * 種目に値域外の 4 が残り、次に開いたときに黙って既定の 30 に戻る。
+ */
+/*
+ * 描画で落ちたときの受け皿。**アプリで 1 つ。**
+ *
+ * 受け皿が無いと白画面になり、しかも PWA でキャッシュが効いているので
+ * 開き直しても白のままになりうる。記録が唯一の資産で、バックアップは JSON の
+ * 書き出しだけなので、**出せないときに書き出しへ行けること**がいちばん大事。
+ */
+describe('画面を出せなかったとき', () => {
+  function Boom(): never {
+    throw new Error('テスト用の失敗');
+  }
+
+  it('白画面にせず、記録を書き出す口を出す', () => {
+    // React が落ちたことをコンソールに書くので、その分だけ黙らせる
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <ErrorBoundary>
+        <Boom />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByText('画面を出せませんでした。')).toBeTruthy();
+    expect(screen.getByText(/記録は消えていません/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: '記録を書き出す' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '開き直す' })).toBeTruthy();
+    // 伝えるために写せるようにしておく
+    expect(screen.getByText(/テスト用の失敗/)).toBeTruthy();
+
+    spy.mockRestore();
+  });
+
+  it('落ちていなければ中身をそのまま出す', () => {
+    render(
+      <ErrorBoundary>
+        <p>ふつうの画面</p>
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText('ふつうの画面')).toBeTruthy();
+    expect(screen.queryByText('画面を出せませんでした。')).toBeNull();
+  });
+});
+
+describe('数値を打つ欄', () => {
+  function SettingsHarness({ exercise }: { exercise: Exercise }) {
+    const [ex, setEx] = useState(exercise);
+    return <ExerciseSettingsForm exercise={ex} onUpdate={setEx} />;
+  }
+
+  function openCalc(exercise: Exercise) {
+    render(<SettingsHarness exercise={exercise} />);
+    fireEvent.click(screen.getByRole('button', { name: '計算方法を変える' }));
+  }
+
+  const bench = () =>
+    fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
+
+  it('1RM換算の分母は、値域を外れた途中の入力では確定しない', () => {
+    openCalc(bench());
+    const field = screen.getByLabelText(/1RM換算の分母/) as HTMLInputElement;
+    expect(field.value).toBe('40');
+
+    // 「4」は値域（20〜60）の外。欄の表示だけ進み、値は据え置き
+    fireEvent.change(field, { target: { value: '4' } });
+    expect(field.value).toBe('4');
+    fireEvent.blur(field);
+    expect(field.value).toBe('40');
+
+    // 打ち切れば入る
+    fireEvent.change(field, { target: { value: '33.3' } });
+    fireEvent.blur(field);
+    expect(field.value).toBe('33.3');
+  });
+
+  it('体重が乗る割合は 0.65 のまま入る（第 2 位で丸めない）', () => {
+    openCalc({ ...bench(), loadMode: 'bodyweight', bodyweightFactor: null });
+    const field = screen.getByLabelText(/体重が乗る割合/) as HTMLInputElement;
+
+    fireEvent.change(field, { target: { value: '0.65' } });
+    fireEvent.blur(field);
+    expect(field.value).toBe('0.65');
+  });
+});
+
 describe('補助部位', () => {
   it('補助部位は0.5セットとして数える', async () => {
     const { buildSessions, buildWeeklySets } = await import('../lib/training');
@@ -2101,6 +2358,21 @@ describe('補助部位', () => {
       { group: 'arms', weight: 0.3 },
       { group: 'shoulders', weight: 0.5 },
     ]);
+  });
+
+  /*
+   * 係数は**小数第 2 位まで**残す。
+   * 第 1 位で丸めると、既定に入っている 0.25 や、体重の割合のヒントに出している
+   * 0.65 が別の値（0.3 / 0.7）になる。
+   */
+  it('体重が乗る割合も小数第 2 位まで残す', async () => {
+    const { sanitizeData } = await import('../lib/storage');
+    const data = sanitizeData({
+      exercises: [
+        { id: 'a', name: '腕立て', group: 'chest', loadMode: 'bodyweight', bodyweightFactor: 0.65 },
+      ],
+    });
+    expect(data.exercises[0]!.bodyweightFactor).toBe(0.65);
   });
 
   it('主部位と同じ部位や未知の部位は補助部位から落とす', async () => {
@@ -2469,6 +2741,43 @@ describe('種目の足し方', () => {
   });
 
   /*
+   * 同じ名前は作らせない。**プリセットと同じ作法。**
+   * 黙って 2 つ並べると、一覧（マイ種目・目標・移行の候補）でどちらがどちらか
+   * 分からなくなる。手がかりは名前と部位しかない。
+   */
+  it('自作種目も名前の欄の Enter で作れる', async () => {
+    render(<Harness />);
+    openCatalog();
+
+    const field = screen.getByLabelText('名前');
+    fireEvent.change(field, { target: { value: '謎のマシン' } });
+    // 「追加」は部位と詳細設定の下にある。打ち終わりにそのまま作れる
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    const stored = await storedData();
+    expect(stored.exercises.map((e) => e.name)).toEqual(['謎のマシン']);
+  });
+
+  it('同じ名前の種目は作れない（理由も出す）', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+    openCatalog();
+
+    fireEvent.change(screen.getByLabelText('名前'), {
+      target: { value: 'ベンチプレス（バーベル）' },
+    });
+    expect((screen.getByRole('button', { name: '追加' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/同じ名前の種目があります/)).toBeTruthy();
+
+    // 名前を変えれば作れる
+    fireEvent.change(screen.getByLabelText('名前'), { target: { value: '謎のマシン' } });
+    expect((screen.getByRole('button', { name: '追加' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+    expect(screen.queryByText(/同じ名前の種目があります/)).toBeNull();
+  });
+
+  /*
    * マイ種目に入れていない種目は、**記録としては他と同じに数える**が、
    * 次に選ぶ場面には出てこない。それが分かるように印を出す。
    */
@@ -2690,7 +2999,6 @@ describe('種目の削除', () => {
       0,
     );
     const onRemove = vi.fn();
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     render(
       <ExerciseManager
@@ -2704,9 +3012,16 @@ describe('種目の削除', () => {
     );
 
     fireEvent.click(screen.getByLabelText('ベンチプレス（バーベル）を削除'));
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('12日ぶんも一緒に消えます'));
-    expect(onRemove).not.toHaveBeenCalled(); // キャンセルしたので消えない
-    confirmSpy.mockRestore();
+    // 問いは見出し、消えるものは本文、結果は押す言葉に書く
+    expect(topDialog().getByText(/12日ぶんも一緒に消えます/)).toBeTruthy();
+    expect(topDialog().getByText('ベンチプレス（バーベル）')).toBeTruthy();
+
+    decline();
+    expect(onRemove).not.toHaveBeenCalled(); // やめたので消えない
+
+    fireEvent.click(screen.getByLabelText('ベンチプレス（バーベル）を削除'));
+    answer('記録ごと削除');
+    expect(onRemove).toHaveBeenCalledWith(bench.id);
   });
 });
 
@@ -2870,7 +3185,7 @@ describe('目標画面', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
     fireEvent.click(screen.getByRole('button', { name: /^ベンチプレス/ }));
-    fireEvent.change(screen.getByLabelText(/ベンチプレス.*の目標$/), { target: { value: '100' } });
+    fireEvent.change(goalField(/ベンチプレス.*の目標$/), { target: { value: '100' } });
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     // 一覧の行には「いま → 目標」を並べる。片方だけでは近いのかどうか読めない
@@ -2884,15 +3199,14 @@ describe('目標画面', () => {
      * 種目そのものの設定は、同じダイアログの面を差し替えて出す
      */
     fireEvent.click(row);
-    const dlg = () => within(document.querySelector('dialog[open]')!);
-    expect(dlg().getByLabelText(/ベンチプレス.*の目標$/)).toBeTruthy();
+    expect(goalField(/ベンチプレス.*の目標$/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の設定/ }));
     expect(screen.getByText('補助的に使う部位')).toBeTruthy();
 
     // 深い面では、右上に「‹ 戻る」が並ぶ（閉じるとダイアログごと消えてしまう）
     fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
-    expect(dlg().getByLabelText(/ベンチプレス.*の目標$/)).toBeTruthy();
+    expect(goalField(/ベンチプレス.*の目標$/)).toBeTruthy();
 
     // 推移は重ねて出す。画面ごと移ると、閉じたときに開いていた種目へ戻れない
     fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移を見る/ }));
@@ -2904,7 +3218,7 @@ describe('目標画面', () => {
     )!;
     fireEvent.click(within(trend).getByRole('button', { name: '閉じる' }));
     expect(screen.queryByText('元データ')).toBeNull();
-    expect(dlg().getByLabelText(/ベンチプレス.*の目標$/)).toBeTruthy();
+    expect(goalField(/ベンチプレス.*の目標$/)).toBeTruthy();
   });
 
   /*
@@ -2929,7 +3243,7 @@ describe('目標画面', () => {
     ] as const) {
       fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
       fireEvent.click(screen.getByRole('button', { name }));
-      fireEvent.change(screen.getByLabelText(label), { target: { value: '100' } });
+      fireEvent.change(goalField(label), { target: { value: '100' } });
       fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     }
 
@@ -2980,22 +3294,23 @@ describe('目標画面', () => {
     expect(screen.getAllByText('今日')).toHaveLength(3);
 
     // 目標を決めれば、一覧の行にバーが出る（数字だけだと割り算をしないと分からない）
-    expect(chestRow.querySelector('[class*="meterFill"]')).toBeNull();
+    expect(chestRow.querySelector('[role="progressbar"]')).toBeNull();
     fireEvent.click(chestRow);
     fireEvent.click(screen.getByRole('button', { name: '部位目標を設定' }));
     fireEvent.click(screen.getByRole('button', { name: '標準 12' }));
     fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
+    // 進捗は読み上げにも出る（Meter が role="progressbar" を持つ）
     const bar = screen
       .getByRole('button', { name: '胸の今週の量' })
-      .querySelector('[class*="meterFill"]') as HTMLElement;
-    expect(bar.style.width).toBe(`${(2 / 12) * 100}%`);
+      .querySelector('[role="progressbar"]') as HTMLElement;
+    expect(bar.getAttribute('aria-valuenow')).toBe(`${Math.round((2 / 12) * 100)}`);
 
     // 種目の目標は、部位を開かずにカードから足せる
     fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
     fireEvent.click(screen.getByRole('button', { name: /^ベンチプレス/ }));
-    fireEvent.change(screen.getByLabelText(/ベンチプレス.*の目標$/), { target: { value: '100' } });
+    fireEvent.change(goalField(/ベンチプレス.*の目標$/), { target: { value: '100' } });
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     expect(screen.getByText('0 / 1 到達')).toBeTruthy();
@@ -3123,27 +3438,65 @@ describe('プリセット（種目の組み合わせ）', () => {
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     expand('スクワット');
 
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     openPresets();
     fireEvent.click(screen.getByRole('button', { name: 'いまの組み合わせをプリセットに保存' }));
     fireEvent.change(screen.getByLabelText('プリセットの名前'), { target: { value: '押す日' } });
     fireEvent.click(screen.getByRole('button', { name: 'この名前で保存' }));
 
-    // 消えるのは前の中身なので、先に伝える。断ったら何も変わらない
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('上書き'));
+    // 消えるのは前の中身なので、先に伝える。やめたら何も変わらない
+    expect(
+      topDialog().getByRole('heading', { name: '同じ名前のプリセットがあります' }),
+    ).toBeTruthy();
+    decline();
     let stored = await storedData();
     expect(stored.presets).toHaveLength(1);
     expect(stored.presets[0]!.exerciseIds).toEqual(['ex_bench', 'ex_pullup']);
 
-    confirmSpy.mockReturnValue(true);
     fireEvent.click(screen.getByRole('button', { name: 'この名前で保存' }));
+    answer('この組み合わせで上書き');
 
     // 同じ名前が 2 つ並ばず、中身だけが入れ替わる
     stored = await storedData();
     expect(stored.presets).toHaveLength(1);
     expect(stored.presets[0]!.name).toBe('押す日');
     expect(stored.presets[0]!.exerciseIds).toEqual(['ex_squat']);
-    confirmSpy.mockRestore();
+  });
+
+  /*
+   * `<form>` を持たないので、Enter は自分で拾う（`lib/keys`）。
+   * スマホのキーボードは「改行」を出してくるので、効かないと一度閉じて ✓ を探すことになる。
+   */
+  it('名前は Enter で確定でき、Esc でやめられる', async () => {
+    seedExercises('ex_bench', 'ex_pullup');
+    render(<Harness />);
+    addTwo();
+
+    openPresets();
+    fireEvent.click(screen.getByRole('button', { name: 'いまの組み合わせをプリセットに保存' }));
+    const field = screen.getByLabelText('プリセットの名前');
+
+    // 変換中の Enter は候補の確定に使うので、欄そのものは確定させない
+    fireEvent.change(field, { target: { value: 'おすひ' } });
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+    expect((await storedData()).presets).toHaveLength(0);
+
+    fireEvent.change(field, { target: { value: '押す日' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    const stored = await storedData();
+    expect(stored.presets.map((preset) => preset.name)).toEqual(['押す日']);
+  });
+
+  it('Esc で名前の入力をやめられる', () => {
+    seedExercises('ex_bench', 'ex_pullup');
+    render(<Harness />);
+    addTwo();
+
+    openPresets();
+    fireEvent.click(screen.getByRole('button', { name: 'いまの組み合わせをプリセットに保存' }));
+    fireEvent.keyDown(screen.getByLabelText('プリセットの名前'), { key: 'Escape' });
+
+    expect(screen.queryByLabelText('プリセットの名前')).toBeNull();
   });
 
   it('削除は確認してから消す', async () => {
@@ -3154,18 +3507,17 @@ describe('プリセット（種目の組み合わせ）', () => {
     await remount();
 
     render(<DayHarness day={isoAdd(todayISO(), -1)} />);
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     // 記録は消えないが、付けた名前と組み合わせは戻せない
     openPresets();
     fireEvent.click(screen.getByRole('button', { name: '押す日を削除' }));
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('元に戻せません'));
+    expect(topDialog().getByText(/付けた名前と組み合わせは戻せません/)).toBeTruthy();
+    decline();
     expect(screen.getByText('押す日')).toBeTruthy();
 
-    confirmSpy.mockReturnValue(true);
     fireEvent.click(screen.getByRole('button', { name: '押す日を削除' }));
+    answer('削除');
     expect(screen.queryByText('押す日')).toBeNull();
-    confirmSpy.mockRestore();
   });
 
   it('入るのは種目だけ。重量と回数は持たない', async () => {
@@ -3619,22 +3971,21 @@ describe('プリセット（設定から見る・編集する）', () => {
   it('最後の 1 種目を外すのは、プリセットごとの削除として確認する', () => {
     seedPresets({ id: 'p1', name: '押す日', exerciseIds: ['ex_bench'] });
     render(<PresetHarness />);
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     // 種目 0 件のプリセットは持てない。空にすることは消すことと同じ
     fireEvent.click(
       screen.getByRole('button', { name: '押す日からベンチプレス（バーベル）を外す' }),
     );
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('ごと削除'));
+    expect(topDialog().getByRole('heading', { name: 'プリセットごと削除しますか？' })).toBeTruthy();
+    decline();
     expect(screen.getByText('押す日')).toBeTruthy();
 
-    confirmSpy.mockReturnValue(true);
     fireEvent.click(
       screen.getByRole('button', { name: '押す日からベンチプレス（バーベル）を外す' }),
     );
+    answer('プリセットごと削除');
     expect(screen.queryByText('押す日')).toBeNull();
     expect(screen.getByText(/まだプリセットがありません/)).toBeTruthy();
-    confirmSpy.mockRestore();
   });
 });
 
@@ -3823,15 +4174,15 @@ describe('画面の位置（タブと下位画面）', () => {
     fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の目標を決める/ }));
     expect(window.location.hash).toBe('#settings/training/exercises');
     expect(screen.getByText(/ベンチプレス.*の目標$/)).toBeTruthy(); // ダイアログの見出し
-    expect(screen.getByLabelText(/ベンチプレス.*の目標$/)).toBeTruthy();
+    expect(goalField(/ベンチプレス.*の目標$/)).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText(/ベンチプレス.*の目標$/), { target: { value: '100' } });
+    fireEvent.change(goalField(/ベンチプレス.*の目標$/), { target: { value: '100' } });
     expect(screen.getByText('重量↑')).toBeTruthy();
     expect(screen.getByText('目標 100kg')).toBeTruthy();
 
     // 閉じると一覧に戻る（行の中で展開しない）
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expect(screen.queryByLabelText(/ベンチプレス.*の目標$/)).toBeNull();
+    expect(goalFields(/ベンチプレス.*の目標$/)).toHaveLength(0);
   });
 
   it('目標タブも体組成／トレーニングの切り替えに従う', () => {
@@ -3912,7 +4263,7 @@ describe('種目の目標を決める', () => {
     // いまは直近の 60、過去最大は 65。目標そのものは空のまま
     expect(screen.getByText('60.0 kg')).toBeTruthy();
     expect(screen.getByText('65.0 kg')).toBeTruthy();
-    expect((screen.getByLabelText(/ベンチプレス.*の目標$/) as HTMLInputElement).value).toBe('');
+    expect((goalField(/ベンチプレス.*の目標$/) as HTMLInputElement).value).toBe('');
   });
 
   it('立て方を選べる（維持 / 重量 / 挙上量 / 回数）', async () => {
@@ -3928,18 +4279,14 @@ describe('種目の目標を決める', () => {
     // 維持は数値を持たない。選んだ時点で目標として成立する。
     // 欄はダイアログの高さを保つために残るが、隠れていて触れない
     fireEvent.click(types.getByRole('button', { name: '維持' }));
-    expect(
-      screen.getByLabelText(/ベンチプレス.*の目標$/).closest('[aria-hidden="true"]'),
-    ).not.toBeNull();
+    expect(goalField(/ベンチプレス.*の目標$/).closest('[aria-hidden="true"]')).not.toBeNull();
 
     const stored = await storedData();
     expect(stored.exercises[0]!.goal).toEqual({ type: 'maintain', value: null });
 
     // 挙上量に切り替えると、また数値を決める形に戻る
     fireEvent.click(types.getByRole('button', { name: '挙上量' }));
-    expect(
-      screen.getByLabelText(/ベンチプレス.*の目標$/).closest('[aria-hidden="true"]'),
-    ).toBeNull();
+    expect(goalField(/ベンチプレス.*の目標$/).closest('[aria-hidden="true"]')).toBeNull();
     expect(screen.getByText(/総挙上量（有効重量 × レップ数の合計）/)).toBeTruthy();
   });
 
@@ -3970,7 +4317,7 @@ describe('種目の目標を決める', () => {
     render(<GoalsHarness />);
     openEditor();
 
-    const field = () => screen.getByLabelText(/ベンチプレス.*の目標$/) as HTMLInputElement;
+    const field = () => goalField(/ベンチプレス.*の目標$/) as HTMLInputElement;
     fireEvent.change(field(), { target: { value: '100' } });
     expect(screen.getByRole('button', { name: '目標を外す' })).toBeTruthy();
 
@@ -4472,6 +4819,59 @@ describe('記録の移行', () => {
     expect(stored.workouts['2026-03-08']![0]!.exerciseId).toBe('ex_curl');
   });
 
+  /*
+   * 期間を選んだのに日付が空。**そのまま押させない。**
+   *
+   * 空は「指定なし」として扱うので、押せると**黙って全期間が移る**（初期値も空）。
+   * 範囲を絞ったつもりでいるのに結果は「すべて」と同じ——いちばん気づけない取り違え。
+   */
+  it('期間を選んで日付を入れないうちは移行できない', () => {
+    seedData(['ex_hammer_curl', 'ex_curl'], {
+      '2026-03-01': [{ exerciseId: 'ex_hammer_curl', sets: [{ weight: 10, reps: 10 }] }],
+      '2026-03-08': [{ exerciseId: 'ex_hammer_curl', sets: [{ weight: 12, reps: 10 }] }],
+    });
+    render(<MoveHarness />);
+    openMove(/ハンマーカールの設定/);
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移行する' }));
+
+    // すべてなら日付は要らない
+    expect((screen.getByRole('button', { name: '移行' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'この日以降' }));
+    expect((screen.getByRole('button', { name: '移行' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/移行する期間の日付を入れてください/)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('開始日'), { target: { value: '2026-03-05' } });
+    expect((screen.getByRole('button', { name: '移行' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+
+    // 期間は終了日も要る
+    fireEvent.click(screen.getByRole('button', { name: '期間を指定' }));
+    expect((screen.getByRole('button', { name: '移行' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  /*
+   * 日付の欄は空にできない。消す操作でいまの値を残す——空を受けると
+   * 「指定なし」に落ちて、範囲が黙って広がる。
+   */
+  it('開始日は空にできない', () => {
+    seedData(['ex_hammer_curl', 'ex_curl'], {
+      '2026-03-08': [{ exerciseId: 'ex_hammer_curl', sets: [{ weight: 12, reps: 10 }] }],
+    });
+    render(<MoveHarness />);
+    openMove(/ハンマーカールの設定/);
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移行する' }));
+    fireEvent.click(screen.getByRole('button', { name: 'この日以降' }));
+
+    const field = screen.getByLabelText('開始日') as HTMLInputElement;
+    fireEvent.change(field, { target: { value: '2026-03-05' } });
+    fireEvent.change(field, { target: { value: '' } });
+    expect(field.value).toBe('2026-03-05');
+  });
+
   /* 消えるものがあるので、そこだけ聞く（§2.2） */
   it('移行先に記録がある日は、上書きか残すかを聞く', async () => {
     seedData(['ex_hammer_curl', 'ex_curl'], {
@@ -4623,12 +5023,19 @@ describe('記録の移行', () => {
     openMove(/ハンマーカールの設定/);
 
     const dialog = () => within(document.querySelector('dialog[open]') as HTMLElement);
+
+    /*
+     * 検索と部位チップは、候補が 8 件を超えたときだけ出す（一覧のまま見渡せるうちは要らない）。
+     * マイ種目が 2 件なので、カタログまで広げてから触る。
+     */
+    expect(dialog().queryByRole('group', { name: '部位' })).toBeNull();
+    fireEvent.click(
+      within(dialog().getByRole('group', { name: '候補' })).getByRole('button', { name: 'すべて' }),
+    );
+
     const groups = () => within(dialog().getByRole('group', { name: '部位' }));
 
     // 部位で絞る（カタログと同じチップ）
-    expect(
-      dialog().getByRole('button', { name: 'ベンチプレス（バーベル）へ移行する' }),
-    ).toBeTruthy();
     fireEvent.click(groups().getByRole('button', { name: '腕' }));
     expect(
       dialog().queryByRole('button', { name: 'ベンチプレス（バーベル）へ移行する' }),
@@ -4721,6 +5128,31 @@ describe('種目の絞り込み（部位）', () => {
     );
   }
 
+  /** 選ぶ面はどこも同じ組み。面ごとに器だけ替えて確かめる */
+  function PresetHarness() {
+    const body = useBodyData(seeded);
+    return (
+      <PresetManager
+        presets={body.data.presets}
+        exercises={body.data.exercises}
+        onCreate={body.savePreset}
+        onUpdate={body.updatePreset}
+        onRemove={body.removePreset}
+        onAddExercises={body.addExercises}
+      />
+    );
+  }
+
+  function GoalsHarness() {
+    const body = useBodyData(seeded);
+    return <GoalsView body={body} domain="training" />;
+  }
+
+  function ChartsHarness() {
+    const body = useBodyData(seeded);
+    return <ChartsView body={body} domain="training" />;
+  }
+
   /** 絞り込みが出るのは 8 件を超えてから */
   const MANY = [
     'ex_bench',
@@ -4747,7 +5179,7 @@ describe('種目の絞り込み（部位）', () => {
   it('件数が少ないうちは絞り込みを出さない', () => {
     seedExercises('ex_bench', 'ex_squat');
     render(<ManagerHarness />);
-    expect(screen.queryByRole('group', { name: '部位で絞り込む' })).toBeNull();
+    expect(screen.queryByRole('group', { name: '部位' })).toBeNull();
   });
 
   /*
@@ -4759,25 +5191,46 @@ describe('種目の絞り込み（部位）', () => {
     render(<ManagerHarness />);
 
     expect(screen.queryByRole('button', { name: 'フィルター' })).toBeNull();
-    expect(screen.getByRole('group', { name: '部位で絞り込む' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: '部位' })).toBeTruthy();
+  });
+
+  /*
+   * 部位で絞るのは**主部位だけ。**一度はマイ種目の一覧だけ補助部位でも拾っていたが、
+   * 同じチップを押したのに面によって出るものが違うことになる。
+   * 一覧の見出しも主部位で切っているので、補助で拾うと絞り込みと見出しが食い違う。
+   */
+  it('部位で絞るのは主部位だけ（補助部位では拾わない）', () => {
+    seedMany();
+    render(<ManagerHarness />);
+
+    // ベンチプレスは肩と腕を補助部位に持つが、「腕」では出ない
+    fireEvent.click(within(screen.getByRole('group', { name: '部位' })).getByText('腕'));
+    expect(screen.getByText(/^カール/)).toBeTruthy();
+    expect(screen.queryByText(/^ベンチプレス/)).toBeNull();
+
+    // 記録画面の候補でも同じ
+    cleanup();
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(within(screen.getByRole('group', { name: '部位' })).getByText('腕'));
+    expect(screen.getByText(/^＋ カール/)).toBeTruthy();
+    expect(screen.queryByText(/^＋ ベンチプレス/)).toBeNull();
   });
 
   it('部位で絞れる', () => {
     seedMany();
     render(<ManagerHarness />);
 
-    fireEvent.click(within(screen.getByRole('group', { name: '部位で絞り込む' })).getByText('脚'));
+    fireEvent.click(within(screen.getByRole('group', { name: '部位' })).getByText('脚'));
     expect(screen.getByText('スクワット')).toBeTruthy();
     expect(screen.queryByText('プランク')).toBeNull();
 
     // 合わなくなったら、そう言う（黙って空にしない）
-    fireEvent.click(within(screen.getByRole('group', { name: '部位で絞り込む' })).getByText('胸'));
+    fireEvent.click(within(screen.getByRole('group', { name: '部位' })).getByText('胸'));
     expect(screen.queryByText('スクワット')).toBeNull();
 
     // 「すべて」で戻る
-    fireEvent.click(
-      within(screen.getByRole('group', { name: '部位で絞り込む' })).getByText('すべて'),
-    );
+    fireEvent.click(within(screen.getByRole('group', { name: '部位' })).getByText('すべて'));
     expect(screen.getByText('スクワット')).toBeTruthy();
   });
 
@@ -4811,7 +5264,7 @@ describe('種目の絞り込み（部位）', () => {
      * チップは出したまま——押す的であると同時に、いま何で絞っているかの表示なので
      */
     expect(document.querySelector('[class*="manageGroup"]')).toBeNull();
-    expect(screen.getByRole('group', { name: '部位で絞り込む' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: '部位' })).toBeTruthy();
   });
 
   /*
@@ -4866,12 +5319,79 @@ describe('種目の絞り込み（部位）', () => {
     seedMany();
     render(<ManagerHarness />);
 
-    fireEvent.click(within(screen.getByRole('group', { name: '部位で絞り込む' })).getByText('胸'));
+    fireEvent.click(within(screen.getByRole('group', { name: '部位' })).getByText('胸'));
     fireEvent.click(screen.getByRole('button', { name: '種目を検索' }));
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'ぷらんく' } });
 
     // 胸で絞ったままなので、体幹のプランクには当たらない
     expect(screen.getByText('このフィルターに合う種目はありません。')).toBeTruthy();
+  });
+
+  /*
+   * **選ぶ面はどこも同じ組み**（`ExercisePickList`）。
+   * 記録画面とカタログには検索と部位チップがあり、プリセットの中身と
+   * 種目の目標を足す面には見出しだけ、という状態だった。
+   */
+  it('プリセットに種目を足す面でも探せる', () => {
+    seedMany();
+    render(<PresetHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
+    const dialog = () => within(document.querySelector('dialog[open]') as HTMLElement);
+
+    fireEvent.click(dialog().getByRole('button', { name: '種目を検索' }));
+    fireEvent.change(dialog().getByRole('searchbox'), { target: { value: 'ぷらんく' } });
+    expect(dialog().getByText('＋ プランク')).toBeTruthy();
+    expect(dialog().queryByText('＋ スクワット')).toBeNull();
+
+    // 部位のチップも同じ組みで出る
+    fireEvent.click(dialog().getByRole('button', { name: '検索をやめる' }));
+    fireEvent.click(within(dialog().getByRole('group', { name: '部位' })).getByText('脚'));
+    expect(dialog().getByText('＋ スクワット')).toBeTruthy();
+    expect(dialog().queryByText('＋ プランク')).toBeNull();
+  });
+
+  it('種目の目標を足す面でも探せる', () => {
+    seedMany();
+    render(<GoalsHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
+    const dialog = () => within(document.querySelector('dialog[open]') as HTMLElement);
+
+    fireEvent.click(dialog().getByRole('button', { name: '種目を検索' }));
+    fireEvent.change(dialog().getByRole('searchbox'), { target: { value: 'ぷらんく' } });
+    // 探した結果では部位も行に添えるので、名前は前方一致で引く
+    expect(dialog().getByRole('button', { name: /^プランク/ })).toBeTruthy();
+    expect(dialog().queryByRole('button', { name: /^スクワット/ })).toBeNull();
+  });
+
+  /*
+   * この画面は「全種目の折れ線を並べて形を比べる」のが主な用途なので、
+   * 検索は畳んだまま置く（待機中の高さは 0）。胸に 10 種持つ人には部位チップだけでは足りない。
+   */
+  it('種目別の推移でも探せる', () => {
+    seedMany();
+    // 推移に出るのは記録のある種目だけ
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      exercises: MANY.map((id, i) =>
+        fromCatalog(
+          CATALOG.find((c) => c.id === id)!,
+          i,
+        ),
+      ),
+      workouts: {
+        '2026-03-01': MANY.map((id) => ({ exerciseId: id, sets: [{ weight: 40, reps: 10 }] })),
+      },
+    });
+    render(<ChartsHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '種目を検索' }));
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'ぷらんく' } });
+    expect(screen.getByText('プランク')).toBeTruthy();
+    expect(screen.queryByText('スクワット')).toBeNull();
   });
 
   it('カタログでも同じように探せる', () => {
@@ -4902,9 +5422,8 @@ describe('種目の絞り込み（部位）', () => {
     render(<Harness />);
     openPicker();
 
-    fireEvent.click(
-      within(screen.getByRole('group', { name: '部位で絞り込む' })).getByText('有酸素'),
-    );
+    // 選ぶ面はどこも同じ組み（`ExercisePickList`）。見出しは見える「部位」
+    fireEvent.click(within(screen.getByRole('group', { name: '部位' })).getByText('有酸素'));
     expect(screen.getByText('＋ ランニング')).toBeTruthy();
     expect(screen.queryByText(/^＋ ベンチプレス/)).toBeNull();
   });
@@ -4913,9 +5432,7 @@ describe('種目の絞り込み（部位）', () => {
     seedMany();
     render(<Harness />);
     openPicker();
-    fireEvent.click(
-      within(screen.getByRole('group', { name: '部位で絞り込む' })).getByText('有酸素'),
-    );
+    fireEvent.click(within(screen.getByRole('group', { name: '部位' })).getByText('有酸素'));
     expect(screen.queryByText(/^＋ ベンチプレス/)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
@@ -4994,24 +5511,21 @@ describe('消えるものがあるときだけ聞く', () => {
 
   it('空のセット行は確認せずに消える', () => {
     editBench();
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     fireEvent.click(screen.getByLabelText('1セット目を削除'));
-    expect(confirmSpy).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
+    expect(asking()).toBe(false);
   });
 
   it('打ってあるセット行は確認してから消す', () => {
     editBench();
     typeSet(setRows()[0]!, '60', '10');
 
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     fireEvent.click(screen.getByLabelText('1セット目を削除'));
+    expect(asking()).toBe(true);
 
-    expect(confirmSpy).toHaveBeenCalledOnce();
-    // 断ったので残っている
+    // やめたので残っている
+    decline();
     expect(setRows()).toHaveLength(1);
-    confirmSpy.mockRestore();
   });
 
   it('カードの × も、打ってあれば確認する（ピッカーの ✓ と同じ扱い）', () => {
@@ -5019,22 +5533,57 @@ describe('消えるものがあるときだけ聞く', () => {
     typeSet(setRows()[0]!, '60', '10');
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     fireEvent.click(screen.getByLabelText(/ベンチプレス.*をこの日から外す/));
+    expect(asking()).toBe(true);
 
-    expect(confirmSpy).toHaveBeenCalledOnce();
+    decline();
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(1);
-    confirmSpy.mockRestore();
+  });
+
+  /*
+   * 行に添える操作は**すべて `MiniButton`**。指で狙える下限（32px）をあれが担保する。
+   * カードの ⇅ と × は素の button で、高さが 20px しか無かった——
+   * しかも × は「この日から外す」＝消える操作で、いちばん小さい的になっていた。
+   */
+  it('カードの ⇅ と × は、行の小さな操作と同じ的で出す', () => {
+    addBench();
+
+    expect(screen.getByLabelText(/ベンチプレス.*をこの日から外す/).className).toMatch(/_mini_/);
   });
 
   it('何も打っていない種目はカードの × で確認せずに外れる', () => {
     addBench();
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     fireEvent.click(screen.getByLabelText(/ベンチプレス.*をこの日から外す/));
-    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(asking()).toBe(false);
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
-    confirmSpy.mockRestore();
+  });
+
+  /*
+   * 聞き方は 1 つ（`ConfirmDialog`）。
+   *
+   * 以前は `confirm()` を 9 か所で使っていた。あれは「OK / キャンセル」しか書けないので、
+   * どちらがどちらの結果なのかを本文から読み取らせることになる
+   * （しかもボタンの語と並び順はブラウザが決めるので、アプリの側では揃えられない）。
+   */
+  it('確認は「押す言葉に結果を書く」形で出す', () => {
+    editBench();
+    typeSet(setRows()[0]!, '60', '10');
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    fireEvent.click(screen.getByLabelText(/ベンチプレス.*をこの日から外す/));
+
+    const box = topDialog();
+    // 問いは見出し、消えるものは本文
+    expect(box.getByRole('heading', { name: 'この日から外しますか？' })).toBeTruthy();
+    expect(box.getByText(/打ったセットも消えます/)).toBeTruthy();
+    // 答えは結果を書いたボタン。OK は出さない
+    expect(box.getByRole('button', { name: 'セットごと外す' })).toBeTruthy();
+    expect(box.queryByRole('button', { name: 'OK' })).toBeNull();
+    // やめるは別の行（答えと並べると 3 択に見える）
+    expect(box.getByRole('button', { name: 'やめる' })).toBeTruthy();
+
+    answer('セットごと外す');
+    expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
   });
 });
 

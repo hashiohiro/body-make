@@ -1,0 +1,23 @@
+@use '../styles/mixins' as *;
+
+/* 入力欄 ＋ ✓ ＋ ×。上の内容から切り離して見えるように、線で区切る */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap-field);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink);
+  @include field-text;
+}

@@ -85,7 +85,7 @@
   font-size: 13px;
   font-weight: 550;
   text-align: center;
-  min-height: 44px; // タップ領域の下限
+  min-height: var(--tap-main); // 面の決定。的の段はトークンで決める
 }
 
 .btnPrimary {
@@ -103,7 +103,7 @@
 }
 
 .btnSm {
-  min-height: 36px;
+  min-height: var(--tap-sub);
   padding: 7px 11px;
   font-size: 12px;
 }
@@ -143,7 +143,7 @@
 
 .segment {
   flex: 1;
-  min-height: 0;
+  min-height: var(--tap-sub);
   padding: 6px 14px;
   border: 0;
   border-radius: 999px;
@@ -162,6 +162,7 @@
 
 .chip {
   flex: none;
+  min-height: var(--tap-sub);
   padding: 8px 14px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -277,17 +278,20 @@
   select {
     flex: none;
     width: 132px;
-    min-height: 40px;
+    min-height: var(--tap-field);
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: var(--radius-xs);
     background: var(--surface-sunken);
     text-align: right;
     @include tabular;
+    @include field-text;
+    @include field-number;
   }
 
   select {
     text-align: left;
+    @include field-select;
   }
 }
 
@@ -344,12 +348,17 @@
   margin-top: 8px;
 }
 
+/*
+ * 種目カードとその日の体組成の入口（編集・推移を見る・目標）。
+ * **記録画面でいちばん押すのがここ**なので、行の操作と同じ段に乗せる
+ * （27px しか無く、下限として書いてある値の半分近くだった）。
+ */
 .detailBtn {
+  min-height: var(--tap-row);
   padding: 5px 11px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--ink-2);
-  min-height: 0;
 }

@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { useNumericField } from '../hooks/useNumericField';
+import { NumericInput } from './NumericInput';
 import s from './QuickEntry.module.scss';
 
 interface Props {
@@ -11,37 +11,32 @@ interface Props {
   min: number;
   max: number;
   onCommit: (value: number | null) => void;
-  /** 読むだけ。押せる的は残すが、値は変えられない（カレンダーから開いた過去の日） */
-  readOnly?: boolean | undefined;
 }
 
 /**
- * ± ボタンは置かない。
- * モバイルの 1 行に収めると数値の表示幅が削られ、肝心の値が読みにくくなる。
- * 直接打つほうが速く、前回値はプレースホルダで示す。
+ * ラベルを上に置いた数字の欄。**体組成の入力（朝 / 夕）で使う。**
+ *
+ * 欄そのものは `NumericInput`。ここが持つのは**ラベルの置き場所**だけ
+ * （上に小さく置いて、数字は大きく中央に出す）。
+ * 1 行に 2 つ並べるので、ラベルを横に置くと数字の幅が削られる。
  */
-export function NumberField({ label, value, fallback, step, min, max, onCommit, readOnly }: Props) {
+export function NumberField({ label, value, fallback, step, min, max, onCommit }: Props) {
   const id = useId();
-  const field = useNumericField(value, min, max, onCommit);
 
   return (
     <div className={s.field}>
       <label className={s.fieldLabel} htmlFor={id}>
         {label}
       </label>
-      <input
+      <NumericInput
         id={id}
         className={s.input}
-        type="number"
-        inputMode="decimal"
+        value={value}
+        fallback={fallback}
         step={step}
         min={min}
         max={max}
-        placeholder={readOnly ? '—' : fallback == null ? '—' : String(fallback)}
-        readOnly={readOnly}
-        value={field.text}
-        onChange={(e) => field.handleChange(e.target.value)}
-        onBlur={field.handleBlur}
+        onCommit={onCommit}
       />
     </div>
   );

@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import {
   CATALOG_CHOICES,
-  GROUP_LABELS,
   EXERCISE_GROUP_ORDER,
+  GROUP_LABELS,
   IMPLEMENT_LABELS,
   catalogId,
   fromCatalog,
   isCatalogCandidate,
 } from '../../lib/exerciseCatalog';
 import type { CatalogChoice } from '../../lib/exerciseCatalog';
-import { matchRank, matchesQuery } from './ExerciseFilterBar';
-import { SearchToggle } from './SearchToggle';
-import type { Exercise, ExerciseGroup } from '../../types';
+import { ChipGroup } from '../ChipGroup';
+import { ExercisePickList } from './ExercisePickList';
+import type { Exercise } from '../../types';
 import ui from '../../styles/ui.module.scss';
+import { Tag } from '../Tag';
+import { Pill } from '../Pill';
 import s from './training.module.scss';
 
 /**
@@ -76,11 +78,11 @@ interface Props {
  * 初めて記録タブを開いた人が「設定から追加してください」で行き止まる。
  */
 export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle }: Props) {
+  /*
+   * 器具の絞り込みだけをここで持つ。**部位と検索は `ExercisePickList` が持っている**
+   * （選ぶ面はどこも同じ組みなので、そこに寄せた）。
+   */
   const [filter, setFilter] = useState<CatalogFilter>('all');
-  // 部位は主部位だけで絞る。一覧の見出しも主部位で切っているので、見え方が一致する
-  const [group, setGroup] = useState<ExerciseGroup | 'all'>('all');
-  /** 名前で探す。90 種目あるので、目当てが決まっているときはこちらが速い */
-  const [query, setQuery] = useState('');
   /*
    * 伏せてある種目（`hidden`）と、マイ種目に入れていない種目（`adhoc`）を、ここに出す。
    * 伏せたものを「追加済み」として消すと、戻す道がマイ種目の非表示欄しか無くなる。
@@ -96,19 +98,9 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
     if (usedIds?.has(id)) return false;
     // 足し終えたものは残す（消えると、入ったのかどうかが分からない）
     if (known.has(id) && !selectedIds?.has(id)) return false;
-    return (
-      matchesFilter(c, filter) &&
-      (group === 'all' || c.entry.group === group) &&
-      // 器具の接尾辞は付けずに、名前そのもので照合する（「ベンチ」で両方に当たる）
-      matchesQuery(c.entry.name, query)
-    );
+    return matchesFilter(c, filter);
   });
-  const searching = query.trim() !== '';
-  const filtered = filter !== 'all' || group !== 'all' || searching;
-  /* 打っている最中の並び。前方一致を先に出し、同じ近さならカタログの並びのまま */
-  const hits = searching
-    ? [...notAdded].sort((a, b) => matchRank(a.entry.name, query) - matchRank(b.entry.name, query))
-    : notAdded;
+  const filtered = filter !== 'all';
 
   /**
    * カタログの 1 件。**束ねた一覧でも、探した結果でも同じものを出す。**
@@ -120,16 +112,14 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
    *
    * 探した結果では、束ねる見出しが無いので部位も行に添える。
    */
-  const pill = (c: CatalogChoice) => {
+  const pill = (c: CatalogChoice, searching: boolean) => {
     const id = catalogId(c.entry, c.implement);
     const picked = selectedIds?.has(id) ?? false;
     const shelf = byId.get(id)?.shelf;
     return (
-      <button
+      <Pill
         key={id}
-        type="button"
-        className={s.pickerBtn}
-        aria-pressed={picked}
+        pressed={picked}
         disabled={picked && onToggle == null}
         onClick={() =>
           picked ? onToggle?.(id) : onAdd([fromCatalog(c.entry, exercises.length, c.implement)])
@@ -138,99 +128,53 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
         {picked ? '✓ ' : '＋ '}
         {c.entry.name}
         {c.entry.implements && `（${IMPLEMENT_LABELS[c.implement]}）`}
-        {searching && <span className={s.catalogTag}>{GROUP_LABELS[c.entry.group]}</span>}
-        {shelf === 'hidden' && <span className={s.catalogTag}>非表示</span>}
-        {shelf === 'adhoc' && <span className={s.catalogTag}>記録あり</span>}
-      </button>
+        {searching && <Tag>{GROUP_LABELS[c.entry.group]}</Tag>}
+        {shelf === 'hidden' && <Tag>非表示</Tag>}
+        {shelf === 'adhoc' && <Tag>記録あり</Tag>}
+      </Pill>
     );
   };
 
+  /**
+   * 並べる形にそろえる。`ExercisePickList` は id / name / group しか見ないので、
+   * 器具まで展開した行をその形に写して渡す（押したときに元の行へ戻す）。
+   */
+  const items = notAdded.map((c) => ({
+    id: catalogId(c.entry, c.implement),
+    name: `${c.entry.name}${c.entry.implements ? `（${IMPLEMENT_LABELS[c.implement]}）` : ''}`,
+    group: c.entry.group,
+    choice: c,
+  }));
+
   return (
     <div className={s.pickerGroup}>
-      <div className={s.catalogHead}>
-        <span className={s.pickerLabel}>カタログ（{notAdded.length}件）</span>
-        {/* 見出しの行に畳む。使わない日に高さを取らせない（SearchToggle） */}
-        <SearchToggle query={query} onQuery={setQuery} label="種目を検索" />
-      </div>
-
-      {/*
-        絞り込みは出しっぱなしにする。畳んでいた頃は、開くのに 1 回・選ぶのに 1 回で
-        毎回 2 回押していた。チップは押す的であると同時に、
-        いま何で絞っているかの表示でもある（`ExerciseFilterBar` と同じ扱い）。
-      */}
-      <div className={s.filters}>
-        {/* ダンベルに切り替えて追加すれば、バーベル版と別種目として両方持てる */}
-        <div className={s.pickerLabel} id="filter-implement">
-          器具
-        </div>
-        <div
-          className={`${ui.chipRow} ${s.filterRow}`}
-          role="group"
-          aria-labelledby="filter-implement"
-        >
-          {CATALOG_FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              className={ui.chip}
-              aria-pressed={filter === f.id}
-              onClick={() => setFilter(f.id)}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        <div className={s.pickerLabel} id="filter-group">
-          部位
-        </div>
-        <div className={`${ui.chipRow} ${s.filterRow}`} role="group" aria-labelledby="filter-group">
-          <button
-            type="button"
-            className={ui.chip}
-            aria-pressed={group === 'all'}
-            onClick={() => setGroup('all')}
-          >
-            すべて
-          </button>
-          {EXERCISE_GROUP_ORDER.map((g) => (
-            <button
-              key={g}
-              type="button"
-              className={ui.chip}
-              aria-pressed={group === g}
-              onClick={() => setGroup(g)}
-            >
-              {GROUP_LABELS[g]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {notAdded.length === 0 ? (
-        <p className={ui.note}>
-          {filtered
-            ? 'このフィルターに合う種目はありません。'
-            : 'カタログの種目はすべて追加済みです。'}
-        </p>
-      ) : searching ? (
-        /*
-          **探しているあいだは部位で束ねない。**名前で当てに行っているので、
-          部位の見出しは読まれないまま場所だけ取る。どの部位かは行の右に添える。
-        */
-        <div className={s.pickerList}>{hits.map(pill)}</div>
-      ) : (
-        EXERCISE_GROUP_ORDER.map((g) => {
-          const items = notAdded.filter((c) => c.entry.group === g);
-          if (items.length === 0) return null;
-          return (
-            <div key={g} className={s.pickerGroup}>
-              <div className={s.pickerLabel}>{GROUP_LABELS[g]}</div>
-              <div className={s.pickerList}>{items.map(pill)}</div>
-            </div>
-          );
-        })
-      )}
+      {/* 選ぶ面はどこも同じ組み。器具の絞り込みだけがカタログ固有なので、そこを渡す */}
+      <ExercisePickList
+        items={items}
+        heading="カタログ"
+        threshold={0}
+        // 部位チップは器具で絞る前の分類から出す（切り替えでチップが消えないように）
+        groups={EXERCISE_GROUP_ORDER}
+        filters={
+          /* ダンベルに切り替えて追加すれば、バーベル版と別種目として両方持てる */
+          <ChipGroup
+            options={CATALOG_FILTERS}
+            value={filter}
+            onChange={setFilter}
+            label="器具"
+            showLabel
+            tight
+          />
+        }
+        empty={
+          <p className={ui.note}>
+            {filtered
+              ? 'このフィルターに合う種目はありません。'
+              : 'カタログの種目はすべて追加済みです。'}
+          </p>
+        }
+        renderItem={(item, searching) => pill(item.choice, searching)}
+      />
     </div>
   );
 }

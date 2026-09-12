@@ -1,5 +1,5 @@
 import type { Warning } from '../../lib/check';
-import ui from '../../styles/ui.module.scss';
+import { Button } from '../Button';
 import s from './training.module.scss';
 
 interface Props {
@@ -41,14 +41,14 @@ export function CheckWarnings({ warnings, onSuppress }: Props) {
             <small className={s.warnFix}>改善するなら {w.fix}</small>
           </div>
           {onSuppress && (
-            <button
-              type="button"
-              className={`${ui.btn} ${ui.btnGhost} ${ui.btnSm}`}
-              aria-label={`${w.message}を許容済みにする`}
+            <Button
+              tone="ghost"
+              size="sub"
+              label={`${w.message}を許容済みにする`}
               onClick={() => onSuppress(w.key)}
             >
               許容する
-            </button>
+            </Button>
           )}
         </li>
       ))}

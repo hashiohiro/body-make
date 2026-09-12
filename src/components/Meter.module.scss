@@ -1,0 +1,57 @@
+/*
+ * 進捗のバー。地と塗りの 2 枚で、違うのは高さと色だけ。
+ *
+ * 角を丸めるのは塗り側にも掛ける。地だけ丸めると、
+ * 進捗が数 % のときに塗りの角が地からはみ出して見える。
+ */
+.track {
+  display: block;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--s-lean);
+}
+
+/* 一覧の行に混ぜる。並べて見比べるためのもの */
+.row {
+  height: 6px;
+}
+
+/* 目標のカードの主役。1 本だけ置く */
+.card {
+  height: 10px;
+
+  .fill {
+    background: var(--accent);
+  }
+}
+
+/*
+ * 未達のぶんも薄く塗る。**1 本しか無い面だけ。**
+ * トラック全体で「どこまで来たか」を読ませたいときに使う。
+ * 並べる行で地を塗ると、行そのものが目立って見比べにくくなる。
+ */
+.tinted {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-sunken));
+}
+
+/* 1 本だけ置く面で使う。並ぶ行が一斉に動くと落ち着かない */
+.animated {
+  transition: width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/*
+ * 自分の段に置くとき（`block`）の余白。
+ * 上は 8px——`.statRow` の下マージン 2px と相殺して、種目カードの間隔にそろえる。
+ * 下は 4px で、その下に来る注記（目標 / 実績の行）と離す。
+ * 行の中に混ぜるバーには付けない（行の高さが伸びる）。
+ */
+.block {
+  margin: 8px 0 4px;
+}

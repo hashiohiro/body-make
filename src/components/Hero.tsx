@@ -1,6 +1,6 @@
 import { Sparkline } from './charts/Sparkline';
 import { deltaTone, fmt, fmtDelta } from '../lib/format';
-import ui from '../styles/ui.module.scss';
+import { TONE_CLASS } from './tone';
 import s from './Hero.module.scss';
 
 interface Props {
@@ -14,7 +14,6 @@ interface Props {
   caption: string;
 }
 
-const TONE_CLASS = { good: ui.good, bad: ui.bad, flat: ui.flat } as const;
 const TONE_ICON = { good: '▼', bad: '▲', flat: '＝' } as const;
 
 /**

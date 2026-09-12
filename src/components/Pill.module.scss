@@ -1,0 +1,49 @@
+/*
+ * 押せる丸ピル。読むだけの札（`Tag`）と形が近いので、描き分けをここに持つ。
+ *   札  … 枠線なし・沈んだ地・ink-muted
+ *   ピル … 枠線あり・地は沈み・ink
+ * 揃えてしまうと、押せるものと押せないものが見分けられない。
+ */
+.pill {
+  /* 上下は 6px。これで段（--tap-row）にちょうど収まる（12px × 1.5 + 12 + 2 = 32） */
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  font-size: 12px;
+  color: var(--ink);
+  min-height: var(--tap-row);
+
+  /* 選択中は他のトグルと同じアクセント。記号を足さなくても選択が分かる */
+  &[aria-pressed='true'] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+  }
+
+  /*
+   * 中に添える札（`Tag`）との間隔。**ピルの中は flex ではない**ので、
+   * gap では空けられない（記号と名前が別の要素として離れてしまう）。
+   * 札は要素なので、ここから間隔を渡す。
+   */
+  > span {
+    margin-left: 5px;
+  }
+}
+
+/* 従属する値（補助部位の係数など）。一段小さくして階層を付ける */
+.small {
+  min-height: var(--tap-tight);
+  /* 段（--tap-tight）に収まる上下（11px × 1.5 + 6 + 2 = 25.5） */
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
+/* 状態への断り（手元にない種目）。塗りは変えず、輪郭だけで示す */
+.dashed {
+  border-style: dashed;
+}

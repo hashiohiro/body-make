@@ -11,12 +11,19 @@ export interface NumericParse {
  * 欄がクリアされて 2 文字目にたどり着けなくなる。値域外と解釈不能は
  * どちらも「まだ確定しない」として扱い、表示だけ進めるのが正しい。
  */
-export function parseNumericInput(raw: string, min: number, max: number): NumericParse {
+export function parseNumericInput(
+  raw: string,
+  min: number,
+  max: number,
+  /** 残す小数の桁数。**係数は 2 桁**（0.65 が 0.7 に潰れる） */
+  decimals = 1,
+): NumericParse {
   if (raw.trim() === '') return { commit: true, value: null };
 
   const n = Number(raw);
   if (!Number.isFinite(n)) return { commit: false, value: null };
   if (n < min || n > max) return { commit: false, value: null };
 
-  return { commit: true, value: Math.round(n * 10) / 10 };
+  const unit = 10 ** decimals;
+  return { commit: true, value: Math.round(n * unit) / unit };
 }

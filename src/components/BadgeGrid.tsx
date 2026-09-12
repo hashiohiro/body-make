@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { insideNode, useDismiss } from '../hooks/useDismiss';
 import type { Badge } from '../lib/badges';
+import { CardHeader } from './CardHeader';
 import ui from '../styles/ui.module.scss';
 import s from './BadgeGrid.module.scss';
 
@@ -32,24 +34,13 @@ export function BadgeGrid({ badges }: { badges: readonly Badge[] }) {
   const open = badges.find((b) => b.id === openId) ?? null;
 
   /*
-   * 外を触ったら閉じる。**グラフのツールチップと同じ作法。**
+   * 外を触ったら閉じる。**グラフのツールチップと同じ作法**（`useDismiss`）。
    * 開いたまま別のカードへ目を移すと、どのバッジの話か分からない吹き出しが残る。
+   *
+   * 判定は矩形ではなく「器の中か」。吹き出しは押したバッジの真下に絶対配置で出るので、
+   * グリッドの矩形より下へ抜けることがある。
    */
-  useEffect(() => {
-    if (openId == null) return;
-    const onDown = (e: PointerEvent) => {
-      if (!(e.target instanceof Node)) return;
-      if (boxRef.current?.contains(e.target)) return;
-      setOpenId(null);
-    };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpenId(null);
-    document.addEventListener('pointerdown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [openId]);
+  useDismiss(openId != null, () => setOpenId(null), insideNode(boxRef));
 
   /**
    * 押されたバッジの真下に出す。
@@ -77,12 +68,14 @@ export function BadgeGrid({ badges }: { badges: readonly Badge[] }) {
 
   return (
     <section className={ui.card}>
-      <header className={ui.cardHeader}>
-        <h2 className={ui.cardTitle}>実績</h2>
-        <span className={ui.hint}>
-          {earned} / {badges.length}
-        </span>
-      </header>
+      <CardHeader
+        title="実績"
+        hint={
+          <>
+            {earned} / {badges.length}
+          </>
+        }
+      />
 
       <div className={s.box} ref={boxRef}>
         <div className={s.grid}>

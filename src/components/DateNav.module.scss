@@ -11,19 +11,20 @@
 .dateInput {
   flex: 0 1 auto;
   min-width: 0;
-  min-height: 36px;
-  padding: 7px 8px;
+  min-height: var(--tap-sub);
+  /* 上下は 5px。帯の中のほかの的（‹ › 今日）とちょうど同じ高さになる */
+  padding: 5px 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
   background: var(--surface-sunken);
-  font-size: 13px;
   @include tabular;
+  @include field-text;
 }
 
 .nav {
   flex: none;
-  width: 32px;
-  min-height: 36px;
+  width: var(--tap-row);
+  min-height: var(--tap-sub);
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
   background: var(--surface);
@@ -38,6 +39,6 @@
 
 .today {
   flex: none;
-  min-height: 36px;
+  min-height: var(--tap-sub);
   padding: 6px 9px;
 }

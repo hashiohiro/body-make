@@ -1,7 +1,7 @@
 @use './styles/mixins' as *;
 
 .app {
-  max-width: 720px;
+  max-width: var(--content-w);
   margin: 0 auto;
   padding: 0 16px calc(var(--tab-h) + 28px + env(safe-area-inset-bottom));
 }
@@ -40,7 +40,7 @@
 
 .back {
   flex: none;
-  min-height: 32px;
+  min-height: var(--tap-row);
   margin-left: -6px;
   padding: 0 6px;
   border: 0;

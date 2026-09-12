@@ -73,6 +73,40 @@ export function linePath(points: readonly { x: number; y: number | null }[]): st
   return d;
 }
 
+export interface BandLayout {
+  /** 1 本が占める幅（棒どうしの間隔を含む） */
+  band: number;
+  /** 棒そのものの幅 */
+  barW: number;
+  /** i 本目の占有域の左端。触れる矩形はここから `band` ぶん */
+  bandX: (index: number) => number;
+  /** i 本目の棒の左端 */
+  barX: (index: number) => number;
+}
+
+/**
+ * 棒グラフの横位置。**上限に当たったぶんは全体を中央へ寄せる。**
+ *
+ * 週が少ないとき、幅を等分すると 1 本が極端に太くなり、棒が散らばって
+ * 「量を見比べる図」に見えなくなる。占有幅（`maxBand`）と棒の幅（`maxBar`）に
+ * 上限を置き、余った幅は左右に均等に流す。
+ *
+ * 同じ 6 行が 2 つの棒グラフ（カロリー収支・週平均の体組成）に写してあった。
+ */
+export function bandLayout(
+  count: number,
+  plotW: number,
+  left: number,
+  maxBand: number,
+  maxBar: number,
+): BandLayout {
+  const band = count > 0 ? Math.min(plotW / count, maxBand) : plotW;
+  const barW = Math.min(maxBar, band * 0.6);
+  const originX = left + (plotW - band * count) / 2;
+  const bandX = (index: number) => originX + band * index;
+  return { band, barW, bandX, barX: (index) => bandX(index) + (band - barW) / 2 };
+}
+
 /** 上端だけ角丸の矩形（積み上げ棒の天面。ベースライン側は直角のまま） */
 export function roundedTopRect(x: number, y: number, w: number, h: number, r: number): string {
   const radius = Math.max(0, Math.min(r, w / 2, h));

@@ -1,8 +1,9 @@
+import { DateField } from '../DateField';
 import { useMemo, useState } from 'react';
+import { ChipGroup } from '../ChipGroup';
 import { Modal } from '../Modal';
 import {
   CATALOG_CHOICES,
-  EXERCISE_GROUP_ORDER,
   GROUP_LABELS,
   LOAD_MODE_LABELS,
   catalogId,
@@ -10,14 +11,19 @@ import {
   isListed,
 } from '../../lib/exerciseCatalog';
 import { buildSessions } from '../../lib/training';
-import { matchRank, matchesQuery } from './ExerciseFilterBar';
-import { SearchToggle } from './SearchToggle';
+import { ChoicePanel } from '../ChoicePanel';
+import { ExercisePickList } from './ExercisePickList';
 import { planMove } from '../../lib/move';
 import type { OnConflict } from '../../lib/move';
 import { formatMD } from '../../lib/date';
+import { last } from '../../lib/array';
+import { fmtVolume } from '../../lib/format';
 import type { BodyData } from '../../hooks/useBodyData';
 import type { Exercise, ExerciseGroup, LoadMode, Workouts } from '../../types';
+import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
+import { Tag } from '../Tag';
+import { Pill } from '../Pill';
 import s from './training.module.scss';
 
 /** 期間の切り方。既定は全期間（取り違えは最初からのことが多い） */
@@ -95,10 +101,6 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
   const { data, daily, moveRecords } = body;
   const [toId, setToId] = useState<string | null>(null);
   const [source, setSource] = useState<SourceId>('mine');
-  /** 部位で絞る。カタログと同じチップ（`CatalogPicker`） */
-  const [group, setGroup] = useState<ExerciseGroup | 'all'>('all');
-  /** 名前で探す。打ちはじめたら、部位の見出しをやめて平たい候補に差し替える */
-  const [query, setQuery] = useState('');
   const [rangeId, setRangeId] = useState<RangeId>('all');
   const [since, setSince] = useState('');
   const [until, setUntil] = useState('');
@@ -156,20 +158,20 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
   const picked = candidates.find((c) => c.id === toId) ?? null;
   const target = picked?.make() ?? null;
 
-  // 検索とチップは AND。カタログと同じ（「腕で絞ってからカールを探す」が通る）
-  const narrowed = candidates.filter(
-    (c) => (group === 'all' || c.group === group) && matchesQuery(c.name, query),
-  );
-  const searching = query.trim() !== '';
-  /* 打っている最中の並び。前方一致を先に出し、同じ近さなら元の並びのまま */
-  const hits = searching
-    ? [...narrowed].sort((a, b) => matchRank(a.name, query) - matchRank(b.name, query))
-    : narrowed;
-
   const range = {
     from: rangeId === 'all' ? null : since || null,
     until: rangeId === 'between' ? until || null : null,
   };
+
+  /*
+   * 期間を選んだのに日付が空。**そのまま押させない。**
+   *
+   * 空は「指定なし」として扱うので、「この日以降」を選んで日付を入れないまま
+   * 押すと**黙って全期間が移る**（初期値も空）。範囲を絞ったつもりでいるのに、
+   * 結果は「すべて」と同じになる——いちばん気づけない形の取り違え。
+   */
+  const needsDate =
+    (rangeId !== 'all' && range.from == null) || (rangeId === 'between' && range.until == null);
 
   const plan = useMemo(
     () =>
@@ -206,29 +208,25 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
    *
    * @param chosen 選んだ 1 件として出すか。もう一度押すと選び直しに戻る
    */
-  const pill = (c: Candidate, chosen: boolean) => (
-    <button
+  const pill = (c: Candidate, chosen: boolean, searching = false) => (
+    <Pill
       key={c.id}
-      type="button"
-      className={s.pickerBtn}
-      aria-pressed={chosen || toId === c.id}
-      aria-label={`${c.name}へ移行する`}
+      pressed={chosen || toId === c.id}
+      label={`${c.name}へ移行する`}
       onClick={() => setToId(chosen ? null : c.id)}
     >
       {chosen && '✓ '}
       {c.name}
       {/* 探した結果では束ねる見出しが無いので、部位も行に添える（カタログと同じ） */}
-      {searching && !chosen && <span className={s.catalogTag}>{GROUP_LABELS[c.group]}</span>}
+      {searching && !chosen && <Tag>{GROUP_LABELS[c.group]}</Tag>}
       {/*
         数え方が違う候補には印を付ける。**選ぶのを止めはしない**——
         器具が違えば数え方も違うのが普通で、それを直すのが移行の目的。
         変わる量は下に数字で出す。
       */}
-      {c.loadMode !== from.loadMode && (
-        <span className={s.catalogTag}>{LOAD_MODE_LABELS[c.loadMode]}</span>
-      )}
-      {!c.mine && <span className={s.adhocTag}>未追加</span>}
-    </button>
+      {c.loadMode !== from.loadMode && <Tag>{LOAD_MODE_LABELS[c.loadMode]}</Tag>}
+      {!c.mine && <Tag kind="state">未追加</Tag>}
+    </Pill>
   );
 
   const run = (onConflict: OnConflict) => {
@@ -247,39 +245,29 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
   if (asking && target) {
     return (
       <Modal open title="移行先に記録がある日" onClose={onClose} onBack={() => setAsking(false)}>
-        <div>
-          <p className={ui.note}>
-            「{target.name}」にすでに記録がある日が {plan.conflicts.length}日ぶんあります（
-            {plan.conflicts.map(formatMD).join('・')}）。
-          </p>
-
-          {/*
-            **答えは 3 つのボタンそのもの。**セットを混ぜる選択肢は作らない——
-            混ぜると、順番も本数もどちらの日のものか分からなくなる。
-          */}
-          <div className={ui.btnRow}>
-            <button
-              type="button"
-              className={`${ui.btn} ${ui.btnDanger}`}
-              onClick={() => run('overwrite')}
-            >
-              上書きする
-            </button>
-            <button type="button" className={ui.btn} onClick={() => run('keep')}>
-              その日は移さない
-            </button>
-          </div>
-          <p className={ui.note}>
-            上書きすると「{target.name}」のその日の記録は消えます（元に戻せません）。
-            移さない場合、その日は「{from.name}」に残ります。
-          </p>
-
-          <div className={ui.btnRow}>
-            <button type="button" className={`${ui.btn} ${ui.btnGhost}`} onClick={onClose}>
-              やめる
-            </button>
-          </div>
-        </div>
+        <ChoicePanel
+          lead={
+            <>
+              「{target.name}」にすでに記録がある日が {plan.conflicts.length}日ぶんあります（
+              {plan.conflicts.map(formatMD).join('・')}）。
+            </>
+          }
+          /*
+              **答えはボタンそのもの。**セットを混ぜる選択肢は作らない——
+              混ぜると、順番も本数もどちらの日のものか分からなくなる。
+            */
+          choices={[
+            { label: '上書きする', tone: 'danger', onSelect: () => run('overwrite') },
+            { label: 'その日は移さない', onSelect: () => run('keep') },
+          ]}
+          note={
+            <>
+              上書きすると「{target.name}」のその日の記録は消えます（元に戻せません）。
+              移さない場合、その日は「{from.name}」に残ります。
+            </>
+          }
+          onCancel={onClose}
+        />
       </Modal>
     );
   }
@@ -289,105 +277,44 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
   return (
     <Modal open title={`${from.name}の記録を移行する`} onClose={onClose}>
       <div>
-        {/* 見出しの行に検索を畳む。組みはカタログと同じ（`CatalogPicker`） */}
-        <div className={s.catalogHead}>
-          <span className={s.pickerLabel}>
-            移行先{picked == null && `（${narrowed.length}件）`}
-          </span>
-          {picked == null && <SearchToggle query={query} onQuery={setQuery} label="種目を検索" />}
-        </div>
-
         {/*
-          絞り込みはカタログと同じ形にそろえる。ラベル付きのチップ行を並べ、
-          出しっぱなしにする（チップは押す的であると同時に、いま何で絞っているかの表示）。
-
-          選び終わったら、絞り込みごと畳む（選び直すまで使わない）。
-        */}
-        {picked == null && (
-          <div className={s.filters}>
-            {/*
-              **既定はマイ種目**——行き先はたいてい手元にある。
-              すべてにはカタログの種目と自作種目の両方が入る。
-            */}
-            {/*
-              見出しは「候補」。カタログの 器具 / 部位 はどちらも種目の性質だが、
-              この行が選んでいるのは性質ではなく**候補の広さ**なので、そう名づける。
-            */}
-            <div className={s.pickerLabel} id="move-source">
-              候補
-            </div>
-            <div
-              className={`${ui.chipRow} ${s.filterRow}`}
-              role="group"
-              aria-labelledby="move-source"
-            >
-              {SOURCES.map((src) => (
-                <button
-                  key={src.id}
-                  type="button"
-                  className={ui.chip}
-                  aria-pressed={source === src.id}
-                  onClick={() => setSource(src.id)}
-                >
-                  {src.label}
-                </button>
-              ))}
-            </div>
-
-            <div className={s.pickerLabel} id="move-group">
-              部位
-            </div>
-            <div
-              className={`${ui.chipRow} ${s.filterRow}`}
-              role="group"
-              aria-labelledby="move-group"
-            >
-              <button
-                type="button"
-                className={ui.chip}
-                aria-pressed={group === 'all'}
-                onClick={() => setGroup('all')}
-              >
-                すべて
-              </button>
-              {EXERCISE_GROUP_ORDER.map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  className={ui.chip}
-                  aria-pressed={group === g}
-                  onClick={() => setGroup(g)}
-                >
-                  {GROUP_LABELS[g]}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/*
-          **選んだら候補を畳む。**選び終われば読むものではなく、
+          選んだら候補を畳む。**選び終われば読むものではなく**、
           113 種を残したままだと期間と「移す」が画面の外へ押し出される。
           選び直したいときは、選んだ行をもう一度押す。
         */}
         {picked ? (
-          <div className={s.pickerList}>{pill(picked, true)}</div>
-        ) : narrowed.length === 0 ? (
-          <p className={ui.emptyState}>このフィルターに合う種目はありません。</p>
-        ) : searching ? (
-          /* 探しているあいだは部位で束ねない（カタログと同じ） */
-          <div className={s.pickerList}>{hits.map((c) => pill(c, false))}</div>
+          <>
+            <div className={s.catalogHead}>
+              <span className={s.pickerLabel}>移行先</span>
+            </div>
+            <div className={s.pickerList}>{pill(picked, true)}</div>
+          </>
         ) : (
-          EXERCISE_GROUP_ORDER.map((g) => {
-            const items = narrowed.filter((c) => c.group === g);
-            if (items.length === 0) return null;
-            return (
-              <div key={g} className={s.pickerGroup}>
-                <div className={s.pickerLabel}>{GROUP_LABELS[g]}</div>
-                <div className={s.pickerList}>{items.map((c) => pill(c, false))}</div>
-              </div>
-            );
-          })
+          <>
+            {/*
+              **候補の広さを選ぶ。**既定はマイ種目——行き先はたいてい手元にある。
+              すべてにはカタログの種目と自作種目の両方が入る。
+              見出しを「候補」にしたのは、カタログの 器具 / 部位 が種目の性質なのに対し、
+              この行が選ぶのは候補の広さだから。
+            */}
+            <div className={s.filters}>
+              <ChipGroup
+                options={SOURCES}
+                value={source}
+                onChange={setSource}
+                label="候補"
+                showLabel
+                tight
+              />
+            </div>
+
+            {/* 選ぶ面はどこも同じ組み（検索・部位チップ・部位ごとの見出し） */}
+            <ExercisePickList
+              items={candidates}
+              heading="移行先"
+              renderItem={(c, searching) => pill(c, false, searching)}
+            />
+          </>
         )}
 
         {picked && !picked.mine && (
@@ -398,40 +325,18 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
         )}
 
         <div className={s.pickerLabel}>期間</div>
-        <div className={ui.chipRow} role="group" aria-label="移す期間">
-          {RANGES.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              className={ui.chip}
-              aria-pressed={rangeId === r.id}
-              onClick={() => setRangeId(r.id)}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
+        <ChipGroup options={RANGES} value={rangeId} onChange={setRangeId} label="移す期間" />
 
         {rangeId !== 'all' && (
           <div className={ui.formRow}>
             <label htmlFor="move-since">開始日</label>
-            <input
-              id="move-since"
-              type="date"
-              value={since}
-              onChange={(e) => setSince(e.target.value)}
-            />
+            <DateField id="move-since" value={since} onChange={setSince} />
           </div>
         )}
         {rangeId === 'between' && (
           <div className={ui.formRow}>
             <label htmlFor="move-until">終了日</label>
-            <input
-              id="move-until"
-              type="date"
-              value={until}
-              onChange={(e) => setUntil(e.target.value)}
-            />
+            <DateField id="move-until" value={until} onChange={setUntil} />
           </div>
         )}
 
@@ -448,7 +353,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
                 {moving}日ぶん
                 {moving > 0 &&
                   `（${formatMD([...plan.dates, ...plan.conflicts].sort()[0]!)} 〜 ${formatMD(
-                    [...plan.dates, ...plan.conflicts].sort().at(-1)!,
+                    last([...plan.dates, ...plan.conflicts].sort())!,
                   )}）`}
               </span>
             </div>
@@ -456,8 +361,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
               <div className={s.groupSummary}>
                 <span>挙上量の通算</span>
                 <span className={s.boardValue}>
-                  {Math.round(totals.before).toLocaleString()} kg →{' '}
-                  {Math.round(totals.after).toLocaleString()} kg
+                  {fmtVolume(totals.before)} kg → {fmtVolume(totals.after)} kg
                 </span>
               </div>
             )}
@@ -476,15 +380,16 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
           </div>
         )}
 
+        {needsDate && <p className={ui.note}>移行する期間の日付を入れてください。</p>}
+
         <div className={ui.btnRow}>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnPrimary}`}
-            disabled={target == null || moving === 0}
+          <Button
+            tone="primary"
+            disabled={target == null || needsDate || moving === 0}
             onClick={submit}
           >
             移行
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

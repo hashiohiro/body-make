@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { Meter } from '../Meter';
+import { Tag } from '../Tag';
 import s from './training.module.scss';
 
 interface Props {
@@ -47,16 +49,12 @@ export function ExerciseSummaryCard({
     <div className={s.itemCard} id={id}>
       <div className={s.statRow}>
         <span className={s.exName}>{name}</span>
-        {tag && <span className={s.exTag}>{tag}</span>}
-        {kind && <span className={s.kindTag}>{kind}</span>}
-        {goal && <span className={s.goalTag}>目標 {goal}</span>}
+        {tag && <Tag>{tag}</Tag>}
+        {kind && <Tag kind="chosen">{kind}</Tag>}
+        {goal && <Tag kind="chosen">目標 {goal}</Tag>}
       </div>
 
-      {progress != null && (
-        <div className={s.meter}>
-          <div className={s.meterFill} style={{ width: `${progress * 100}%` }} />
-        </div>
-      )}
+      {progress != null && <Meter value={progress} label={`${name}の到達率`} block />}
 
       <div className={s.goalFoot}>
         <span>{factLeft}</span>

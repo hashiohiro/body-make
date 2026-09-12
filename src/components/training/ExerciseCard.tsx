@@ -3,6 +3,8 @@ import { ExerciseTotals } from './ExerciseTotals';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { Exercise, ExercisePoint } from '../../types';
 import ui from '../../styles/ui.module.scss';
+import { MiniButton } from '../MiniButton';
+import { Tag } from '../Tag';
 import s from './training.module.scss';
 
 interface Props {
@@ -22,12 +24,6 @@ interface Props {
   onOpenGoal: () => void;
   /** セットを打つダイアログを開く。**入力はカードではなく面を分けて置く** */
   onEdit: () => void;
-  /**
-   * 読むだけ。**カレンダーから過去の日を開いたときに使う。**
-   * 値を変えられず、足す・消す・写す・並べ替えるの入口も出さない。
-   * 推移（詳細）だけは残す——読むための面なので。
-   */
-  readOnly?: boolean | undefined;
 }
 
 export function ExerciseCard({
@@ -39,7 +35,6 @@ export function ExerciseCard({
   onRemove,
   onMove,
   onEdit,
-  readOnly,
   onOpenDetail,
   onOpenGoal,
 }: Props) {
@@ -47,41 +42,27 @@ export function ExerciseCard({
     <section className={ui.card} id={`ex-card-${exercise.id}`}>
       <div className={s.exHead}>
         <span className={s.exName}>{exercise.name}</span>
-        <span className={s.exTag}>{GROUP_LABELS[exercise.group]}</span>
+        <Tag>{GROUP_LABELS[exercise.group]}</Tag>
         {/*
           マイ種目に入れていない種目。**記録としては他と同じに数える**が、
           次に選ぶ場面（マイ種目から選ぶ・プリセット・目標）には出てこない。
           出しておかないと、次の日に探して見つからないことになる。
         */}
-        {exercise.shelf === 'adhoc' && <span className={s.adhocTag}>未追加</span>}
+        {exercise.shelf === 'adhoc' && <Tag kind="state">未追加</Tag>}
         {/* この種目をどうしたいか（維持 / 重量↑ / 挙上量↑ / 回数↑）。打ちながら分かるように */}
         {exercise.goal && (
-          <span className={s.kindTag}>
-            {goalTypeLabel(exercise.goal.type, exercise.repUnit, true)}
-          </span>
+          <Tag kind="chosen">{goalTypeLabel(exercise.goal.type, exercise.repUnit, true)}</Tag>
         )}
         <span className={s.exHeadBtns}>
           {/* 並びはやった順。掴むと、その日の種目だけが小さな一覧に畳まれる */}
-          {!readOnly && onMove && (
-            <button
-              type="button"
-              className={s.exRemove}
-              aria-label={`${exercise.name}の順番を変える`}
-              onClick={onMove}
-            >
+          {onMove && (
+            <MiniButton label={`${exercise.name}の順番を変える`} onClick={onMove}>
               ⇅
-            </button>
+            </MiniButton>
           )}
-          {!readOnly && (
-            <button
-              type="button"
-              className={s.exRemove}
-              aria-label={`${exercise.name}をこの日から外す`}
-              onClick={onRemove}
-            >
-              ×
-            </button>
-          )}
+          <MiniButton label={`${exercise.name}をこの日から外す`} onClick={onRemove}>
+            ×
+          </MiniButton>
         </span>
       </div>
 
@@ -103,16 +84,14 @@ export function ExerciseCard({
           セットを打つのはダイアログ。カードは要約と入口だけを持つ。
           並べたときにカードの高さがそろうので、いま打つ種目を探しやすい
         */}
-        {!readOnly && (
-          <button
-            type="button"
-            className={`${ui.detailBtn} ${s.editBtn}`}
-            aria-label={`${exercise.name}のセットを編集`}
-            onClick={onEdit}
-          >
-            編集
-          </button>
-        )}
+        <button
+          type="button"
+          className={`${ui.detailBtn} ${s.editBtn}`}
+          aria-label={`${exercise.name}のセットを編集`}
+          onClick={onEdit}
+        >
+          編集
+        </button>
         <button
           type="button"
           className={ui.detailBtn}
@@ -125,18 +104,16 @@ export function ExerciseCard({
           打っている最中に「この種目はどこを目指しているか」を決め直したくなる。
           マイ種目や目標タブと同じ入口（目標）を、同じ並びでここにも置く
         */}
-        {!readOnly && (
-          <button
-            type="button"
-            className={ui.detailBtn}
-            aria-label={
-              exercise.goal ? `${exercise.name}の目標を変える` : `${exercise.name}の目標を決める`
-            }
-            onClick={onOpenGoal}
-          >
-            目標
-          </button>
-        )}
+        <button
+          type="button"
+          className={ui.detailBtn}
+          aria-label={
+            exercise.goal ? `${exercise.name}の目標を変える` : `${exercise.name}の目標を決める`
+          }
+          onClick={onOpenGoal}
+        >
+          目標
+        </button>
       </div>
     </section>
   );

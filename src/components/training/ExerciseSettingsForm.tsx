@@ -1,29 +1,24 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
   EXERCISE_GROUP_ORDER,
   GROUP_LABELS,
   GROUP_ORDER,
   isCardio,
-  LOAD_MODE_HINTS,
-  LOAD_MODE_LABELS,
-  LOAD_MODE_ORDER,
-  REP_UNIT_LABELS,
   SUB_GROUP_WEIGHT,
   SUB_GROUP_WEIGHT_STEPS,
 } from '../../lib/exerciseCatalog';
-import { FACTOR_RANGE, MINUTES_PER_SET_RANGE, RM_DIVISOR_RANGE } from '../../lib/storage';
-import type { Exercise, ExerciseGroup, LoadMode, RepUnit } from '../../types';
-import ui from '../../styles/ui.module.scss';
+import { MINUTES_PER_SET_RANGE } from '../../lib/storage';
+import { ExerciseCalcFields } from './ExerciseCalcFields';
+import type { Exercise } from '../../types';
+import { NumericInput } from '../NumericInput';
+import { Select } from '../Select';
+import { Pill } from '../Pill';
+import { Button } from '../Button';
 import s from './training.module.scss';
 
 interface Props {
   exercise: Exercise;
   onUpdate: (exercise: Exercise) => void;
-}
-
-function numOrNull(raw: string): number | null {
-  const n = Number(raw);
-  return raw.trim() === '' || !Number.isFinite(n) ? null : n;
 }
 
 /**
@@ -38,6 +33,7 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
   const [calc, setCalc] = useState(false);
   // 構成チェックの値も同じ扱い。触らなくても記録は取れる
   const [check, setCheck] = useState(false);
+  const fieldId = useId();
 
   // 取り込んだデータが刻みから外れた値でも、選択中の値は必ず出す
   const subWeightOptions = (current: number) =>
@@ -50,10 +46,10 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
       {/* フォーム次第で主働筋が変わる種目（ディップスなど）があるので、部位も変えられる */}
       <label className={s.newField}>
         部位
-        <select
+        <Select
           value={ex.group}
-          onChange={(e) => {
-            const group = e.target.value as ExerciseGroup;
+          options={EXERCISE_GROUP_ORDER.map((g) => ({ id: g, label: GROUP_LABELS[g] }))}
+          onChange={(group) => {
             // 新しい主部位が補助部位に残っていると、その部位を二重に数える。
             // 保存時のサニタイズは読み込みでしか走らないので、ここで落とす
             onUpdate({
@@ -62,13 +58,7 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
               subGroups: ex.subGroups.filter((x) => x.group !== group),
             });
           }}
-        >
-          {EXERCISE_GROUP_ORDER.map((g) => (
-            <option key={g} value={g}>
-              {GROUP_LABELS[g]}
-            </option>
-          ))}
-        </select>
+        />
       </label>
 
       <div className={s.newField}>
@@ -77,11 +67,9 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
           {GROUP_ORDER.filter((g) => g !== ex.group).map((g) => {
             const on = ex.subGroups.some((x) => x.group === g);
             return (
-              <button
+              <Pill
                 key={g}
-                type="button"
-                className={s.pickerBtn}
-                aria-pressed={on}
+                pressed={on}
                 onClick={() =>
                   onUpdate({
                     ...ex,
@@ -92,7 +80,7 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
                 }
               >
                 {GROUP_LABELS[g]}
-              </button>
+              </Pill>
             );
           })}
         </div>
@@ -106,12 +94,11 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
             <span className={s.subWeightName}>{GROUP_LABELS[sub.group]}</span>
             <div className={s.pickerList}>
               {subWeightOptions(sub.weight).map((w) => (
-                <button
+                <Pill
                   key={w}
-                  type="button"
-                  className={`${s.pickerBtn} ${s.stepBtn}`}
-                  aria-pressed={sub.weight === w}
-                  aria-label={`${GROUP_LABELS[sub.group]}を${w}で数える`}
+                  small
+                  pressed={sub.weight === w}
+                  label={`${GROUP_LABELS[sub.group]}を${w}で数える`}
                   onClick={() =>
                     onUpdate({
                       ...ex,
@@ -122,7 +109,7 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
                   }
                 >
                   ×{w}
-                </button>
+                </Pill>
               ))}
             </div>
           </div>
@@ -137,46 +124,13 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
           触る必要がほとんど無い。開いた瞬間に並べると
           「決めなければいけない項目」に見えるので、もう一段畳む
         */}
-      <button
-        type="button"
-        className={`${ui.btn} ${ui.btnGhost} ${ui.btnSm}`}
-        aria-expanded={calc}
-        onClick={() => setCalc((v) => !v)}
-      >
+      <Button tone="ghost" size="sub" expanded={calc} onClick={() => setCalc((v) => !v)}>
         {calc ? '計算方法を閉じる' : '計算方法を変える'}
-      </button>
+      </Button>
 
       {calc && (
         <>
-          <label className={s.newField}>
-            負荷の数え方
-            <select
-              value={ex.loadMode}
-              onChange={(e) => onUpdate({ ...ex, loadMode: e.target.value as LoadMode })}
-            >
-              {LOAD_MODE_ORDER.map((m) => (
-                <option key={m} value={m}>
-                  {LOAD_MODE_LABELS[m]}
-                </option>
-              ))}
-            </select>
-            <small>{LOAD_MODE_HINTS[ex.loadMode]}</small>
-          </label>
-
-          <label className={s.newField}>
-            回数の単位
-            <select
-              value={ex.repUnit}
-              onChange={(e) => onUpdate({ ...ex, repUnit: e.target.value as RepUnit })}
-            >
-              {(Object.keys(REP_UNIT_LABELS) as RepUnit[]).map((u) => (
-                <option key={u} value={u}>
-                  {u === 'reps' ? '回（レップ）' : '秒（プランクなど）'}
-                </option>
-              ))}
-            </select>
-            <small>秒で数える種目は挙上量に計上しません</small>
-          </label>
+          <ExerciseCalcFields value={ex} onChange={(patch) => onUpdate({ ...ex, ...patch })} />
 
           {/*
             繰り返すかどうか。既定はカタログが持っていて、ここで種目ごとに変えられる。
@@ -184,32 +138,21 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
           */}
           <label className={s.newField}>
             {isCardio(ex.group) ? '本数' : 'セット'}
-            <select
+            <Select
               value={ex.repeated ? 'many' : 'one'}
-              onChange={(e) => onUpdate({ ...ex, repeated: e.target.value === 'many' })}
-            >
-              <option value="many">
-                {isCardio(ex.group) ? '分けて記録する（インターバル）' : '複数セットで記録する'}
-              </option>
-              <option value="one">1回で完結する</option>
-            </select>
+              options={[
+                {
+                  id: 'many',
+                  label: isCardio(ex.group)
+                    ? '分けて記録する（インターバル）'
+                    : '複数セットで記録する',
+                },
+                { id: 'one', label: '1回で完結する' },
+              ]}
+              onChange={(mode) => onUpdate({ ...ex, repeated: mode === 'many' })}
+            />
             <small>1回で完結する種目は、行を足すボタンを出しません</small>
           </label>
-
-          {ex.loadMode === 'bodyweight' && (
-            <label className={s.newField}>
-              体重が乗る割合（懸垂 1.0 / 腕立て 0.65 など）
-              <input
-                type="number"
-                inputMode="decimal"
-                step={0.05}
-                min={FACTOR_RANGE[0]}
-                max={FACTOR_RANGE[1]}
-                value={ex.bodyweightFactor ?? ''}
-                onChange={(e) => onUpdate({ ...ex, bodyweightFactor: numOrNull(e.target.value) })}
-              />
-            </label>
-          )}
         </>
       )}
 
@@ -218,45 +161,34 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
         入っていない（design-checks.md §4.3）。触らなければ判定に出てこないだけで、
         記録そのものには一切効かないので、計算方法と同じくもう一段畳む。
       */}
-      <button
-        type="button"
-        className={`${ui.btn} ${ui.btnGhost} ${ui.btnSm}`}
-        aria-expanded={check}
-        onClick={() => setCheck((v) => !v)}
-      >
+      <Button tone="ghost" size="sub" expanded={check} onClick={() => setCheck((v) => !v)}>
         {check ? 'レビューの値を閉じる' : 'レビューの値を変える'}
-      </button>
+      </Button>
 
       {check && (
         <>
           <div className={s.newField}>
             この種目の性質
             <div className={s.pickerList}>
-              <button
-                type="button"
-                className={s.pickerBtn}
-                aria-pressed={ex.axial}
-                onClick={() => onUpdate({ ...ex, axial: !ex.axial })}
-              >
+              <Pill pressed={ex.axial} onClick={() => onUpdate({ ...ex, axial: !ex.axial })}>
                 {ex.axial ? '✓ ' : ''}軸荷重種目
-              </button>
+              </Pill>
             </div>
             <small>
               背骨に荷重を通す種目（デッドリフト・スクワット・RDLなど）。連日になったときに知らせます
             </small>
           </div>
 
-          <label className={s.newField}>
+          <label className={s.newField} htmlFor={`${fieldId}-minutes`}>
             1セットあたりの時間（分）
-            <input
-              type="number"
-              inputMode="decimal"
-              step={0.5}
+            <NumericInput
+              id={`${fieldId}-minutes`}
+              value={ex.minutesPerSet}
               min={MINUTES_PER_SET_RANGE[0]}
               max={MINUTES_PER_SET_RANGE[1]}
-              value={ex.minutesPerSet ?? ''}
+              step={0.5}
               placeholder="既定値を使う"
-              onChange={(e) => onUpdate({ ...ex, minutesPerSet: numOrNull(e.target.value) })}
+              onCommit={(v) => onUpdate({ ...ex, minutesPerSet: v })}
             />
             <small>
               空欄なら設定の既定値。休憩の長い高重量種目だけ入れます。
@@ -264,26 +196,6 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
             </small>
           </label>
         </>
-      )}
-
-      {ex.repUnit === 'reps' && (
-        <label className={s.newField}>
-          1RM換算の分母（ベンチ 40 / スクワット・デッド 33.3 / 既定 30）
-          <input
-            type="number"
-            inputMode="decimal"
-            step={0.1}
-            min={RM_DIVISOR_RANGE[0]}
-            max={RM_DIVISOR_RANGE[1]}
-            value={ex.rmDivisor}
-            onChange={(e) =>
-              onUpdate({
-                ...ex,
-                rmDivisor: numOrNull(e.target.value) ?? ex.rmDivisor,
-              })
-            }
-          />
-        </label>
       )}
     </div>
   );

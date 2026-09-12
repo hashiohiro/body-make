@@ -1,4 +1,4 @@
-import { useNumericField } from '../../hooks/useNumericField';
+import { NumericInput } from '../NumericInput';
 import {
   DISTANCE_M_RANGE,
   DURATION_SEC_RANGE,
@@ -18,40 +18,27 @@ interface NumberCellProps {
   integer?: boolean;
   ariaLabel: string;
   onCommit: (value: number | null) => void;
-  readOnly?: boolean | undefined;
 }
 
 /**
- * ± ボタンは置かない。
- * 1 行に重量と回数を並べる都合上、ボタンを付けると数値の表示幅が削られて読みにくくなる。
- * 打鍵途中を潰さない確定ロジックは useNumericField に集約されている。
+ * セット行の中の数字の欄。
+ *
+ * 欄そのものは `NumericInput`。ここが持つのは**行の中に置くための形**だけ
+ * （幅いっぱい・中央寄せ・ラベルは読み上げだけ）。
+ * 刻みは端末に任せる——重量は 2.5kg プレートで 0.5 刻みになる。
  */
-function NumberCell({
-  value,
-  fallback,
-  min,
-  max,
-  integer,
-  ariaLabel,
-  onCommit,
-  readOnly,
-}: NumberCellProps) {
-  const field = useNumericField(value, min, max, onCommit);
-
+function NumberCell({ value, fallback, min, max, integer, ariaLabel, onCommit }: NumberCellProps) {
   return (
-    <input
+    <NumericInput
       className={s.input}
-      type="number"
-      inputMode={integer ? 'numeric' : 'decimal'}
-      step={integer ? 1 : 'any'}
+      value={value}
+      fallback={fallback}
       min={min}
       max={max}
-      placeholder={readOnly ? '—' : fallback == null ? '—' : String(fallback)}
-      readOnly={readOnly}
-      aria-label={ariaLabel}
-      value={field.text}
-      onChange={(e) => field.handleChange(e.target.value)}
-      onBlur={field.handleBlur}
+      step="any"
+      integer={integer}
+      ariaLabel={ariaLabel}
+      onCommit={onCommit}
     />
   );
 }
@@ -82,14 +69,12 @@ interface Props {
   /**
    * 連番（と TOP の印）を出すか。**行を足せる種目かどうかで決まる。**
    *
-   * 以前は `onRemove` の有無で出し分けていたが、読むだけのときに削除を落とすと
-   * 連番まで消え、`grid-template-columns` の 1 列目（34px）に入力欄が入って潰れた。
+   * 以前は `onRemove` の有無で出し分けていたが、削除を落とすと連番まで消え、
+   * `grid-template-columns` の 1 列目（34px）に入力欄が入って潰れた。
    * **見せる情報と、押せる操作は別。**
    */
   showIndex: boolean;
   onRemove: (() => void) | undefined;
-  /** 読むだけ。値は変えられず、削除も出さない */
-  readOnly?: boolean | undefined;
 }
 
 export function SetRow({
@@ -105,7 +90,6 @@ export function SetRow({
   showIndex,
   onRemove,
   rowClass,
-  readOnly,
 }: Props) {
   const role = point?.role ?? 'work';
   // 器はこの行の描き方そのものを変える。種目が決めるので set 側の形は見ない
@@ -134,7 +118,6 @@ export function SetRow({
             min={DURATION_SEC_RANGE[0] / 60}
             max={DURATION_SEC_RANGE[1] / 60}
             ariaLabel={`${index + 1}セット目の時間`}
-            readOnly={readOnly}
             // 打つのは分、持つのは秒。90 秒を 1.5 と書けて、丸めも起きない
             onCommit={(v) => onValue('seconds', v == null ? null : Math.round(v * 60))}
           />
@@ -151,7 +134,6 @@ export function SetRow({
             min={DISTANCE_M_RANGE[0]}
             max={DISTANCE_M_RANGE[1]}
             ariaLabel={`${index + 1}セット目の距離`}
-            readOnly={readOnly}
             onCommit={(v) => onValue('meters', v)}
           />
         </>
@@ -165,7 +147,6 @@ export function SetRow({
             min={repRangeOf(repUnit)[0]}
             max={repRangeOf(repUnit)[1]}
             ariaLabel={`${index + 1}セット目の${FIELD_NOUNS[repUnit]}`}
-            readOnly={readOnly}
             onCommit={(v) => onValue('reps', v)}
           />
 
@@ -181,7 +162,6 @@ export function SetRow({
                 min={SET_WEIGHT_RANGE[0]}
                 max={SET_WEIGHT_RANGE[1]}
                 ariaLabel={`${index + 1}セット目の重量`}
-                readOnly={readOnly}
                 onCommit={(v) => onValue('weight', v)}
               />
             </>

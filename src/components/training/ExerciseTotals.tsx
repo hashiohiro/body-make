@@ -1,11 +1,10 @@
-import { deltaTone, fmt, fmtDelta } from '../../lib/format';
+import { deltaTone, fmt, fmtDelta, fmtVolume } from '../../lib/format';
 import { isCardio } from '../../lib/exerciseCatalog';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { Exercise, ExercisePoint } from '../../types';
+import { TONE_CLASS } from '../tone';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
-
-const TONE_CLASS = { good: ui.good, bad: ui.bad, flat: ui.flat } as const;
 
 interface Props {
   exercise: Exercise;
@@ -71,7 +70,7 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
               </span>
             )}
             <b>
-              {Math.round(volume).toLocaleString()} kg
+              {fmtVolume(volume)} kg
               {delta != null && (
                 <span className={`${ui.hint} ${TONE_CLASS[tone]}`}> {fmtDelta(delta, 0)}</span>
               )}
@@ -90,9 +89,7 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
       {!cardio && (bestWeight != null || (best != null && best > 0)) && (
         <div className={s.exPrev}>
           {bestWeight != null && <span>最高重量 {fmt(bestWeight)} kg</span>}
-          {best != null && best > 0 && (
-            <span>最高挙上量 {Math.round(best).toLocaleString()} kg</span>
-          )}
+          {best != null && best > 0 && <span>最高挙上量 {fmtVolume(best)} kg</span>}
         </div>
       )}
     </>

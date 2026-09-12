@@ -11,6 +11,15 @@ export function fmtDelta(value: number | null | undefined, digits = 1): string {
   return `${rounded > 0 ? '+' : '−'}${Math.abs(rounded).toFixed(digits)}`;
 }
 
+/**
+ * 挙上量のような大きい整数。**3 桁区切りで出す。**
+ * 同じ `Math.round(v).toLocaleString()` が 5 か所に写してあった。
+ */
+export function fmtVolume(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  return Math.round(value).toLocaleString();
+}
+
 export type DeltaTone = 'good' | 'bad' | 'flat';
 
 /**

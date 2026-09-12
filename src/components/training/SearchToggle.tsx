@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { onEnter } from '../../lib/keys';
 import s from './training.module.scss';
 
 interface Props {
@@ -64,8 +65,8 @@ export function SearchToggle({ query, onQuery, label }: Props) {
         placeholder={label}
         aria-label={label}
         onChange={(e) => onQuery(e.target.value)}
-        // 打ち終わりに Esc で閉じられる。物理キーボードのときだけ効く
-        onKeyDown={(e) => e.key === 'Escape' && close()}
+        // 絞り込みは打つたびに効くので、Enter に確定させるものが無い。Esc は閉じる
+        onKeyDown={(e) => onEnter(e, undefined, close)}
       />
       {/*
         × は 1 つだけ。ブラウザが欄の中に付ける × は CSS で消してある——

@@ -11,8 +11,10 @@ import {
   TARGET_VOLUME_RANGE,
   TARGET_WEIGHT_RANGE,
 } from '../../lib/storage';
-import { exerciseHistory, personalBest } from '../../lib/training';
+import { exerciseHistory, goalCurrent, personalBest } from '../../lib/training';
 import type { Exercise, ExercisePoint, GoalType, SessionPoint } from '../../types';
+import { Button } from '../Button';
+import { Segmented } from '../Segmented';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
@@ -21,17 +23,6 @@ interface Props {
   sessions: readonly SessionPoint[];
   onUpdate: (exercise: Exercise) => void;
 }
-
-/** 目標の種類ごとの、判定に使う値。lib/training の currentOf と同じ取り方 */
-const PICK: Record<GoalType, (p: ExercisePoint) => number | null> = {
-  maintain: (p) => p.metric,
-  weight: (p) => p.top?.weight ?? null,
-  volume: (p) => (p.volume > 0 ? p.volume : null),
-  reps: (p) => p.maxReps,
-  distance: (p) => p.meters,
-  duration: (p) => p.minutes,
-  speed: (p) => p.speed,
-};
 
 const NOTES: Record<GoalType, string> = {
   // どれも 2 行に収まる長さにそろえる（下の goalNote が 2 行ぶんの高さを持つ）
@@ -119,9 +110,15 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
               : 'kg';
   const digits = type === 'weight' || type === 'speed' ? 1 : 0;
 
-  const values = history.map((h) => PICK[type](h.point)).filter((v): v is number => v != null);
+  /*
+   * 決める材料は**到達率と同じ取り方**で出す（`goalCurrent`）。
+   * 以前はここに同じ 7 通りの表を置いていて、片方を直すともう片方が古くなる形だった
+   * ——「いま 100kg」と出しているのに、到達率は別の値で計算しうる。
+   */
+  const pick = (p: ExercisePoint) => goalCurrent(type, p);
+  const values = history.map((h) => pick(h.point)).filter((v): v is number => v != null);
   const latest = values.length > 0 ? values[values.length - 1]! : null;
-  const best = personalBest(sessions, exercise.id, todayISO(), PICK[type]);
+  const best = personalBest(sessions, exercise.id, todayISO(), pick);
 
   const choose = (next: GoalType) => {
     setType(next);
@@ -138,19 +135,15 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
 
   return (
     <div className={s.goalForm}>
-      <div className={ui.segmented} role="group" aria-label={`${exercise.name}の目標の種類`}>
-        {types.map((id) => (
-          <button
-            key={id}
-            type="button"
-            className={ui.segment}
-            aria-pressed={type === id}
-            onClick={() => choose(id)}
-          >
-            {id === 'reps' && seconds ? '秒数' : GOAL_TYPE_LABELS[id]}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        label={`${exercise.name}の目標の種類`}
+        value={type}
+        options={types.map((id) => ({
+          id,
+          label: id === 'reps' && seconds ? '秒数' : GOAL_TYPE_LABELS[id],
+        }))}
+        onChange={choose}
+      />
 
       {/*
         **「維持」でも欄はそのまま置いて、見えなくするだけ。**
@@ -215,13 +208,9 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
       */}
       <div className={exercise.goal ? undefined : s.goalRemoveEmpty}>
         {exercise.goal && (
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnGhost} ${ui.btnSm}`}
-            onClick={() => onUpdate({ ...exercise, goal: null })}
-          >
+          <Button tone="ghost" size="sub" onClick={() => onUpdate({ ...exercise, goal: null })}>
             目標を外す
-          </button>
+          </Button>
         )}
       </div>
 

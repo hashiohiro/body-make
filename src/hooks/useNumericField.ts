@@ -24,6 +24,8 @@ export function useNumericField(
   min: number,
   max: number,
   onCommit: (value: number | null) => void,
+  /** 残す小数の桁数。既定は 1 桁（kg・%）。係数の欄だけ 2 桁 */
+  decimals = 1,
 ): NumericField {
   const [text, setText] = useState(() => toText(value));
   const lastValue = useRef(value);
@@ -39,7 +41,7 @@ export function useNumericField(
     text,
     handleChange: (raw) => {
       setText(raw);
-      const parsed = parseNumericInput(raw, min, max);
+      const parsed = parseNumericInput(raw, min, max, decimals);
       if (parsed.commit) onCommit(parsed.value);
     },
     handleBlur: () => setText(toText(value)),

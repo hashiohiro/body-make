@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { addDays, formatMD, formatMDW, fromISO, startOfWeek, todayISO, toISO } from '../lib/date';
+import { ChipGroup } from './ChipGroup';
+import { CardHeader } from './CardHeader';
 import ui from '../styles/ui.module.scss';
 import s from './RecordCalendar.module.scss';
 
@@ -115,28 +117,18 @@ export function RecordCalendar({ marked, filled, selected, summary, firstDate, o
 
   return (
     <section className={ui.card}>
-      <header className={ui.cardHeader}>
-        <h2 className={ui.cardTitle}>記録の継続</h2>
-        <span className={ui.hint}>{summary}</span>
-      </header>
+      <CardHeader title="記録の継続" hint={summary} />
 
-      <div className={ui.chipRow} role="group" aria-label="表示する範囲">
-        {RANGES.map((r) => (
-          <button
-            key={r.id}
-            type="button"
-            className={ui.chip}
-            aria-pressed={rangeId === r.id}
-            onClick={() => {
-              setRangeId(r.id);
-              // 範囲を変えたら、いま見ている日が入る位置に戻す
-              setAnchor(selected > today ? today : selected);
-            }}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
+      <ChipGroup
+        options={RANGES}
+        value={rangeId}
+        label="表示する範囲"
+        onChange={(id) => {
+          setRangeId(id);
+          // 範囲を変えたら、いま見ている日が入る位置に戻す
+          setAnchor(selected > today ? today : selected);
+        }}
+      />
 
       <div className={s.nav}>
         <button

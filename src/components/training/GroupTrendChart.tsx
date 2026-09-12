@@ -2,6 +2,7 @@ import { TimeSeriesChart } from '../charts/TimeSeriesChart';
 import type { ChartSeries } from '../charts/TimeSeriesChart';
 import { GROUP_COLORS, GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
 import { addDays, isoToTime, startOfWeek, todayISO } from '../../lib/date';
+import { ChipGroup } from '../ChipGroup';
 import { GROUP_VALUES } from './groupValues';
 import type { GroupValueId } from './groupValues';
 import type { WeekSetCount } from '../../lib/training';
@@ -47,19 +48,12 @@ export function GroupTrendChart({ weeks, valueId, onValueChange }: Props) {
 
   return (
     <div>
-      <div className={ui.chipRow} role="group" aria-label="表示する値">
-        {GROUP_VALUES.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            className={ui.chip}
-            aria-pressed={valueId === v.id}
-            onClick={() => onValueChange(v.id)}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
+      <ChipGroup
+        options={GROUP_VALUES}
+        value={valueId}
+        onChange={onValueChange}
+        label="表示する値"
+      />
 
       <TimeSeriesChart
         series={series}

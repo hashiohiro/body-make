@@ -10,6 +10,7 @@ import { computeBadges } from '../lib/badges';
 import { formatMD } from '../lib/date';
 import type { BodyData } from '../hooks/useBodyData';
 import type { Domain } from '../types';
+import { Button } from '../components/Button';
 import ui from '../styles/ui.module.scss';
 
 interface Props {
@@ -78,13 +79,9 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
               今日の体重を入れると、ここに現在地と推移が出ます。
             </p>
             <div className={ui.btnRow}>
-              <button
-                type="button"
-                className={`${ui.btn} ${ui.btnPrimary}`}
-                onClick={onOpenRecords}
-              >
+              <Button tone="primary" onClick={onOpenRecords}>
                 記録する
-              </button>
+              </Button>
             </div>
           </section>
         ) : (

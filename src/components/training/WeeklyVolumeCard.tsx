@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { ChipGroup } from '../ChipGroup';
+import { Meter } from '../Meter';
 import { Modal } from '../Modal';
 import { NumericInput } from '../NumericInput';
 import { GROUP_LABELS, GROUP_ORDER, isCardio, isListed } from '../../lib/exerciseCatalog';
@@ -7,7 +9,9 @@ import { addDays, formatMD, startOfWeek, todayISO } from '../../lib/date';
 import { formatSets } from '../../lib/training';
 import type { TrainingStats } from '../../lib/training';
 import type { Exercise, ExerciseGroup, GroupGoals, MuscleGroup, SessionPoint } from '../../types';
+import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
+import { MiniButton } from '../MiniButton';
 import s from './training.module.scss';
 
 /**
@@ -120,12 +124,14 @@ export function WeeklyVolumeCard({
   return (
     <>
       <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>今週の量</h2>
-          <span className={ui.hint}>
-            {stats.thisWeekDays}日 ・ {formatSets(totalSets)}セット
-          </span>
-        </header>
+        <CardHeader
+          title="今週の量"
+          hint={
+            <>
+              {stats.thisWeekDays}日 ・ {formatSets(totalSets)}セット
+            </>
+          }
+        />
 
         {rows.map((row) => (
           <button
@@ -144,9 +150,7 @@ export function WeeklyVolumeCard({
             {row.progress == null ? (
               <span />
             ) : (
-              <span className={s.meter}>
-                <span className={s.meterFill} style={{ width: `${row.progress * 100}%` }} />
-              </span>
+              <Meter value={row.progress} label={`${GROUP_LABELS[row.group]}の今週の量`} />
             )}
 
             {/* 単位（セット）はカードの見出しが持つ。行に書くとバーがそのぶん痩せる */}
@@ -211,19 +215,12 @@ export function WeeklyVolumeCard({
                 打つ前に押せる値を先に置く。効くのは開いている部位だけで、
                 ほかの部位は動かさない（1 か所を開いているのに 6 か所が変わると驚く）
               */}
-              <div className={ui.chipRow} role="group" aria-label="目安から決める">
-                {PRESETS.map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    className={ui.chip}
-                    aria-pressed={current.target === preset.sets}
-                    onClick={() => onSetGroupGoal(current.group, preset.sets)}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
+              <ChipGroup
+                options={PRESETS.map((p) => ({ id: p.sets ?? 0, label: p.label }))}
+                value={current.target ?? 0}
+                onChange={(sets) => onSetGroupGoal(current.group, sets === 0 ? null : sets)}
+                label="目安から決める"
+              />
 
               <div className={ui.formRow}>
                 <label htmlFor={`group-goal-${current.group}`}>週のセット数</label>
@@ -246,12 +243,11 @@ export function WeeklyVolumeCard({
 
               {/* 決めた値がいまの実績にどう当たるかを、同じ面で見せる */}
               {current.target != null && (
-                <span className={s.meter}>
-                  <span
-                    className={s.meterFill}
-                    style={{ width: `${(current.progress ?? 0) * 100}%` }}
-                  />
-                </span>
+                <Meter
+                  value={current.progress ?? 0}
+                  label={`${GROUP_LABELS[current.group]}の今週の量`}
+                  block
+                />
               )}
 
               <p className={ui.note}>
@@ -278,12 +274,11 @@ export function WeeklyVolumeCard({
               </div>
 
               {current?.target != null && (
-                <span className={s.meter}>
-                  <span
-                    className={s.meterFill}
-                    style={{ width: `${(current.progress ?? 0) * 100}%` }}
-                  />
-                </span>
+                <Meter
+                  value={current.progress ?? 0}
+                  label={`${GROUP_LABELS[current.group]}の今週の量`}
+                  block
+                />
               )}
 
               <p className={ui.note}>
@@ -309,9 +304,7 @@ export function WeeklyVolumeCard({
               */}
               {current && (
                 <div className={ui.btnRow}>
-                  <button type="button" className={s.miniBtn} onClick={() => setEditing(true)}>
-                    部位目標を設定
-                  </button>
+                  <MiniButton onClick={() => setEditing(true)}>部位目標を設定</MiniButton>
                 </div>
               )}
             </div>

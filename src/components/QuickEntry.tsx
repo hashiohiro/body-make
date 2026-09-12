@@ -4,6 +4,8 @@ import { BODYFAT_RANGE, WEIGHT_RANGE } from '../lib/storage';
 import type { DailyPoint, Entries, SlotId } from '../types';
 import type { MeasurementField } from '../hooks/useBodyData';
 import { NumberField } from './NumberField';
+import { CardHeader } from './CardHeader';
+import { MiniButton } from './MiniButton';
 import ui from '../styles/ui.module.scss';
 import s from './QuickEntry.module.scss';
 
@@ -12,11 +14,6 @@ interface Props {
   entries: Entries;
   daily: readonly DailyPoint[];
   onValue: (date: string, slot: SlotId, field: MeasurementField, value: number | null) => void;
-  /**
-   * 読むだけ。**カレンダーから過去の日を開いたときに使う。**
-   * その場で直せると、見るつもりで開いて触ってしまう。直すのは記録タブの仕事。
-   */
-  readOnly?: boolean | undefined;
   /**
    * 推移を開く。**渡されたときだけ入口を出す。**
    *
@@ -53,23 +50,21 @@ function lastKnown(
  * 日付ナビは持たない。日付は記録タブ全体の状態（体組成とトレーニングで同じ日を見続ける）で、
  * 置き場所はヘッダに 1 つ。カードには入力欄だけを残す。
  */
-export function QuickEntry({ date, entries, daily, onValue, readOnly, onOpenTrend }: Props) {
+export function QuickEntry({ date, entries, daily, onValue, onOpenTrend }: Props) {
   const entry = entries[date] ?? emptyDay();
   const avgWeight = dayAverageWeight(entry);
   const avgBodyFat = dayAverageBodyFat(entry);
 
   return (
     <section className={ui.card}>
-      <header className={ui.cardHeader}>
-        <h2 className={ui.cardTitle}>体組成</h2>
-      </header>
+      <CardHeader title="体組成" />
 
       <div className={s.slots}>
         {SLOTS.map((slot) => {
           const measurement = entry[slot.id];
           const prevWeight = lastKnown(daily, date, slot.id, 'weight');
           const prevBodyFat = lastKnown(daily, date, slot.id, 'bodyFat');
-          const canCopy = !readOnly && measurement.weight == null && prevWeight != null;
+          const canCopy = measurement.weight == null && prevWeight != null;
 
           return (
             <div key={slot.id} className={s.slot}>
@@ -77,16 +72,15 @@ export function QuickEntry({ date, entries, daily, onValue, readOnly, onOpenTren
                 <span aria-hidden="true">{slot.icon}</span>
                 {slot.label}
                 {canCopy && (
-                  <button
-                    type="button"
-                    className={s.copy}
+                  <MiniButton
+                    label={`${slot.label}に前回値を入れる`}
                     onClick={() => {
                       onValue(date, slot.id, 'weight', prevWeight);
                       if (prevBodyFat != null) onValue(date, slot.id, 'bodyFat', prevBodyFat);
                     }}
                   >
                     前回値
-                  </button>
+                  </MiniButton>
                 )}
               </div>
 
@@ -98,7 +92,6 @@ export function QuickEntry({ date, entries, daily, onValue, readOnly, onOpenTren
                 min={WEIGHT_RANGE[0]}
                 max={WEIGHT_RANGE[1]}
                 onCommit={(v) => onValue(date, slot.id, 'weight', v)}
-                readOnly={readOnly}
               />
               <NumberField
                 label="体脂肪率 %"
@@ -108,7 +101,6 @@ export function QuickEntry({ date, entries, daily, onValue, readOnly, onOpenTren
                 min={BODYFAT_RANGE[0]}
                 max={BODYFAT_RANGE[1]}
                 onCommit={(v) => onValue(date, slot.id, 'bodyFat', v)}
-                readOnly={readOnly}
               />
             </div>
           );

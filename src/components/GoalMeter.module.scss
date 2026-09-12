@@ -16,22 +16,6 @@
   color: var(--ink);
 }
 
-.track {
-  height: 10px;
-  border-radius: 999px;
-  // 未達部分は同じ青の淡いステップ。トラック全体で状態が読めるようにする
-  background: color-mix(in srgb, var(--accent) 16%, var(--surface-sunken));
-  overflow: hidden;
-}
-
-.fill {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--accent);
-  transition: width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
 .foot {
   display: flex;
   justify-content: space-between;

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Meter } from '../Meter';
 import { Modal } from '../Modal';
 import { GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
 import { MAX_RECOVERY_DAYS, axialStatus, groupReadiness, type CheckHistory } from '../../lib/check';
@@ -113,9 +114,7 @@ export function RecoveryDialog({ open, onClose, date, history }: Props) {
   const row = (r: Row) => (
     <div key={r.key} className={s.recoveryRow}>
       <span className={s.recoveryName}>{r.label}</span>
-      <span className={s.groupBarTrack}>
-        <span className={s.groupBarFill} style={{ width: `${progress(r) * 100}%` }} />
-      </span>
+      <Meter value={progress(r)} label={`${r.label}の回復`} />
       <span className={r.left > 0 ? s.recoveryWait : s.recoveryReady}>
         {r.left > 0 ? `あと${r.left}日` : '回復済み'}
       </span>

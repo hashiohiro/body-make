@@ -1,7 +1,10 @@
+import { Button } from '../Button';
 import { useState } from 'react';
 import { ExerciseDetailDialog } from './ExerciseDetailDialog';
+import { ExercisePickList } from './ExercisePickList';
 import { ExerciseSettingsForm } from './ExerciseSettingsForm';
 import { GoalEditor } from './GoalEditor';
+import { Meter } from '../Meter';
 import { Modal } from '../Modal';
 import {
   EXERCISE_GROUP_ORDER,
@@ -14,7 +17,11 @@ import { todayISO } from '../../lib/date';
 import { RECENT_DAYS, STALE_WEEKS } from '../../lib/training';
 import type { ExerciseGoal, TrainingStats } from '../../lib/training';
 import type { Exercise, SessionPoint } from '../../types';
+import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
+import { Tag } from '../Tag';
+import { MiniButton } from '../MiniButton';
+import { Pill } from '../Pill';
 import s from './training.module.scss';
 
 interface Props {
@@ -89,9 +96,7 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
       >
         <span className={s.goalRowHead}>
           <span className={s.goalRowName}>{goal.name}</span>
-          <span className={s.kindTag}>
-            {goalTypeLabel(goal.type, exercise?.repUnit ?? 'reps', true)}
-          </span>
+          <Tag kind="chosen">{goalTypeLabel(goal.type, exercise?.repUnit ?? 'reps', true)}</Tag>
           <span className={s.chevron} aria-hidden="true">
             ›
           </span>
@@ -115,9 +120,7 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
           {goal.target == null ? (
             <span />
           ) : (
-            <span className={s.meter}>
-              <span className={s.meterFill} style={{ width: `${(goal.progress ?? 0) * 100}%` }} />
-            </span>
+            <Meter value={goal.progress ?? 0} label={`${goal.name}の到達率`} />
           )}
 
           {/* 維持は数値を決めないので割合も出ない。それは上の「維持」が言っている */}
@@ -145,14 +148,16 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
   return (
     <>
       <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>種目の目標</h2>
-          {goals.length > 0 && (
-            <span className={ui.hint}>
-              {reached} / {goals.length} 到達
-            </span>
-          )}
-        </header>
+        <CardHeader
+          title="種目の目標"
+          hint={
+            goals.length > 0 ? (
+              <>
+                {reached} / {goals.length} 到達
+              </>
+            ) : null
+          }
+        />
 
         {sorted.length === 0 ? (
           <p className={ui.emptyState}>
@@ -179,14 +184,14 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
         )}
 
         <div className={ui.btnRow}>
-          <button
-            type="button"
-            className={`${ui.btn} ${goals.length === 0 ? ui.btnPrimary : ''}`}
+          {/* まだ 1 つも無いときだけ勧める。並んでからは地の姿に戻す */}
+          <Button
+            tone={goals.length === 0 ? 'primary' : undefined}
             disabled={withoutGoal.length === 0}
             onClick={() => setPicking(true)}
           >
             ＋ 種目の目標を追加
-          </button>
+          </Button>
         </div>
 
         {withoutGoal.length === 0 && goals.length === 0 && (
@@ -237,22 +242,15 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
                 画面によってボタンの名前や数が違うと、どちらで何ができるか覚え直しになる
               */}
               <div className={ui.btnRow}>
-                <button
-                  type="button"
-                  className={s.miniBtn}
-                  aria-label={`${openExercise.name}の推移を見る`}
+                <MiniButton
+                  label={`${openExercise.name}の推移を見る`}
                   onClick={() => setTrendOf(openExercise.id)}
                 >
                   推移を見る
-                </button>
-                <button
-                  type="button"
-                  className={s.miniBtn}
-                  aria-label={`${openExercise.name}の設定`}
-                  onClick={() => setSettings(true)}
-                >
+                </MiniButton>
+                <MiniButton label={`${openExercise.name}の設定`} onClick={() => setSettings(true)}>
                   設定
-                </button>
+                </MiniButton>
               </div>
             </div>
           )}
@@ -270,32 +268,19 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
             <GoalEditor exercise={pickedExercise} sessions={sessions} onUpdate={onUpdate} />
           ) : (
             <div>
-              {/*
-                ここは部位で束ねる。**選ぶときだけは部位が手がかりになる**
-                （目標を決めるのは「今週やる部位」を思い浮かべながらのことが多い）。
-                一覧のほうに見出しを付けないのは、読むときの軸を種目に寄せるため。
-              */}
-              {EXERCISE_GROUP_ORDER.map((group) => {
-                const items = withoutGoal.filter((e) => e.group === group);
-                if (items.length === 0) return null;
-                return (
-                  <div key={group} className={s.pickerGroup}>
-                    <div className={s.pickerLabel}>{GROUP_LABELS[group]}</div>
-                    <div className={s.pickerList}>
-                      {items.map((e) => (
-                        <button
-                          key={e.id}
-                          type="button"
-                          className={s.pickerBtn}
-                          onClick={() => setPicked(e.id)}
-                        >
-                          {e.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+              {/* 選ぶ面はどこも同じ組み（検索・部位チップ・部位ごとの見出し） */}
+              <ExercisePickList
+                items={withoutGoal}
+                heading="目標を決めていない種目"
+                empty={<p className={ui.emptyState}>すべての種目に目標を決めています。</p>}
+                renderItem={(e, searching) => (
+                  <Pill key={e.id} onClick={() => setPicked(e.id)}>
+                    {e.name}
+                    {/* 束ねる見出しが無いので、探した結果では部位も行に添える */}
+                    {searching && <Tag>{GROUP_LABELS[e.group]}</Tag>}
+                  </Pill>
+                )}
+              />
             </div>
           )}
         </Modal>

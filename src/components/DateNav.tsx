@@ -1,5 +1,6 @@
+import { DateField } from './DateField';
 import { addDays } from '../lib/date';
-import ui from '../styles/ui.module.scss';
+import { Button } from './Button';
 import s from './DateNav.module.scss';
 
 interface Props {
@@ -36,18 +37,14 @@ export function DateNav({ date, today, onChange }: Props) {
         ‹
       </button>
 
-      <input
-        className={s.dateInput}
-        type="date"
-        value={date}
-        /*
-          **先の日も選べる。**旅行や大会の前に予定の日へ入れておく、
-          日付をまたいだ深夜に翌日ぶんとして付ける、といった使い方がある。
-          導出は先の日付を織り込んである（連続記録と記録率は今日までしか数えない）。
-        */
-        onChange={(e) => e.target.value && onChange(e.target.value)}
-        aria-label="記録する日付"
-      />
+      {/*
+        **先の日も選べる。**旅行や大会の前に予定の日へ入れておく、
+        日付をまたいだ深夜に翌日ぶんとして付ける、といった使い方がある。
+        導出は先の日付を織り込んである（連続記録と記録率は今日までしか数えない）。
+
+        空にはできない。見ている日が無い状態は作れない。
+      */}
+      <DateField className={s.dateInput} value={date} label="記録する日付" onChange={onChange} />
 
       <button
         type="button"
@@ -60,13 +57,9 @@ export function DateNav({ date, today, onChange }: Props) {
 
       {/* 今日を見ているときは押しても何も起きない。無効のまま置かず、消す */}
       {date !== today && (
-        <button
-          type="button"
-          className={`${ui.btn} ${ui.btnSm} ${s.today}`}
-          onClick={() => onChange(today)}
-        >
+        <Button size="sub" onClick={() => onChange(today)} className={s.today}>
           今日
-        </button>
+        </Button>
       )}
     </div>
   );

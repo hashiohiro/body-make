@@ -1,6 +1,8 @@
 import { Fragment } from 'react';
 import { GROUP_LABELS } from '../../lib/exerciseCatalog';
 import type { ExerciseGroup } from '../../types';
+import { Tag } from '../Tag';
+import { MiniButton } from '../MiniButton';
 import s from './training.module.scss';
 
 export interface OrderEntry {
@@ -85,14 +87,9 @@ export function OrderList({
           {i === from ? (
             <div className={`${s.orderItem} ${s.orderItemMoving}`}>
               <span className={s.orderItemName}>{movingName} を移動中</span>
-              <button
-                type="button"
-                className={s.miniBtn}
-                aria-label="移動をやめる"
-                onClick={onCancel}
-              >
+              <MiniButton label="移動をやめる" onClick={onCancel}>
                 やめる
-              </button>
+              </MiniButton>
             </div>
           ) : (
             <div className={s.orderItem}>
@@ -103,26 +100,22 @@ export function OrderList({
               {/* 移動中は、置き場所を選ぶこと以外を出さない */}
               {from < 0 && (
                 <>
-                  <span className={s.exTag}>{entry.group ? GROUP_LABELS[entry.group] : ''}</span>
+                  <Tag>{entry.group ? GROUP_LABELS[entry.group] : ''}</Tag>
                   {entries.length > 1 && (
-                    <button
-                      type="button"
-                      className={s.miniBtn}
-                      aria-label={`${label}の${entry.name}を移動`}
+                    <MiniButton
+                      label={`${label}の${entry.name}を移動`}
                       onClick={() => onGrab(entry.id)}
                     >
                       ⇅
-                    </button>
+                    </MiniButton>
                   )}
                   {onDrop && (
-                    <button
-                      type="button"
-                      className={s.miniBtn}
-                      aria-label={`${label}から${entry.name}を外す`}
+                    <MiniButton
+                      label={`${label}から${entry.name}を外す`}
                       onClick={() => onDrop(entry.id)}
                     >
                       −
-                    </button>
+                    </MiniButton>
                   )}
                 </>
               )}

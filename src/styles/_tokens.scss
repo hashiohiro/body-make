@@ -254,19 +254,82 @@ $light-themes: (sakura, solarized-light);
 
   --font: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
 
+  /*
+   * 本文の幅。**JS からも読む。**
+   * ＋ ボタンは本文の縁に合わせて置くので、同じ数字が JS と CSS の両方に要る
+   * （`useFabPosition` の inset）。数字を 2 か所に書くと、幅を変えた日に
+   * ボタンだけ元の位置に残る。`max()` や `calc()` は custom property のままでは
+   * 解けないので、**素の px でだけ持つ**。
+   */
+  /*
+   * 選ぶ欄の矢印。**素の `<select>` の見た目を落とすので自分で描く。**
+   * `url()` の中では custom property が使えないので、色ごと配色で差し替える。
+   */
+  --caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2352514e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  --content-w: 720px;
+
   --tab-h: 56px;
+
+  /*
+   * ＋ ボタンの大きさ。**JS からも読む**（ドラッグの上限を出すのに要る）。
+   * 下の余白（`.fabSpace`）もこれに従う——大きさを変えたときに、
+   * ボタンだけ大きくなって最後のカードがその下に潜る形にしない。
+   */
+  --fab-size: 56px;
+
+  /*
+   * 押す的の高さ。**役目で 4 段に分ける。**
+   *
+   * 以前は「タップ領域の下限 44px」と 1 行書いてあるだけで、実装は 20〜44px に
+   * 9 段あった。いちばん押す「編集」（種目カードの入口）が 27px で、下限として
+   * 書いてある値の半分近くだった。
+   *
+   *   main  … 面の決定（保存・削除・確認の答え）。面でいちばん強い的
+   *   sub   … 切り替えと入口（絞り込みのチップ・セグメント・日付ナビ・行を足す）
+   *   row   … 行やカードに添える操作。**横に並ぶのでこの値で揃える**
+   *           （それ以上大きくすると、操作のぶんだけ行が伸びる）
+   *   tight … 詰めた選択肢。**例外**——一覧に重ねる絞り込みと、
+   *           親の値に従属するもの（補助部位の係数）だけ
+   *
+   * row より下は tight の 2 か所だけ。ほかで小さくしたくなったら、
+   * それは的ではなく読むものになっていないか先に疑う。
+   */
+  --tap-main: 44px;
+  --tap-sub: 36px;
+  --tap-row: 32px;
+  --tap-tight: 26px;
+
+  /*
+   * 文字・数字を打つ欄。**押す的とは別の軸**なので、段も別に持つ
+   * （押す的は「指が届くか」、打つ欄は「読みながら打てるか」で決まる）。
+   * 中の字は 16px 以上にする——それ未満だと iOS が focus のたびに画面を拡大する。
+   *
+   * 段は 1 つだけ。40 / 42 / 48px に分かれていたが差に理由が無く、そのうえ
+   * **選ぶ欄（素の `<select>`）は端末が高さを決めていた**ので、いちばん大きい
+   * ところへ寄せて決定ボタンと同じ段に乗せた。
+   *
+   * 主役の 1 欄（目標の値）も同じ箱にする。大きさを変えると、同じ種目の行から
+   * 開く設定の選ぶ欄と並べたときに、そこだけ浮く。**決める値であることは
+   * 太さと中央寄せで足りる。**
+   */
+  --tap-field: 44px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme='light'])) {
     color-scheme: dark;
     @include emit($dark);
+    /* 矢印は地が暗くなるぶん明るい線にする（url() の中では変数が使えない） */
+    --caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23c3c2b7' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   }
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
   @include emit($dark);
+  /* 矢印は地が暗くなるぶん明るい線にする（url() の中では変数が使えない） */
+  --caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23c3c2b7' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 @each $id, $theme in $themes {

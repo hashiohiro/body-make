@@ -4,6 +4,7 @@ import { fmt } from '../../lib/format';
 import { sessionGroups } from '../../lib/training';
 import type { TrainingStats } from '../../lib/training';
 import type { SessionPoint } from '../../types';
+import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
@@ -35,9 +36,7 @@ export function TrainingSummary({ sessions, stats }: Props) {
     <>
       <div className={s.pair}>
         <section className={ui.card}>
-          <header className={ui.cardHeader}>
-            <h2 className={ui.cardTitle}>今週のトレーニング</h2>
-          </header>
+          <CardHeader title="今週のトレーニング" />
 
           <div className={s.statRow} style={{ marginBottom: 0 }}>
             <b>{stats.thisWeekDays}</b>
@@ -68,9 +67,7 @@ export function TrainingSummary({ sessions, stats }: Props) {
         </section>
 
         <section className={ui.card}>
-          <header className={ui.cardHeader}>
-            <h2 className={ui.cardTitle}>トレーニングの通算回数</h2>
-          </header>
+          <CardHeader title="トレーニングの通算回数" />
 
           <div className={s.statRow} style={{ marginBottom: 0 }}>
             <b>{stats.sessions}</b>

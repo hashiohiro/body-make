@@ -10,20 +10,19 @@ import type { BodyData } from '../../hooks/useBodyData';
 import type { Exercise, ExerciseGroup, SessionPoint } from '../../types';
 import { CatalogPicker } from './CatalogPicker';
 import { CustomExerciseForm } from './CustomExerciseForm';
-import {
-  ExerciseFilterBar,
-  FILTER_THRESHOLD,
-  matchRank,
-  matchesGroup,
-  matchesQuery,
-} from './ExerciseFilterBar';
+import { FILTER_THRESHOLD, matchRank, matchesGroup, matchesQuery } from '../../lib/exerciseSearch';
+import { GroupChips } from './GroupChips';
 import { SearchToggle } from './SearchToggle';
 import { ExerciseSettingsForm } from './ExerciseSettingsForm';
 import { RecordMoveDialog } from './RecordMoveDialog';
 import { GoalEditor } from './GoalEditor';
 import { ExerciseSummaryCard } from './ExerciseSummaryCard';
 import { Modal } from '../Modal';
+import { useConfirm } from '../ConfirmDialog';
+import { CardHeader } from '../CardHeader';
+import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
+import { MiniButton } from '../MiniButton';
 import s from './training.module.scss';
 
 interface Props {
@@ -90,6 +89,7 @@ export function ExerciseManager({
   const [editing, setEditing] = useState<string | null>(null);
   /** 目標を開いている種目。設定（詳細）とは同時に開かない */
   const [goalOf, setGoalOf] = useState<string | null>(null);
+  const [ask, confirmDialog] = useConfirm();
   const openDetail = (ex: Exercise) => {
     setGoalOf(null);
     setEditing((cur) => (cur === ex.id ? null : ex.id));
@@ -135,8 +135,14 @@ export function ExerciseManager({
       onRemove(ex.id);
       return;
     }
-    const message = `「${ex.name}」を削除します。\nこの種目の記録 ${days}日ぶんも一緒に消えます。元に戻せません。`;
-    if (confirm(message)) onRemove(ex.id);
+    ask({
+      title: '種目を削除しますか？',
+      subject: ex.name,
+      note: `この種目の記録 ${days}日ぶんも一緒に消えます。元に戻せません。`,
+      confirmLabel: '記録ごと削除',
+      destructive: true,
+      onConfirm: () => onRemove(ex.id),
+    });
   };
 
   /*
@@ -166,22 +172,15 @@ export function ExerciseManager({
       actions={
         ex.shelf === 'hidden' ? (
           <>
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-label={`${ex.name}を表示に戻す`}
+            <MiniButton
+              label={`${ex.name}を表示に戻す`}
               onClick={() => onUpdate({ ...ex, shelf: 'listed' })}
             >
               表示に戻す
-            </button>
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-label={`${ex.name}を削除`}
-              onClick={() => remove(ex)}
-            >
+            </MiniButton>
+            <MiniButton label={`${ex.name}を削除`} onClick={() => remove(ex)}>
               削除
-            </button>
+            </MiniButton>
           </>
         ) : (
           <>
@@ -190,11 +189,9 @@ export function ExerciseManager({
               マイ種目を見ていたつもりが別の画面に移っていて、戻り方も分からない。
               決める道具（GoalEditor）は目標タブと同じものを使う。
             */}
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-pressed={goalOf === ex.id}
-              aria-label={ex.goal ? `${ex.name}の目標を変える` : `${ex.name}の目標を決める`}
+            <MiniButton
+              pressed={goalOf === ex.id}
+              label={ex.goal ? `${ex.name}の目標を変える` : `${ex.name}の目標を決める`}
               onClick={() =>
                 setGoalOf((cur) => {
                   setEditing(null);
@@ -203,32 +200,23 @@ export function ExerciseManager({
               }
             >
               目標
-            </button>
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-pressed={editing === ex.id}
-              aria-label={`${ex.name}の設定`}
+            </MiniButton>
+            <MiniButton
+              pressed={editing === ex.id}
+              label={`${ex.name}の設定`}
               onClick={() => openDetail(ex)}
             >
               設定
-            </button>
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-label={`${ex.name}を非表示にする`}
+            </MiniButton>
+            <MiniButton
+              label={`${ex.name}を非表示にする`}
               onClick={() => onUpdate({ ...ex, shelf: 'hidden' })}
             >
               非表示
-            </button>
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-label={`${ex.name}を削除`}
-              onClick={() => remove(ex)}
-            >
+            </MiniButton>
+            <MiniButton label={`${ex.name}を削除`} onClick={() => remove(ex)}>
               削除
-            </button>
+            </MiniButton>
           </>
         )
       }
@@ -237,29 +225,28 @@ export function ExerciseManager({
 
   return (
     <section className={ui.card}>
-      <header className={ui.cardHeader}>
-        <h2 className={ui.cardTitle}>マイ種目</h2>
-        {/* 検索を開いているあいだは、件数の代わりに欄が入る（行は増やさない） */}
-        {!searching && (
-          <span className={ui.hint}>
-            {shownAll.length}件 / 目標 {shownAll.filter((e) => e.goal != null).length}件
-            {hiddenAll.length > 0 && ` / 非表示 ${hiddenAll.length}件`}
-          </span>
-        )}
+      {/* 検索を開いているあいだは、件数の代わりに欄が入る（行は増やさない） */}
+      <CardHeader
+        title="マイ種目"
+        hint={
+          searching ? null : (
+            <>
+              {shownAll.length}件 / 目標 {shownAll.filter((e) => e.goal != null).length}件
+              {hiddenAll.length > 0 && ` / 非表示 ${hiddenAll.length}件`}
+            </>
+          )
+        }
+      >
         {sorted.length > FILTER_THRESHOLD && (
           <SearchToggle query={query} onQuery={setQuery} label="種目を検索" />
         )}
-      </header>
+      </CardHeader>
 
       {/* 追加は一番上。登録済みが増えるほど、下に置くとスクロールを強いることになる */}
       <div className={ui.btnRow}>
-        <button
-          type="button"
-          className={`${ui.btn} ${ui.btnPrimary}`}
-          onClick={() => setAdding(true)}
-        >
+        <Button tone="primary" onClick={() => setAdding(true)}>
           ＋ マイ種目に追加
-        </button>
+        </Button>
       </div>
 
       {/* 一覧の続きに出すと、どこまでが追加の画面か分からなくなるのでモーダルにする */}
@@ -277,7 +264,17 @@ export function ExerciseManager({
       ) : (
         <>
           {sorted.length > FILTER_THRESHOLD && (
-            <ExerciseFilterBar group={filter} onGroup={setFilter} exercises={sorted} />
+            <div className={s.filterBar}>
+              {/*
+                部位チップは**持っている種目の分類だけ**出す
+                （押しても 0 件にしかならないチップを並べない）。
+              */}
+              <GroupChips
+                value={filter}
+                onChange={setFilter}
+                groups={EXERCISE_GROUP_ORDER.filter((g) => sorted.some((e) => matchesGroup(e, g)))}
+              />
+            </div>
           )}
 
           {/*
@@ -345,13 +342,9 @@ export function ExerciseManager({
             */}
             {(usage.get(settingsExercise.id) ?? 0) > 0 && (
               <div className={ui.btnRow}>
-                <button
-                  type="button"
-                  className={`${ui.btn} ${ui.btnSm}`}
-                  onClick={() => setMoving(true)}
-                >
+                <Button size="sub" onClick={() => setMoving(true)}>
                   記録を別の種目へ移行
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -361,6 +354,8 @@ export function ExerciseManager({
       {settingsExercise && moving && body && (
         <RecordMoveDialog body={body} from={settingsExercise} onClose={() => setMoving(false)} />
       )}
+
+      {confirmDialog}
     </section>
   );
 }

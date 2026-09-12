@@ -2,6 +2,7 @@ import { markExported } from '../lib/device';
 import { exportJson } from '../lib/io';
 import { currentBackend } from '../lib/storage';
 import type { AppData } from '../types';
+import { Button } from './Button';
 import ui from '../styles/ui.module.scss';
 import s from './StorageAlert.module.scss';
 
@@ -45,13 +46,9 @@ export function StorageAlert({ data, failed }: Props) {
           開き直すと元に戻ることがあります。
         </p>
         <div className={ui.btnRow}>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnPrimary}`}
-            onClick={() => window.location.reload()}
-          >
+          <Button tone="primary" onClick={() => window.location.reload()}>
             開き直す
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -66,16 +63,15 @@ export function StorageAlert({ data, failed }: Props) {
         プライベートモードで開いている可能性があります。
       </p>
       <div className={ui.btnRow}>
-        <button
-          type="button"
-          className={`${ui.btn} ${ui.btnPrimary}`}
+        <Button
+          tone="primary"
           onClick={() => {
             exportJson(data);
             markExported();
           }}
         >
           いますぐ JSON で書き出す
-        </button>
+        </Button>
       </div>
     </div>
   );

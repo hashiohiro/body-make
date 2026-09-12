@@ -1,11 +1,15 @@
 import { GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
+import { fmtVolume } from '../../lib/format';
 import { formatSets } from '../../lib/training';
 import { useState } from 'react';
 import { Modal } from '../Modal';
 import { GroupTrendChart } from './GroupTrendChart';
+import { ChipGroup } from '../ChipGroup';
 import { GROUP_VALUES } from './groupValues';
 import type { GroupValueId } from './groupValues';
 import type { WeekSetCount } from '../../lib/training';
+import { CardHeader } from '../CardHeader';
+import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
@@ -46,24 +50,14 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
   return (
     <>
       <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>部位別の配分</h2>
-          <span className={ui.hint}>週あたり / 右が今週</span>
-        </header>
+        <CardHeader title="部位別の配分" hint={<>週あたり / 右が今週</>} />
 
-        <div className={ui.chipRow} role="group" aria-label="表示する値">
-          {GROUP_VALUES.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              className={ui.chip}
-              aria-pressed={valueId === v.id}
-              onClick={() => onValueChange(v.id)}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
+        <ChipGroup
+          options={GROUP_VALUES}
+          value={valueId}
+          onChange={onValueChange}
+          label="表示する値"
+        />
 
         <div className={ui.tableScroll}>
           <table className={`${ui.table} ${s.heatmap}`}>
@@ -103,7 +97,7 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
                             valueId === 'sets' ? (
                               formatSets(n)
                             ) : (
-                              n.toLocaleString()
+                              fmtVolume(n)
                             )
                           ) : (
                             <span className={ui.cellEmpty}>—</span>
@@ -126,13 +120,9 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
 
         {/* 表からは増減の向きが読めない。必要なときだけ線で開く */}
         <div className={ui.btnRow}>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnSm}`}
-            onClick={() => setOpenTrend(true)}
-          >
+          <Button size="sub" onClick={() => setOpenTrend(true)}>
             推移をグラフで見る
-          </button>
+          </Button>
         </div>
       </section>
 

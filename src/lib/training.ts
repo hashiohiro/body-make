@@ -410,6 +410,14 @@ export function personalBest(
 export const pickOneRm = (p: ExercisePoint) => p.oneRm;
 export const pickVolume = (p: ExercisePoint) => (p.volume > 0 ? p.volume : null);
 export const pickMetric = (p: ExercisePoint) => p.metric;
+/**
+ * その日いちばん重かった**書いた重量**。
+ *
+ * 換算後（有効重量）ではない。最高重量・最大重量のグラフ・重量の目標は、
+ * どれも「バーに載せた数字」で見る（`buildExercisePoint` の 1RM のところに理由）。
+ * 名前を付けずに 5 か所で書いていたので、揃っていることを型で言えなかった。
+ */
+export const pickTopWeight = (p: ExercisePoint) => p.top?.weight ?? null;
 
 /* ------------------------------------------------------------------ *
  * 表示用
@@ -888,12 +896,12 @@ export interface ExerciseGoal {
  * 有酸素は距離と時間を **合計** で見る。1 本の最長ではなく、その日に積んだ量が目標になる
  * （インターバルを 5 本に割っても、通しで 1 本走っても同じ 5km として数える）。
  */
-const currentOf = (type: GoalType, p: ExercisePoint): number | null => {
+export const goalCurrent = (type: GoalType, p: ExercisePoint): number | null => {
   switch (type) {
     case 'weight':
-      return p.top?.weight ?? null;
+      return pickTopWeight(p);
     case 'volume':
-      return p.volume > 0 ? p.volume : null;
+      return pickVolume(p);
     case 'reps':
       return p.maxReps;
     case 'distance':
@@ -931,7 +939,7 @@ export function exerciseGoals(
 
     const history = exerciseHistory(sessions, exercise.id);
     const values = history
-      .map((h) => currentOf(goal.type, h.point))
+      .map((h) => goalCurrent(goal.type, h.point))
       .filter((v): v is number => v != null);
 
     const current = values.length ? values[values.length - 1]! : null;

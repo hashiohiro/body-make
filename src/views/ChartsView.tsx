@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { BodyTrendCharts } from '../components/charts/BodyTrendCharts';
+import { ChipGroup } from '../components/ChipGroup';
 import { EnergyBalanceChart } from '../components/charts/EnergyBalanceChart';
 import { WeeklyCompositionChart } from '../components/charts/WeeklyCompositionChart';
 import { DailyTable, EnergyTable, WeeklyTable } from '../components/DataTables';
@@ -9,6 +10,7 @@ import { computeEnergyBalance, ENERGY_WINDOWS, weeksShort } from '../lib/energy'
 import type { EnergyWindow } from '../lib/energy';
 import type { BodyData } from '../hooks/useBodyData';
 import type { Domain } from '../types';
+import { CardHeader } from '../components/CardHeader';
 import ui from '../styles/ui.module.scss';
 
 type RangeId = '30' | '90' | 'all';
@@ -60,19 +62,7 @@ export function ChartsView({ body, domain: mode, exerciseId }: Props) {
   return (
     <>
       {/* フィルタはすべてのグラフに効く 1 行としてカードの外に置く */}
-      <div className={ui.chipRow} role="group" aria-label="表示期間">
-        {RANGES.map((r) => (
-          <button
-            key={r.id}
-            type="button"
-            className={ui.chip}
-            aria-pressed={range === r.id}
-            onClick={() => setRange(r.id)}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
+      <ChipGroup options={RANGES} value={range} onChange={setRange} label="表示期間" />
 
       {mode === 'training' && (
         <TrainingCharts
@@ -88,10 +78,7 @@ export function ChartsView({ body, domain: mode, exerciseId }: Props) {
           <BodyTrendCharts daily={visible} settings={data.settings} highlight={todayTime} note />
 
           <section className={ui.card}>
-            <header className={ui.cardHeader}>
-              <h2 className={ui.cardTitle}>週平均の体組成</h2>
-              <span className={ui.hint}>kg</span>
-            </header>
+            <CardHeader title="週平均の体組成" hint={<>kg</>} />
             <WeeklyCompositionChart weeks={visibleWeeks} />
             <p className={ui.note}>
               除脂肪体重を保ったまま体脂肪量だけ減っているのが理想の形です。
@@ -100,25 +87,15 @@ export function ChartsView({ body, domain: mode, exerciseId }: Props) {
           </section>
 
           <section className={ui.card}>
-            <header className={ui.cardHeader}>
-              <h2 className={ui.cardTitle}>推定カロリー収支</h2>
-              <span className={ui.hint}>kcal/日</span>
-            </header>
+            <CardHeader title="推定カロリー収支" hint={<>kcal/日</>} />
 
             {/* 集計期間はこのグラフだけに効くパラメータなので、対象の直上に置く */}
-            <div className={ui.chipRow} role="group" aria-label="集計期間">
-              {ENERGY_WINDOWS.map((w) => (
-                <button
-                  key={w}
-                  type="button"
-                  className={ui.chip}
-                  aria-pressed={energyWindow === w}
-                  onClick={() => setEnergyWindow(w)}
-                >
-                  {w}週ごと
-                </button>
-              ))}
-            </div>
+            <ChipGroup
+              options={ENERGY_WINDOWS.map((w) => ({ id: w, label: `${w}週ごと` }))}
+              value={energyWindow}
+              onChange={setEnergyWindow}
+              label="集計期間"
+            />
 
             {energy.length === 0 ? (
               <p className={ui.emptyState}>
@@ -147,9 +124,7 @@ export function ChartsView({ body, domain: mode, exerciseId }: Props) {
           </section>
 
           <section className={ui.card}>
-            <header className={ui.cardHeader}>
-              <h2 className={ui.cardTitle}>元データ</h2>
-            </header>
+            <CardHeader title="元データ" />
             <DailyTable daily={visible} />
           </section>
         </>

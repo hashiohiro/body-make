@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 import s from './Modal.module.scss';
 
@@ -69,6 +69,7 @@ function unlockScroll() {
  */
 export function Modal({ open, title, onClose, onBack, tall, children }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
     const dialog = ref.current;
@@ -101,9 +102,15 @@ export function Modal({ open, title, onClose, onBack, tall, children }: Props) {
   }, [open]);
 
   return (
+    /*
+      見出しは面の名前として渡す（`aria-labelledby`）。**`<dialog>` は
+      それだけでは名前を持たない**ので、読み上げでは「ダイアログ」としか出ず、
+      どの面が開いたのか分からないままになる。
+    */
     <dialog
       ref={ref}
       className={`${s.dialog} ${tall ? s.tall : ''}`}
+      aria-labelledby={titleId}
       onCancel={onBack ?? onClose}
       onClose={onBack ?? onClose}
     >
@@ -113,7 +120,9 @@ export function Modal({ open, title, onClose, onBack, tall, children }: Props) {
             ‹ 戻る
           </button>
         )}
-        <span className={s.title}>{title}</span>
+        <h2 className={s.title} id={titleId}>
+          {title}
+        </h2>
         <button type="button" className={s.close} onClick={onClose}>
           閉じる
         </button>

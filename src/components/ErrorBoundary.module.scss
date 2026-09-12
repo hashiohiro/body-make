@@ -1,0 +1,34 @@
+/*
+ * 画面を出せなかったときの面。アプリの外枠（ヘッダ・タブ）も出ないので、
+ * 自分で余白と幅を持つ。中身はカード 1 枚。
+ */
+.wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 24px 14px;
+}
+
+.head {
+  margin-bottom: 6px;
+  font-size: 16px;
+  font-weight: 640;
+}
+
+/* エラーの中身。読むためではなく、伝えるために写せるようにしておく */
+.detail {
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--ink-muted);
+
+  pre {
+    overflow-x: auto;
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    border-radius: var(--radius-xs);
+    background: var(--surface-sunken);
+    font-size: 10px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}

@@ -1,8 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useElementWidth } from '../../hooks/useElementWidth';
+import { insideRect, useDismiss } from '../../hooks/useDismiss';
 import { formatMD } from '../../lib/date';
+import { fmtDelta } from '../../lib/format';
 import type { EnergyPoint } from '../../lib/energy';
-import { divergingBar, linearScale, niceScale } from './scales';
+import { bandLayout, divergingBar, linearScale, niceScale } from './scales';
+import { YAxis } from './YAxis';
 import s from './charts.module.scss';
 
 interface Props {
@@ -14,7 +17,8 @@ const MARGIN = { top: 22, right: 8, bottom: 34, left: 52 } as const;
 const MAX_BAR = 24;
 const MAX_BAND = 76;
 
-const kcal = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(Math.round(v))}`;
+/** kcal は整数で出す。符号の付け方（0 は ±）は `fmtDelta` が持つ */
+const kcal = (v: number) => fmtDelta(v, 0);
 
 /**
  * ゼロを中心に上下へ伸びる発散型の棒。
@@ -23,7 +27,12 @@ const kcal = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(Mat
  */
 export function EnergyBalanceChart({ points, height = 250 }: Props) {
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
+  /** プロットの矩形。外を触ったかどうかは**ここ**で判定する */
+  const plotRef = useRef<SVGRectElement>(null);
   const [active, setActive] = useState<number | null>(null);
+
+  // 指では pointerleave が来ないので、外を触るか Esc で閉じられるようにする
+  useDismiss(active != null, () => setActive(null), insideRect(plotRef));
 
   const scale = useMemo(() => {
     const values: number[] = [0];
@@ -39,11 +48,13 @@ export function EnergyBalanceChart({ points, height = 250 }: Props) {
   const plotH = height - MARGIN.top - MARGIN.bottom;
   const y = linearScale([scale.min, scale.max], [MARGIN.top + plotH, MARGIN.top]);
 
-  const band = points.length > 0 ? Math.min(plotW / points.length, MAX_BAND) : plotW;
-  const barW = Math.min(MAX_BAR, band * 0.6);
-  const originX = MARGIN.left + (plotW - band * points.length) / 2;
-  const bandX = (i: number) => originX + band * i;
-  const barX = (i: number) => bandX(i) + (band - barW) / 2;
+  const { band, barW, bandX, barX } = bandLayout(
+    points.length,
+    plotW,
+    MARGIN.left,
+    MAX_BAND,
+    MAX_BAR,
+  );
 
   const yZero = y(0);
   const labelEvery = points.length <= 8;
@@ -77,31 +88,27 @@ export function EnergyBalanceChart({ points, height = 250 }: Props) {
           >
             <title>週ごとの推定カロリー収支（kcal/日）</title>
 
-            {scale.ticks
-              .filter((tick) => tick !== 0)
-              .map((tick) => (
-                <line
-                  key={tick}
-                  className={s.grid}
-                  x1={MARGIN.left}
-                  x2={MARGIN.left + plotW}
-                  y1={y(tick)}
-                  y2={y(tick)}
-                />
-              ))}
+            {/* ゼロ線はグリッドではなく基準線なので、下で軸と同じ強さで引く */}
+            <YAxis
+              ticks={scale.ticks}
+              y={y}
+              left={MARGIN.left}
+              right={MARGIN.left + plotW}
+              format={(tick) => String(Math.round(tick))}
+              skipZeroGrid
+            />
 
-            {scale.ticks.map((tick) => (
-              <text
-                key={`t${tick}`}
-                className={s.tickLabel}
-                x={MARGIN.left - 7}
-                y={y(tick)}
-                textAnchor="end"
-                dy="0.32em"
-              >
-                {Math.round(tick)}
-              </text>
-            ))}
+            {/* 外を触ったかどうかを決めるだけの矩形。触れる的は棒ごとに持つ */}
+            <rect
+              ref={plotRef}
+              data-plot=""
+              x={MARGIN.left}
+              y={MARGIN.top}
+              width={plotW}
+              height={plotH}
+              fill="none"
+              pointerEvents="none"
+            />
 
             {points.map((point, i) => {
               const x = barX(i);
@@ -227,17 +234,14 @@ export function EnergyBalanceChart({ points, height = 250 }: Props) {
             </div>
             <div className={s.tipRow}>
               体重の変化
-              <b>
-                {points[active]!.weightDelta > 0 ? '+' : '−'}
-                {Math.abs(points[active]!.weightDelta).toFixed(2)} kg
-              </b>
+              <b>{fmtDelta(points[active]!.weightDelta, 2)} kg</b>
             </div>
             <div className={s.tipRow}>
               体脂肪量の変化
               <b>
                 {points[active]!.fatDelta == null
                   ? '—'
-                  : `${points[active]!.fatDelta! > 0 ? '+' : '−'}${Math.abs(points[active]!.fatDelta!).toFixed(2)} kg`}
+                  : `${fmtDelta(points[active]!.fatDelta, 2)} kg`}
               </b>
             </div>
           </div>

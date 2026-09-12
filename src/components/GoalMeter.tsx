@@ -1,9 +1,12 @@
+import { DateField } from './DateField';
+import { Button } from './Button';
 import { useState } from 'react';
 import { NumericInput } from './NumericInput';
 import { formatRelativeDays, formatYMD, todayISO, diffDays } from '../lib/date';
-import { fmt, fmtPercent } from '../lib/format';
+import { fmt, fmtDelta, fmtPercent } from '../lib/format';
 import { BODYFAT_RANGE, HEIGHT_RANGE, WEIGHT_RANGE } from '../lib/storage';
 import type { Projection, Settings, Stats } from '../types';
+import { Meter } from './Meter';
 import ui from '../styles/ui.module.scss';
 import s from './GoalMeter.module.scss';
 
@@ -65,11 +68,12 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
           目標日
           <small>必要ペースを逆算します</small>
         </label>
-        <input
+        {/* 目標日は外せる（決めていない状態がある）ので、空を受ける */}
+        <DateField
           id="target-date"
-          type="date"
           value={settings.targetDate ?? ''}
-          onChange={(e) => onUpdate({ targetDate: e.target.value || null })}
+          clearable
+          onChange={(value) => onUpdate({ targetDate: value || null })}
         />
       </div>
 
@@ -111,14 +115,13 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
         {editing && editor}
 
         <div className={ui.btnRow}>
-          <button
-            type="button"
-            className={`${ui.btn} ${editing ? ui.btnGhost : ui.btnPrimary}`}
-            aria-expanded={editing}
+          <Button
+            tone={editing ? 'ghost' : 'primary'}
+            expanded={editing}
             onClick={() => setEditing((v) => !v)}
           >
             {editing ? '閉じる' : target == null ? '目標を決める' : '目標を変更'}
-          </button>
+          </Button>
         </div>
       </section>
     );
@@ -135,16 +138,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
         <span className={s.pct}>{fmtPercent(progress)}</span>
       </div>
 
-      <div
-        className={s.track}
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(progress * 100)}
-        aria-label="目標体重までの進捗"
-      >
-        <i className={s.fill} style={{ width: `${Math.round(progress * 100)}%` }} />
-      </div>
+      <Meter value={progress} label="目標体重までの進捗" size="card" tinted animated />
 
       <div className={s.foot}>
         <span>開始 {fmt(stats.startWeight)}kg</span>
@@ -155,7 +149,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
         <div className={s.etaRow}>
           <span>現在のペース（直近28日）</span>
           <span>
-            <b>{pace == null ? '—' : `${pace > 0 ? '+' : '−'}${Math.abs(pace).toFixed(2)}`}</b>
+            <b>{fmtDelta(pace, 2)}</b>
             {' kg/週'}
           </span>
         </div>
@@ -178,9 +172,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
           <div className={s.etaRow}>
             <span>{formatYMD(settings.targetDate)}までに必要なペース</span>
             <span>
-              <b>
-                {`${projection.requiredPerWeek > 0 ? '+' : '−'}${Math.abs(projection.requiredPerWeek).toFixed(2)}`}
-              </b>
+              <b>{fmtDelta(projection.requiredPerWeek, 2)}</b>
               {' kg/週'}
             </span>
           </div>
@@ -214,14 +206,13 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
       {editing && editor}
 
       <div className={ui.btnRow}>
-        <button
-          type="button"
-          className={`${ui.btn} ${editing ? ui.btnGhost : ''}`}
-          aria-expanded={editing}
+        <Button
+          tone={editing ? 'ghost' : undefined}
+          expanded={editing}
           onClick={() => setEditing((v) => !v)}
         >
           {editing ? '閉じる' : '目標を変更'}
-        </button>
+        </Button>
       </div>
     </section>
   );

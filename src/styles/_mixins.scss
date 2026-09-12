@@ -52,6 +52,52 @@ $bp-wide: 560px;
   font-variant-numeric: tabular-nums;
 }
 
+/// 打ち込む欄の字の大きさ。**16px を下回らせない。**
+///
+/// iOS の Safari は、16px 未満の欄に focus したときページごと拡大する。
+/// 戻すのは手（ピンチ）なので、1 つ打つたびに拡大 → 戻すを繰り返すことになる。
+///
+/// 同じ理由を 4 か所にコメントで書いていたのに、設定・目標・移行の欄（`.formRow`）と
+/// ヘッダの日付欄は 13px のままだった。**規則はここだけに持つ。**
+@mixin field-text {
+  font-size: 16px;
+}
+
+/// 数字の欄。**上下の矢印（スピナー）を落とす。**
+/// 桁を 1 つ増やすのに何度も押させるより、直接打つほうが速い。
+/// 矢印のぶん数値の表示幅が削られるのも、1 行に 2 つ並べる面では効く。
+@mixin field-number {
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
+
+/// 選ぶ欄。**箱を自分で持つ。**
+///
+/// 素のままだと、`<select>` の高さは端末が決める（iOS の Safari は padding も
+/// min-height も素通しする）。隣の文字の欄だけがこちらの指定に従うので、
+/// **同じ行に並べたときに高さが食い違う。**
+/// 見た目を落として自前で描けば、文字の欄と同じ箱になる。
+///
+/// 矢印は自分で描く。落とすと「押すと開く」ことが形から読めなくなる。
+@mixin field-select {
+  appearance: none;
+  -webkit-appearance: none;
+  // 矢印のぶんだけ右を空ける（文字が矢印の下に潜らないように）
+  padding-right: 30px;
+  background-image: var(--caret);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+}
+
 @mixin truncate {
   overflow: hidden;
   text-overflow: ellipsis;

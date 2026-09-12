@@ -23,7 +23,6 @@ interface Props {
   onAddSet: () => void;
   onRemoveSet: (index: number) => void;
   onCopyPrevious: () => void;
-  readOnly?: boolean | undefined;
 }
 
 /** 1 つ目の欄の見出し。単位で決まる（有酸素はここを使わない） */
@@ -72,7 +71,6 @@ export function ExerciseSetEditor({
   onAddSet,
   onRemoveSet,
   onCopyPrevious,
-  readOnly,
 }: Props) {
   const cardio = isCardio(exercise.group);
   // まだ何も入っていないときにだけ複製を出す。入力済みを黙って上書きしない
@@ -119,7 +117,7 @@ export function ExerciseSetEditor({
             <span>
               前回 {formatMD(previous.date)}: {summarizeSets(previous.point)}
             </span>
-            {!readOnly && empty && (
+            {empty && (
               <button type="button" className={s.prevBtn} onClick={onCopyPrevious}>
                 前回の構成で始める
               </button>
@@ -165,11 +163,10 @@ export function ExerciseSetEditor({
             (cardio ? null : (previous?.point.top?.reps ?? null))
           }
           onValue={(field, value) => onValue(i, field, value)}
-          // 連番は「行を足せる種目か」で決まる。読むだけかどうかとは別
+          // 連番は「行を足せる種目か」で決まる（削除を出すかとは別）
           showIndex={repeated}
-          onRemove={!readOnly && repeated ? () => onRemoveSet(i) : undefined}
+          onRemove={repeated ? () => onRemoveSet(i) : undefined}
           rowClass={rowClass}
-          readOnly={readOnly}
         />
       ))}
 
@@ -190,14 +187,14 @@ export function ExerciseSetEditor({
       />
 
       <div className={s.setActions}>
-        {!readOnly && repeated && (
+        {repeated && (
           <button type="button" className={s.addSet} onClick={onAddSet}>
             ＋ {cardio ? '本' : 'セット'}を追加
           </button>
         )}
 
         {/* 自重種目で、ベルトなどで加重した日だけ開く。値が入っていれば畳ませない */}
-        {!readOnly && weightCounts && bodyweight && !hasWeight && (
+        {weightCounts && bodyweight && !hasWeight && (
           <button
             type="button"
             className={s.weightToggle}

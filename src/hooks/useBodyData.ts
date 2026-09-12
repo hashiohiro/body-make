@@ -18,6 +18,7 @@ import {
   exerciseGoals,
 } from '../lib/training';
 import { buildCheckHistory } from '../lib/check';
+import { newId } from '../lib/id';
 import { moveRecords as moveWorkoutRecords, planMove } from '../lib/move';
 import type { OnConflict } from '../lib/move';
 import type { ImportPayload } from '../lib/io';
@@ -506,7 +507,7 @@ export function useBodyData(initial: AppData): BodyData {
         ...prev,
         presets: found
           ? prev.presets.map((p) => (p.id === found.id ? { ...p, exerciseIds: ids } : p))
-          : [...prev.presets, { id: crypto.randomUUID(), name: trimmed, exerciseIds: ids }],
+          : [...prev.presets, { id: newId(), name: trimmed, exerciseIds: ids }],
       };
     });
   }, []);

@@ -1,4 +1,4 @@
-import { BASELINE_SESSIONS } from '../../lib/training';
+import { BASELINE_SESSIONS, pickOneRm, pickTopWeight, pickVolume } from '../../lib/training';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { ExercisePoint } from '../../types';
 
@@ -24,7 +24,7 @@ export const METRICS: Metric[] = [
     unit: 'kg',
     digits: 0,
     needsWeight: true,
-    pick: (p) => (p.volume > 0 ? p.volume : null),
+    pick: pickVolume,
   },
   { id: 'sets', label: 'セット数', unit: 'セット', digits: 0, pick: (p) => p.workSets },
   // 有酸素は本数（インターバルの本数、サーキットのラウンド数）
@@ -39,10 +39,10 @@ export const METRICS: Metric[] = [
     digits: 1,
     weightLike: true,
     needsWeight: true,
-    pick: (p) => p.top?.weight ?? null,
+    pick: pickTopWeight,
   },
   { id: 'maxReps', label: '最大回数', unit: '', digits: 0, pick: (p) => p.maxReps },
-  { id: 'oneRm', label: '推定1RM', unit: 'kg', digits: 1, needsWeight: true, pick: (p) => p.oneRm },
+  { id: 'oneRm', label: '推定1RM', unit: 'kg', digits: 1, needsWeight: true, pick: pickOneRm },
 
   /*
    * 有酸素。距離が「量」、速度が「強度」で、筋トレの 挙上量 / 推定1RM にあたる。

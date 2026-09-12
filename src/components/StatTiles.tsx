@@ -1,6 +1,7 @@
 import { deltaTone, fmt, fmtDelta } from '../lib/format';
 import type { DeltaTone } from '../lib/format';
 import type { Stats } from '../types';
+import { TONE_CLASS } from './tone';
 import ui from '../styles/ui.module.scss';
 import s from './StatTiles.module.scss';
 
@@ -14,8 +15,6 @@ interface Tile {
   color: string | null;
   deltaLabel: string;
 }
-
-const TONE_CLASS = { good: ui.good, bad: ui.bad, flat: ui.flat } as const;
 
 export function StatTiles({ stats }: { stats: Stats }) {
   const tiles: Tile[] = [

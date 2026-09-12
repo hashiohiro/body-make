@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { App } from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { loadData } from './lib/storage';
 import { applyStoredTheme } from './hooks/useTheme';
 import './styles/global.scss';
@@ -32,7 +33,13 @@ void loadData().then(
     container.replaceChildren();
     createRoot(container).render(
       <StrictMode>
-        <App initial={initial} />
+        {/*
+          描画で落ちたときの受け皿は**ここ 1 か所**。面ごとに囲むと
+          「一部だけ壊れた画面」が出来て、どこまで信じていいのか読めなくなる。
+        */}
+        <ErrorBoundary>
+          <App initial={initial} />
+        </ErrorBoundary>
       </StrictMode>,
     );
   },

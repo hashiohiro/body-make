@@ -1,5 +1,6 @@
 import { Modal } from './Modal';
 import { DEMO_TODAY, formatMD } from '../lib/date';
+import { Button } from './Button';
 import ui from '../styles/ui.module.scss';
 
 interface Props {
@@ -34,9 +35,9 @@ export function DemoNotice({ onStart }: Props) {
       <p className={ui.note}>記録が送られる先はありません。この端末のブラウザにだけ残ります。</p>
 
       <div className={ui.btnRow}>
-        <button type="button" className={`${ui.btn} ${ui.btnPrimary}`} onClick={onStart}>
+        <Button tone="primary" onClick={onStart}>
           初期データではじめる
-        </button>
+        </Button>
       </div>
     </Modal>
   );

@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Sparkline } from '../charts/Sparkline';
 import { ExerciseDetailDialog } from './ExerciseDetailDialog';
+import { ChipGroup } from '../ChipGroup';
+import { GroupChips } from './GroupChips';
+import { FILTER_THRESHOLD, matchesGroup, matchesQuery } from '../../lib/exerciseSearch';
 import { METRICS, baselineOf, lastOf } from './metrics';
+import { SearchToggle } from './SearchToggle';
 import {
   EXERCISE_GROUP_ORDER,
   GROUP_LABELS,
@@ -11,10 +15,10 @@ import {
 import { deltaTone, fmt, fmtDelta } from '../../lib/format';
 import { exerciseHistory } from '../../lib/training';
 import type { Exercise, ExerciseGroup, SessionPoint } from '../../types';
+import { CardHeader } from '../CardHeader';
+import { TONE_CLASS } from '../tone';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
-
-const TONE_CLASS = { good: ui.good, bad: ui.bad, flat: ui.flat } as const;
 
 interface Props {
   sessions: readonly SessionPoint[];
@@ -49,11 +53,20 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
   const [openId, setOpenId] = useState<string | null>(initialOpenId ?? null);
   const [metricId, setMetricId] = useState<string | null>(null);
   const [group, setGroup] = useState<ExerciseGroup | 'all'>('all');
+  /** 名前で探す。見出しの行に畳んである（`SearchToggle`） */
+  const [query, setQuery] = useState('');
 
   // 部位は主部位だけで絞る。ここで見たいのは種目の推移で、配分ではない
   // （補助部位まで拾うと、腕にベンチプレスが並ぶ）
   const groups = EXERCISE_GROUP_ORDER.filter((g) => recorded.some((e) => e.group === g));
-  const shown = group === 'all' ? recorded : recorded.filter((e) => e.group === group);
+  /*
+   * 出す種目。部位チップと検索は AND。
+   *
+   * 検索は**見出しの行に畳む**（待機中の高さは 0）。この画面は
+   * 「全種目の折れ線を並べて形を比べる」のが主な用途なので、絞り込みを主役にしない。
+   * それでも「ベンチだけ見たい」はよくあり、胸に 10 種持つ人には部位チップだけでは足りない。
+   */
+  const shown = recorded.filter((e) => matchesGroup(e, group) && matchesQuery(e.name, query));
 
   /*
    * 指標は一覧ぜんぶに効くので、出ている種目全体で出せるかを見る。
@@ -110,64 +123,23 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
   return (
     <>
       <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>種目別の推移</h2>
-        </header>
+        <CardHeader title="種目別の推移">
+          {recorded.length > FILTER_THRESHOLD && (
+            <SearchToggle query={query} onQuery={setQuery} label="種目を検索" />
+          )}
+        </CardHeader>
 
         <div className={s.filters}>
-          <div className={s.pickerLabel} id="trend-metric">
-            指標
-          </div>
-          <div
-            className={`${ui.chipRow} ${s.filterRow}`}
-            role="group"
-            aria-labelledby="trend-metric"
-          >
-            {metrics.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                className={ui.chip}
-                aria-pressed={metric.id === m.id}
-                onClick={() => setMetricId(m.id)}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
+          <ChipGroup
+            options={metrics}
+            value={metric.id}
+            onChange={setMetricId}
+            label="指標"
+            showLabel
+            tight
+          />
 
-          {groups.length > 1 && (
-            <>
-              <div className={s.pickerLabel} id="trend-group">
-                部位
-              </div>
-              <div
-                className={`${ui.chipRow} ${s.filterRow}`}
-                role="group"
-                aria-labelledby="trend-group"
-              >
-                <button
-                  type="button"
-                  className={ui.chip}
-                  aria-pressed={group === 'all'}
-                  onClick={() => setGroup('all')}
-                >
-                  すべて
-                </button>
-                {groups.map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    className={ui.chip}
-                    aria-pressed={group === g}
-                    onClick={() => setGroup(g)}
-                  >
-                    {GROUP_LABELS[g]}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+          <GroupChips value={group} onChange={setGroup} groups={groups} showLabel />
         </div>
 
         <div className={s.trendList}>

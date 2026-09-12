@@ -1,7 +1,13 @@
+import { sameSet } from '../../lib/array';
 import { useState } from 'react';
 import { PRESET_NAME_MAX } from '../../lib/storage';
 import type { Preset } from '../../types';
+import { CardHeader } from '../CardHeader';
+import { useConfirm } from '../ConfirmDialog';
+import { removePresetRequest } from './presetConfirm';
 import ui from '../../styles/ui.module.scss';
+import { MiniButton } from '../MiniButton';
+import { NameEntryRow } from '../NameEntryRow';
 import s from './training.module.scss';
 
 export interface PresetOption extends Preset {
@@ -18,13 +24,6 @@ interface Props {
   onAdd: (exerciseIds: readonly string[]) => void;
   onSave: (name: string, exerciseIds: readonly string[]) => void;
   onRemove: (id: string) => void;
-}
-
-/** 並びは違っても、同じ種目の組み合わせなら同じものとして扱う */
-function sameSet(a: readonly string[], b: readonly string[]): boolean {
-  if (a.length !== b.length) return false;
-  const set = new Set(a);
-  return b.every((id) => set.has(id));
 }
 
 /**
@@ -45,6 +44,7 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
 export function PresetCard({ presets, currentIds, currentName, onAdd, onSave, onRemove }: Props) {
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [ask, confirmDialog] = useConfirm();
 
   const composing = currentIds.length > 0;
   // いまの組み合わせがそのまま残っているなら、保存しても同じものが増えるだけ
@@ -53,67 +53,53 @@ export function PresetCard({ presets, currentIds, currentName, onAdd, onSave, on
 
   return (
     <section className={ui.card}>
-      <header className={ui.cardHeader}>
-        <h2 className={ui.cardTitle}>プリセット</h2>
-        {!composing && presets.length > 0 && <span className={ui.hint}>{presets.length}件</span>}
-      </header>
+      <CardHeader
+        title="プリセット"
+        hint={!composing && presets.length > 0 ? `${presets.length}件` : null}
+      />
 
       {composing ? (
         saving ? (
-          <div className={s.presetSave}>
-            <input
-              type="text"
-              className={s.presetInput}
-              value={name}
-              maxLength={PRESET_NAME_MAX}
-              aria-label="プリセットの名前"
-              onChange={(e) => setName(e.target.value)}
-            />
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-label="この名前で保存"
-              disabled={name.trim() === ''}
-              onClick={() => {
-                /*
-                 * 同じ名前があれば上書きする。黙って 2 つ並べると、
-                 * 一覧で名前から見分けられないものが増える（手がかりが部位と件数しかない）。
-                 * 消えるのは前の中身なので、上書きすることは先に伝える。
-                 */
-                const trimmed = name.trim().slice(0, PRESET_NAME_MAX);
-                const same = presets.find((preset) => preset.name === trimmed);
-                if (
-                  same &&
-                  !confirm(
-                    `プリセット「${trimmed}」はすでにあります。\n` +
-                      `中身をいまの組み合わせ（${currentIds.length}種目）で上書きします。`,
-                  )
-                )
-                  return;
+          <NameEntryRow
+            value={name}
+            onChange={setName}
+            label="プリセットの名前"
+            commitLabel="この名前で保存"
+            cancelLabel="保存をやめる"
+            disabled={name.trim() === ''}
+            onCancel={() => setSaving(false)}
+            onCommit={() => {
+              const save = () => {
                 onSave(name, currentIds);
                 setSaving(false);
-              }}
-            >
-              ✓
-            </button>
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-label="保存をやめる"
-              onClick={() => setSaving(false)}
-            >
-              ×
-            </button>
-          </div>
+              };
+              /*
+               * 同じ名前があれば上書きする。黙って 2 つ並べると、
+               * 一覧で名前から見分けられないものが増える（手がかりが部位と件数しかない）。
+               * 消えるのは前の中身なので、上書きすることは先に伝える。
+               */
+              const trimmed = name.trim().slice(0, PRESET_NAME_MAX);
+              if (!presets.some((preset) => preset.name === trimmed)) {
+                save();
+                return;
+              }
+              ask({
+                title: '同じ名前のプリセットがあります',
+                subject: trimmed,
+                note: `中身をいまの組み合わせ（${currentIds.length}種目）に置き換えます。前の組み合わせは戻せません。`,
+                confirmLabel: 'この組み合わせで上書き',
+                destructive: true,
+                onConfirm: save,
+              });
+            }}
+          />
         ) : (
           <div className={s.presetSave}>
             <span className={s.presetSaveLabel}>
               いまの組み合わせを保存（{currentIds.length}種目）
             </span>
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-label="いまの組み合わせをプリセットに保存"
+            <MiniButton
+              label="いまの組み合わせをプリセットに保存"
               onClick={() => {
                 // 下書きは部位から作る。そのまま使ってもいいし、書き換えてもいい
                 setName(currentName);
@@ -121,7 +107,7 @@ export function PresetCard({ presets, currentIds, currentName, onAdd, onSave, on
               }}
             >
               ＋
-            </button>
+            </MiniButton>
           </div>
         )
       ) : presets.length === 0 ? (
@@ -137,30 +123,24 @@ export function PresetCard({ presets, currentIds, currentName, onAdd, onSave, on
             <span className={s.presetGroups}>{preset.groups}</span>
             <span className={s.presetCount}>{preset.exerciseIds.length}種目</span>
 
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-label={`${preset.name}をこの日に入れる`}
+            <MiniButton
+              label={`${preset.name}をこの日に入れる`}
               onClick={() => onAdd(preset.exerciseIds)}
             >
               ＋
-            </button>
-            <button
-              type="button"
-              className={s.miniBtn}
-              aria-label={`${preset.name}を削除`}
-              onClick={() => {
-                // 記録は消えないが、付けた名前と組み合わせは戻せない
-                if (confirm(`プリセット「${preset.name}」を削除します。\n元に戻せません。`)) {
-                  onRemove(preset.id);
-                }
-              }}
+            </MiniButton>
+            <MiniButton
+              label={`${preset.name}を削除`}
+              // 聞き方は設定のプリセット管理と同じ（presetConfirm）
+              onClick={() => ask(removePresetRequest(preset, () => onRemove(preset.id)))}
             >
               ×
-            </button>
+            </MiniButton>
           </div>
         ))
       )}
+
+      {confirmDialog}
     </section>
   );
 }

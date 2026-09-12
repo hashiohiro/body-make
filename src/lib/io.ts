@@ -8,7 +8,7 @@ import type {
   Workouts,
 } from '../types';
 import { todayISO } from './date';
-import { fmt } from './format';
+import { fmt, fmtDelta } from './format';
 import { sanitizeData, sanitizeEntries } from './storage';
 
 function download(filename: string, blob: Blob): void {
@@ -105,7 +105,7 @@ export function buildShareText(
   streak: number,
 ): string {
   const parts = [`体重 ${fmt(weight)}kg`];
-  if (delta != null) parts.push(`開始比 ${delta > 0 ? '+' : '−'}${Math.abs(delta).toFixed(1)}kg`);
+  if (delta != null) parts.push(`開始比 ${fmtDelta(delta)}kg`);
   if (bodyFat != null) parts.push(`体脂肪率 ${fmt(bodyFat)}%`);
   if (streak > 0) parts.push(`${streak}日連続記録`);
   return `${parts.join(' / ')} #BodyMake`;

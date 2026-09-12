@@ -5,6 +5,7 @@ import { todayISO } from '../lib/date';
 import { exportJson } from '../lib/io';
 import { IS_DEMO } from '../lib/env';
 import type { AppData } from '../types';
+import { Button } from './Button';
 import ui from '../styles/ui.module.scss';
 import s from './SafetyNotices.module.scss';
 
@@ -84,23 +85,18 @@ export function SafetyNotices({ data }: Props) {
           ブラウザのデータを消すか機種を変えると、戻せません。
         </p>
         <div className={ui.btnRow}>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnPrimary}`}
+          <Button
+            tone="primary"
             onClick={() => {
               exportJson(data);
               setDevice(markExported());
             }}
           >
             JSONで書き出す
-          </button>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnGhost}`}
-            onClick={() => setDevice(patchDevice({ backupClosedAt: today }))}
-          >
+          </Button>
+          <Button tone="ghost" onClick={() => setDevice(patchDevice({ backupClosedAt: today }))}>
             閉じる
-          </button>
+          </Button>
         </div>
       </section>
     );
@@ -121,17 +117,13 @@ export function SafetyNotices({ data }: Props) {
         </p>
         <div className={ui.btnRow}>
           {install.prompt && (
-            <button type="button" className={`${ui.btn} ${ui.btnPrimary}`} onClick={install.prompt}>
+            <Button tone="primary" onClick={install.prompt}>
               ホーム画面に追加
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnGhost}`}
-            onClick={() => setDevice(patchDevice({ installClosedAt: today }))}
-          >
+          <Button tone="ghost" onClick={() => setDevice(patchDevice({ installClosedAt: today }))}>
             閉じる
-          </button>
+          </Button>
         </div>
       </section>
     );

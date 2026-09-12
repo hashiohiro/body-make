@@ -60,7 +60,7 @@
 /* 戻ると閉じるは同じ器。役割の違いは位置と言葉で出す（左が戻る、右が閉じる） */
 .back,
 .close {
-  min-height: 32px;
+  min-height: var(--tap-row);
   padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);

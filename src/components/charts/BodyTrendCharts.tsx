@@ -2,6 +2,7 @@ import { TimeSeriesChart } from './TimeSeriesChart';
 import type { ChartSeries } from './TimeSeriesChart';
 import { isoToTime, todayISO } from '../../lib/date';
 import type { DailyPoint, Settings } from '../../types';
+import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
 
 interface Props {
@@ -67,10 +68,7 @@ export function BodyTrendCharts({ daily, settings, highlight = null, note = fals
   return (
     <>
       <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>体重の推移</h2>
-          <span className={ui.hint}>kg</span>
-        </header>
+        <CardHeader title="体重の推移" hint={<>kg</>} />
         <TimeSeriesChart
           series={weightSeries}
           domain={domain}
@@ -94,10 +92,7 @@ export function BodyTrendCharts({ daily, settings, highlight = null, note = fals
       </section>
 
       <section className={ui.card}>
-        <header className={ui.cardHeader}>
-          <h2 className={ui.cardTitle}>体脂肪率の推移</h2>
-          <span className={ui.hint}>%</span>
-        </header>
+        <CardHeader title="体脂肪率の推移" hint={<>%</>} />
         <TimeSeriesChart
           series={bodyFatSeries}
           domain={domain}
