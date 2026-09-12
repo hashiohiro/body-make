@@ -453,6 +453,16 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+  {
+    id: 'ex_cable_shrug',
+    // 下から引くので、ダンベル版より僧帽筋上部の張力が長く残る
+    name: 'ケーブルシュラッグ',
+    group: 'back',
+    subGroups: [['arms', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
   // 股関節伸展が主体で、ハムと大臀筋の関与が大きい
   {
     id: 'ex_back_extension',
@@ -552,6 +562,19 @@ export const CATALOG: readonly CatalogEntry[] = [
   {
     id: 'ex_rdl',
     name: 'ルーマニアンデッドリフト',
+    group: 'legs',
+    subGroups: ['back'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_cable_pull_through',
+    /*
+     * 股関節伸展をケーブルで。RDL と同じ動きだが、負荷が水平に掛かるので
+     * 背骨に縦の荷重が通らない（軸荷重に数えない）。
+     */
+    name: 'ケーブルプルスルー',
     group: 'legs',
     subGroups: ['back'],
     loadMode: 'standard',
@@ -784,6 +807,40 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+  /*
+   * ケーブル版のレイズ。**片手ずつやるので「ウエイト1つ」。**
+   * ダンベル版は左右に 1 つずつ持つので片方ぶんを書く（ウエイト2つ）が、
+   * こちらはスタック 1 つを片手で引くので、書いた重量がそのまま負荷になる。
+   */
+  {
+    id: 'ex_cable_lateral_raise',
+    // 下から引くので、腕を下ろした位置でも張力が残る（ダンベル版は抜ける）
+    name: 'ケーブルサイドレイズ',
+    group: 'shoulders',
+    subGroups: [['back', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_cable_rear_delt_fly',
+    // 両手で 2 つのスタックを引く。書くのは片方ぶん
+    name: 'ケーブルリアデルトフライ',
+    group: 'shoulders',
+    subGroups: [['back', 0.75]],
+    loadMode: 'perSide',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_cable_front_raise',
+    name: 'ケーブルフロントレイズ',
+    group: 'shoulders',
+    subGroups: [['chest', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
   // 後部三角筋と、僧帽中下部・菱形筋。上背部の種目としての性格が強い
   {
     id: 'ex_face_pull',
@@ -911,6 +968,29 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+  /*
+   * ケーブル版のカール。**ロープやバーを両手で持つので「ウエイト1つ」。**
+   * ダンベルのハンマーカールは左右に 1 つずつ持つので片方ぶんを書く（ウエイト2つ）が、
+   * こちらはスタック 1 つなので、書いた重量がそのまま負荷になる。
+   */
+  {
+    id: 'ex_cable_curl',
+    // 肘を曲げきった位置でも張力が残るのが、ダンベル・バーベル版との違い
+    name: 'ケーブルカール',
+    group: 'arms',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_cable_hammer_curl',
+    // ロープを縦に握る。上腕二頭の外側（長頭）と前腕の腕橈骨筋に寄る
+    name: 'ケーブルハンマーカール',
+    group: 'arms',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
   {
     id: 'ex_wrist_curl',
     name: 'リストカール',
@@ -960,9 +1040,27 @@ export const CATALOG: readonly CatalogEntry[] = [
     rmDivisor: RM_DEFAULT,
   },
   {
+    id: 'ex_cable_overhead_extension',
+    // 伸張位（肘を深く曲げた位置）で張力が抜けない。長頭に寄る
+    name: 'ケーブルオーバーヘッドエクステンション',
+    group: 'arms',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
     id: 'ex_kickback',
     equipment: 'dumbbell',
     name: 'キックバック',
+    group: 'arms',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_cable_kickback',
+    // 片手ずつ。肘を伸ばしきった位置でも張力が残る
+    name: 'ケーブルキックバック',
     group: 'arms',
     loadMode: 'standard',
     bodyweightFactor: null,
