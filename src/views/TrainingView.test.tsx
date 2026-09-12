@@ -2309,6 +2309,36 @@ describe('実績バッジ', () => {
     expect(screen.getByText('いま 0 / 3')).toBeTruthy();
   });
 
+  /*
+   * 条件は**そのバッジの真下に浮かせる。**カードの末尾に面として出していた頃は、
+   * 押したバッジから遠く、開くたびにカードが伸びて下のカードが動いた。
+   */
+  it('条件はツールチップで出し、外を触ると閉じる', async () => {
+    const { computeBadges } = await import('../lib/badges');
+    const { computeTrainingStats, buildSessions } = await import('../lib/training');
+    const { computeStats, buildDaily, buildWeeks } = await import('../lib/derive');
+    const { DEFAULT_SETTINGS } = await import('../lib/storage');
+
+    const daily = buildDaily({});
+    const stats = computeStats(daily, buildWeeks(daily), DEFAULT_SETTINGS);
+    const badges = computeBadges(stats, computeTrainingStats(buildSessions({}, [], [])));
+
+    render(<BadgeGrid badges={badges.filter((b) => b.domain === 'body')} />);
+    fireEvent.click(screen.getByRole('button', { name: '3日連続の条件' }));
+
+    // 吹き出しはグリッドの中に浮く（カードの末尾ではない）
+    const tip = document.querySelector('[class*="_tip_"]') as HTMLElement;
+    expect(tip).toBeTruthy();
+    expect(tip.closest('[class*="_box_"]')).toBeTruthy();
+    // 押せることの案内は、開いているあいだは出さない
+    expect(screen.queryByText(/バッジを押すと/)).toBeNull();
+
+    // 外を触ると閉じる（別のカードへ目を移したときに残らない）
+    fireEvent.pointerDown(document.body);
+    expect(document.querySelector('[class*="_tip_"]')).toBeNull();
+    expect(screen.getByText(/バッジを押すと/)).toBeTruthy();
+  });
+
   it('「次の目標」は出さない（並び順が同じことを言っている）', async () => {
     const { computeBadges } = await import('../lib/badges');
     const { computeTrainingStats, buildSessions } = await import('../lib/training');
@@ -2875,6 +2905,43 @@ describe('目標画面', () => {
     fireEvent.click(within(trend).getByRole('button', { name: '閉じる' }));
     expect(screen.queryByText('元データ')).toBeNull();
     expect(dlg().getByLabelText(/ベンチプレス.*の目標$/)).toBeTruthy();
+  });
+
+  /*
+   * 種目の目標も**部位ごとに見出しを付ける**（マイ種目・カタログ・移行先と同じ切り方）。
+   * 並び順だけ部位の順にしていた頃は、切れ目が読めず、
+   * どこまでが同じ部位なのかを行の右の札で数えることになっていた。
+   */
+  it('種目の目標は部位ごとに束ねて出す', async () => {
+    const today = todayISO();
+    seedData(['ex_bench', 'ex_curl'], {
+      [today]: [
+        { exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] },
+        { exerciseId: 'ex_curl', sets: [{ weight: 20, reps: 10 }] },
+      ],
+    });
+    render(<GoalsHarness domain="training" />);
+
+    // 2 種目に目標を決める（胸と腕）
+    for (const [name, label] of [
+      [/^ベンチプレス/, /^ベンチプレス.*の目標$/],
+      [/^カール/, /^カール.*の目標$/],
+    ] as const) {
+      fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
+      fireEvent.click(screen.getByRole('button', { name }));
+      fireEvent.change(screen.getByLabelText(label), { target: { value: '100' } });
+      fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    }
+
+    const card = screen.getByText('種目の目標').closest('section')!;
+    const heads = [...card.querySelectorAll('[class*="_manageGroup_"]')].map(
+      (el) => el.textContent,
+    );
+    expect(heads).toEqual(['胸', '腕']);
+
+    // 見出しが言っているので、行の側に部位は書かない
+    const row = within(card).getByRole('button', { name: /^ベンチプレス.*の目標$/ });
+    expect(row.textContent).not.toContain('胸');
   });
 
   it('量と目標を別のカードに分ける（部位と種目を混ぜない）', async () => {
@@ -4352,7 +4419,7 @@ describe('記録の移行', () => {
   /** 種目の「設定」を開いて、記録の移行を始める */
   function openMove(name: RegExp) {
     fireEvent.click(screen.getByRole('button', { name }));
-    fireEvent.click(screen.getByRole('button', { name: '記録を別の種目へ移す' }));
+    fireEvent.click(screen.getByRole('button', { name: '記録を別の種目へ移行' }));
   }
 
   it('マイ種目の別の種目へ、全期間ぶん移せる', async () => {
@@ -4363,7 +4430,7 @@ describe('記録の移行', () => {
     render(<MoveHarness />);
     openMove(/ハンマーカールの設定/);
 
-    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移す' }));
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移行する' }));
     expect(screen.getByText('2日ぶん（3/1 〜 3/8）')).toBeTruthy();
 
     /*
@@ -4373,7 +4440,7 @@ describe('記録の移行', () => {
      */
     expect(screen.getByText('440 kg → 220 kg')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: '移す' }));
+    fireEvent.click(screen.getByRole('button', { name: '移行' }));
 
     const stored = await storedData();
     expect(
@@ -4392,13 +4459,13 @@ describe('記録の移行', () => {
     });
     render(<MoveHarness />);
     openMove(/ハンマーカールの設定/);
-    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移す' }));
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移行する' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'この日以降' }));
     fireEvent.change(screen.getByLabelText('開始日'), { target: { value: '2026-03-05' } });
     expect(screen.getByText('1日ぶん（3/8 〜 3/8）')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: '移す' }));
+    fireEvent.click(screen.getByRole('button', { name: '移行' }));
 
     const stored = await storedData();
     expect(stored.workouts['2026-03-01']![0]!.exerciseId).toBe('ex_hammer_curl');
@@ -4415,9 +4482,9 @@ describe('記録の移行', () => {
     });
     render(<MoveHarness />);
     openMove(/ハンマーカールの設定/);
-    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移す' }));
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移行する' }));
 
-    fireEvent.click(screen.getByRole('button', { name: '移す' }));
+    fireEvent.click(screen.getByRole('button', { name: '移行' }));
     expect(screen.getByText('移行先に記録がある日')).toBeTruthy();
 
     // その日は移さない＝移し元に残る（何も失わない）
@@ -4438,8 +4505,8 @@ describe('記録の移行', () => {
     });
     render(<MoveHarness />);
     openMove(/ハンマーカールの設定/);
-    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移す' }));
-    fireEvent.click(screen.getByRole('button', { name: '移す' }));
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移行する' }));
+    fireEvent.click(screen.getByRole('button', { name: '移行' }));
     fireEvent.click(screen.getByRole('button', { name: '上書きする' }));
 
     const stored = await storedData();
@@ -4459,12 +4526,12 @@ describe('記録の移行', () => {
     // 既定はマイ種目。カタログまで広げれば、まだ持っていない種目も選べる
     const box = within(
       within(document.querySelector('dialog[open]') as HTMLElement).getByRole('group', {
-        name: '移行先の出どころ',
+        name: '候補',
       }),
     );
     fireEvent.click(box.getByRole('button', { name: 'すべて' }));
-    fireEvent.click(screen.getByRole('button', { name: 'ケーブルハンマーカールへ移す' }));
-    fireEvent.click(screen.getByRole('button', { name: '移す' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ケーブルハンマーカールへ移行する' }));
+    fireEvent.click(screen.getByRole('button', { name: '移行' }));
 
     const stored = await storedData();
     expect(stored.workouts['2026-03-01']![0]!.exerciseId).toBe('ex_cable_hammer_curl');
@@ -4474,8 +4541,7 @@ describe('記録の移行', () => {
 
   /*
    * 移行先は**部位ごとに見出しを付けて**並べる（マイ種目・カタログと同じ切り方）。
-   * 出どころはトグルで切り替える。既定はカタログ——取り違えを直す場面では、
-   * 行き先はまだ手元に無いことが多い。
+   * 候補の広さはトグルで切り替える。既定はマイ種目——行き先はたいてい手元にある。
    */
   it('移行先は すべて / マイ種目 で選べて、部位ごとに並ぶ', () => {
     // 自作種目を 1 つ持たせる（カタログには無い種目）
@@ -4513,8 +4579,8 @@ describe('記録の移行', () => {
     openMove(/ハンマーカールの設定/);
 
     const dialog = () => within(document.querySelector('dialog[open]') as HTMLElement);
-    // 期間の行にも「すべて」があるので、出どころのほうを名前で指す
-    const box = () => within(dialog().getByRole('group', { name: '移行先の出どころ' }));
+    // 期間の行にも「すべて」があるので、候補のほうを名前で指す
+    const box = () => within(dialog().getByRole('group', { name: '候補' }));
 
     /*
      * **既定はマイ種目。並びは マイ種目 → すべて。**
@@ -4525,16 +4591,59 @@ describe('記録の移行', () => {
     expect(box().getByRole('button', { name: 'マイ種目', pressed: true })).toBeTruthy();
 
     // マイ種目には自作種目も並ぶ。カタログにしかない種目は出ない
-    expect(dialog().getByRole('button', { name: '謎のマシンへ移す' })).toBeTruthy();
-    expect(dialog().queryByRole('button', { name: 'ケーブルハンマーカールへ移す' })).toBeNull();
+    expect(dialog().getByRole('button', { name: '謎のマシンへ移行する' })).toBeTruthy();
+    expect(dialog().queryByRole('button', { name: 'ケーブルハンマーカールへ移行する' })).toBeNull();
 
     // すべてに広げると、カタログの種目も並ぶ（自作種目は残る）
     fireEvent.click(box().getByRole('button', { name: 'すべて' }));
-    expect(dialog().getByRole('button', { name: 'ケーブルハンマーカールへ移す' })).toBeTruthy();
-    expect(dialog().getByRole('button', { name: '謎のマシンへ移す' })).toBeTruthy();
-    // 部位の見出しが付く（マイ種目・カタログと同じ切り方）
-    expect(dialog().getByText('腕')).toBeTruthy();
-    expect(dialog().getByText('胸')).toBeTruthy();
+    expect(dialog().getByRole('button', { name: 'ケーブルハンマーカールへ移行する' })).toBeTruthy();
+    expect(dialog().getByRole('button', { name: '謎のマシンへ移行する' })).toBeTruthy();
+    /*
+     * 部位の見出しが付く（マイ種目・カタログと同じ切り方）。
+     * 部位のチップにも同じ語があるので、見出しのほうを数える
+     */
+    const heads = [
+      ...(document.querySelector('dialog[open]') as HTMLElement).querySelectorAll(
+        '[class*="_pickerGroup_"] > [class*="_pickerLabel_"]',
+      ),
+    ].map((el) => el.textContent);
+    expect(heads).toContain('腕');
+    expect(heads).toContain('胸');
+  });
+
+  /*
+   * 移行先の絞り込みは**カタログと同じ組み**にする。見出しの行に検索を畳み、
+   * その下にラベル付きのチップ行（候補 / 部位）を並べる。
+   */
+  it('検索と部位のチップで、移行先を絞れる', () => {
+    seedData(['ex_hammer_curl', 'ex_curl', 'ex_bench'], {
+      '2026-03-01': [{ exerciseId: 'ex_hammer_curl', sets: [{ weight: 10, reps: 10 }] }],
+    });
+    render(<MoveHarness />);
+    openMove(/ハンマーカールの設定/);
+
+    const dialog = () => within(document.querySelector('dialog[open]') as HTMLElement);
+    const groups = () => within(dialog().getByRole('group', { name: '部位' }));
+
+    // 部位で絞る（カタログと同じチップ）
+    expect(
+      dialog().getByRole('button', { name: 'ベンチプレス（バーベル）へ移行する' }),
+    ).toBeTruthy();
+    fireEvent.click(groups().getByRole('button', { name: '腕' }));
+    expect(
+      dialog().queryByRole('button', { name: 'ベンチプレス（バーベル）へ移行する' }),
+    ).toBeNull();
+    expect(dialog().getByRole('button', { name: 'カール（バーベル）へ移行する' })).toBeTruthy();
+
+    // 検索は見出しの行に畳んである。打てば平たい候補に差し替わる
+    fireEvent.click(groups().getByRole('button', { name: 'すべて' }));
+    fireEvent.click(dialog().getByRole('button', { name: '種目を検索' }));
+    fireEvent.change(dialog().getByRole('searchbox'), { target: { value: 'べんち' } });
+
+    expect(
+      dialog().getByRole('button', { name: 'ベンチプレス（バーベル）へ移行する' }),
+    ).toBeTruthy();
+    expect(dialog().queryByRole('button', { name: 'カール（バーベル）へ移行する' })).toBeNull();
   });
 
   /*
@@ -4549,19 +4658,19 @@ describe('記録の移行', () => {
     openMove(/ハンマーカールの設定/);
 
     const dialog = () => within(document.querySelector('dialog[open]') as HTMLElement);
-    expect(dialog().getByRole('group', { name: '移行先の出どころ' })).toBeTruthy();
+    expect(dialog().getByRole('group', { name: '候補' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移す' }));
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移行する' }));
 
-    // 残るのは選んだ 1 件だけ。出どころのトグルも畳む
-    expect(dialog().getAllByRole('button', { name: /へ移す$/ })).toHaveLength(1);
-    expect(dialog().queryByRole('group', { name: '移行先の出どころ' })).toBeNull();
+    // 残るのは選んだ 1 件だけ。候補のトグルも畳む
+    expect(dialog().getAllByRole('button', { name: /へ移行する$/ })).toHaveLength(1);
+    expect(dialog().queryByRole('group', { name: '候補' })).toBeNull();
     // 部位の見出しも消える（1 件を束ねる意味が無い）
     expect(dialog().queryByText('腕')).toBeNull();
 
     // もう一度押すと選び直せる
-    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移す' }));
-    expect(dialog().getByRole('group', { name: '移行先の出どころ' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移行する' }));
+    expect(dialog().getByRole('group', { name: '候補' })).toBeTruthy();
   });
 
   /*
@@ -4577,13 +4686,13 @@ describe('記録の移行', () => {
     fireEvent.click(
       within(
         within(document.querySelector('dialog[open]') as HTMLElement).getByRole('group', {
-          name: '移行先の出どころ',
+          name: '候補',
         }),
       ).getByRole('button', { name: 'すべて' }),
     );
 
     // ハンマーカールは「ウエイト2つ」。ケーブル版は「ウエイト1つ」なので印が付く
-    const cable = screen.getByRole('button', { name: 'ケーブルハンマーカールへ移す' });
+    const cable = screen.getByRole('button', { name: 'ケーブルハンマーカールへ移行する' });
     expect(cable.textContent).toContain('ウエイト1つ');
     expect((cable as HTMLButtonElement).disabled).toBe(false);
   });
@@ -4593,7 +4702,7 @@ describe('記録の移行', () => {
     seedExercises('ex_hammer_curl', 'ex_curl');
     render(<MoveHarness />);
     fireEvent.click(screen.getByRole('button', { name: /ハンマーカールの設定/ }));
-    expect(screen.queryByRole('button', { name: '記録を別の種目へ移す' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '記録を別の種目へ移行' })).toBeNull();
   });
 });
 

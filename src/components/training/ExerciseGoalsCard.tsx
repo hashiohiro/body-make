@@ -73,6 +73,68 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
   const openExercise = openId ? (byId.get(openId) ?? null) : null;
   const pickedExercise = picked ? (byId.get(picked) ?? null) : null;
 
+  /**
+   * 目標 1 件の行。**部位ごとに束ねて出す**ので、行の側に部位は書かない
+   * （見出しが言っている）。
+   */
+  const row = (goal: ExerciseGoal) => {
+    const exercise = byId.get(goal.exerciseId);
+    return (
+      <button
+        key={goal.exerciseId}
+        type="button"
+        className={s.goalRow}
+        aria-label={`${goal.name}の目標`}
+        onClick={() => setOpenId(goal.exerciseId)}
+      >
+        <span className={s.goalRowHead}>
+          <span className={s.goalRowName}>{goal.name}</span>
+          <span className={s.kindTag}>
+            {goalTypeLabel(goal.type, exercise?.repUnit ?? 'reps', true)}
+          </span>
+          <span className={s.chevron} aria-hidden="true">
+            ›
+          </span>
+        </span>
+
+        {/*
+          いまと目標を並べる。**片方だけでは決めた値に近いのか分からない。**
+          維持は数値を決めないので、目標もバーも出さない（割る相手がない）
+        */}
+        <span className={s.goalRowBody}>
+          {/*
+            前回からの増減はここに足さない。**1 行で動く数字は 1 つにする。**
+            足すと「いま → 目標」の右に別の軸の数字が並び、
+            そのぶん列を広げるとバーが痩せる。伸びの中身は推移が持っている。
+          */}
+          <span className={s.goalRowValue}>
+            {fmt(goal.current, goal.digits)}
+            {goal.target != null && ` → ${fmt(goal.target, goal.digits)}`} {goal.unit}
+          </span>
+
+          {goal.target == null ? (
+            <span />
+          ) : (
+            <span className={s.meter}>
+              <span className={s.meterFill} style={{ width: `${(goal.progress ?? 0) * 100}%` }} />
+            </span>
+          )}
+
+          {/* 維持は数値を決めないので割合も出ない。それは上の「維持」が言っている */}
+          <span className={s.goalRowPct}>
+            {goal.target == null
+              ? '—'
+              : goal.reached
+                ? '到達'
+                : goal.progress == null
+                  ? '—'
+                  : fmtPercent(goal.progress)}
+          </span>
+        </span>
+      </button>
+    );
+  };
+
   const close = () => {
     setOpenId(null);
     setSettings(false);
@@ -99,65 +161,19 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
             種目を選ぶと、いまの値を見ながら決められます。
           </p>
         ) : (
-          sorted.map((goal) => {
-            const exercise = byId.get(goal.exerciseId);
+          /*
+            **部位ごとに見出しを付ける。**マイ種目・カタログ・移行先と同じ切り方。
+            並び順だけ部位の順にしていたが、見出しが無いと切れ目が読めず、
+            どこまでが同じ部位なのかを行の右の札で数えることになっていた。
+          */
+          EXERCISE_GROUP_ORDER.map((g) => {
+            const items = sorted.filter((goal) => goal.group === g);
+            if (items.length === 0) return null;
             return (
-              <button
-                key={goal.exerciseId}
-                type="button"
-                className={s.goalRow}
-                aria-label={`${goal.name}の目標`}
-                onClick={() => setOpenId(goal.exerciseId)}
-              >
-                <span className={s.goalRowHead}>
-                  <span className={s.goalRowName}>{goal.name}</span>
-                  <span className={s.kindTag}>
-                    {goalTypeLabel(goal.type, exercise?.repUnit ?? 'reps', true)}
-                  </span>
-                  <span className={s.exTag}>{GROUP_LABELS[goal.group]}</span>
-                  <span className={s.chevron} aria-hidden="true">
-                    ›
-                  </span>
-                </span>
-
-                {/*
-                  いまと目標を並べる。**片方だけでは決めた値に近いのか分からない。**
-                  維持は数値を決めないので、目標もバーも出さない（割る相手がない）
-                */}
-                <span className={s.goalRowBody}>
-                  {/*
-                    前回からの増減はここに足さない。**1 行で動く数字は 1 つにする。**
-                    足すと「いま → 目標」の右に別の軸の数字が並び、
-                    そのぶん列を広げるとバーが痩せる。伸びの中身は推移が持っている。
-                  */}
-                  <span className={s.goalRowValue}>
-                    {fmt(goal.current, goal.digits)}
-                    {goal.target != null && ` → ${fmt(goal.target, goal.digits)}`} {goal.unit}
-                  </span>
-
-                  {goal.target == null ? (
-                    <span />
-                  ) : (
-                    <span className={s.meter}>
-                      <span
-                        className={s.meterFill}
-                        style={{ width: `${(goal.progress ?? 0) * 100}%` }}
-                      />
-                    </span>
-                  )}
-
-                  {/* 維持は数値を決めないので割合も出ない。それは上の「維持」が言っている */}
-                  <span className={s.goalRowPct}>
-                    {goal.target == null
-                      ? '—'
-                      : goal.reached
-                        ? '到達'
-                        : goal.progress == null
-                          ? '—'
-                          : fmtPercent(goal.progress)}
-                  </span>
-                </span>
-              </button>
+              <div key={g}>
+                <div className={s.manageGroup}>{GROUP_LABELS[g]}</div>
+                {items.map(row)}
+              </div>
             );
           })
         )}

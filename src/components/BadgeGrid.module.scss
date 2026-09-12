@@ -1,3 +1,10 @@
+@use '../styles/mixins' as *;
+
+/* 吹き出しを置く器。バッジの位置はこの中で測る */
+.box {
+  position: relative;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(94px, 1fr));
@@ -52,12 +59,41 @@
   }
 }
 
-/* 押したバッジの条件。title 属性はスマホで出ないので、面として出す */
-.detail {
-  margin-top: 12px;
+/*
+ * 押したバッジの条件。title 属性はスマホで出ないので、自分で出す。
+ *
+ * **そのバッジの真下に浮かせる。**カードの末尾に面として置いていた頃は、
+ * 押したバッジから遠く、開くたびにカードが伸びて下のカードが動いた。
+ * 浮かせれば下は動かないし、どのバッジの話かも位置で分かる。
+ *
+ * 横幅はグリッドいっぱい。バッジの幅（94px〜）に合わせると条件文が縦に伸びるし、
+ * 端のバッジでは枠から出る。指すのはしっぽに任せる。
+ */
+.tip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
   padding: 11px 12px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-s);
-  background: var(--surface-sunken);
+  // グリッドの上に重なるので、面だけでは透ける（配色によっては半透明）
+  @include opaque-surface;
+
+  box-shadow: var(--shadow);
+}
+
+/* しっぽ。**これだけがバッジを指す**（吹き出し本体はグリッド幅いっぱい） */
+.tipArrow {
+  position: absolute;
+  top: -5px;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--border);
+  border-width: 1px 0 0 1px;
+  border-radius: 1px;
+  transform: translateX(-50%) rotate(45deg);
+  @include opaque-surface;
 }
 
 .detailName {

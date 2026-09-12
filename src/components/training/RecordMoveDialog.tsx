@@ -10,6 +10,8 @@ import {
   isListed,
 } from '../../lib/exerciseCatalog';
 import { buildSessions } from '../../lib/training';
+import { matchRank, matchesQuery } from './ExerciseFilterBar';
+import { SearchToggle } from './SearchToggle';
 import { planMove } from '../../lib/move';
 import type { OnConflict } from '../../lib/move';
 import { formatMD } from '../../lib/date';
@@ -28,7 +30,7 @@ const RANGES = [
 type RangeId = (typeof RANGES)[number]['id'];
 
 /**
- * 移行先の出どころ。**既定はマイ種目。**
+ * 候補の広さ。**既定はマイ種目。**
  *
  * 手元にある種目のほうが数が少なく、行き先もたいていそこにある。
  * カタログまで開くのは、行き先がまだ手元に無いときだけ（ダンベル版で付けていたのを
@@ -51,7 +53,7 @@ interface Candidate {
   name: string;
   group: ExerciseGroup;
   loadMode: LoadMode;
-  /** すでにマイ種目にあるか。無ければ移すときに足す */
+  /** すでにマイ種目にあるか。無ければ移行するときに足す */
   mine: boolean;
   /** 移行先として渡す実体 */
   make: () => Exercise;
@@ -93,6 +95,10 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
   const { data, daily, moveRecords } = body;
   const [toId, setToId] = useState<string | null>(null);
   const [source, setSource] = useState<SourceId>('mine');
+  /** 部位で絞る。カタログと同じチップ（`CatalogPicker`） */
+  const [group, setGroup] = useState<ExerciseGroup | 'all'>('all');
+  /** 名前で探す。打ちはじめたら、部位の見出しをやめて平たい候補に差し替える */
+  const [query, setQuery] = useState('');
   const [rangeId, setRangeId] = useState<RangeId>('all');
   const [since, setSince] = useState('');
   const [until, setUntil] = useState('');
@@ -150,6 +156,16 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
   const picked = candidates.find((c) => c.id === toId) ?? null;
   const target = picked?.make() ?? null;
 
+  // 検索とチップは AND。カタログと同じ（「腕で絞ってからカールを探す」が通る）
+  const narrowed = candidates.filter(
+    (c) => (group === 'all' || c.group === group) && matchesQuery(c.name, query),
+  );
+  const searching = query.trim() !== '';
+  /* 打っている最中の並び。前方一致を先に出し、同じ近さなら元の並びのまま */
+  const hits = searching
+    ? [...narrowed].sort((a, b) => matchRank(a.name, query) - matchRank(b.name, query))
+    : narrowed;
+
   const range = {
     from: rangeId === 'all' ? null : since || null,
     until: rangeId === 'between' ? until || null : null,
@@ -183,6 +199,37 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
     };
     return { before: sum(from, from.id), after: sum(target, target.id) };
   }, [target, plan, data.workouts, from, daily]);
+
+  /**
+   * 候補の 1 件。**束ねた一覧でも、探した結果でも、選んだあとでも同じものを出す。**
+   * 印はカタログと同じ器（`catalogTag` / `adhocTag`）。
+   *
+   * @param chosen 選んだ 1 件として出すか。もう一度押すと選び直しに戻る
+   */
+  const pill = (c: Candidate, chosen: boolean) => (
+    <button
+      key={c.id}
+      type="button"
+      className={s.pickerBtn}
+      aria-pressed={chosen || toId === c.id}
+      aria-label={`${c.name}へ移行する`}
+      onClick={() => setToId(chosen ? null : c.id)}
+    >
+      {chosen && '✓ '}
+      {c.name}
+      {/* 探した結果では束ねる見出しが無いので、部位も行に添える（カタログと同じ） */}
+      {searching && !chosen && <span className={s.catalogTag}>{GROUP_LABELS[c.group]}</span>}
+      {/*
+        数え方が違う候補には印を付ける。**選ぶのを止めはしない**——
+        器具が違えば数え方も違うのが普通で、それを直すのが移行の目的。
+        変わる量は下に数字で出す。
+      */}
+      {c.loadMode !== from.loadMode && (
+        <span className={s.catalogTag}>{LOAD_MODE_LABELS[c.loadMode]}</span>
+      )}
+      {!c.mine && <span className={s.adhocTag}>未追加</span>}
+    </button>
+  );
 
   const run = (onConflict: OnConflict) => {
     if (target == null) return;
@@ -240,31 +287,81 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
   const moving = plan.dates.length + plan.conflicts.length;
 
   return (
-    <Modal open title={`${from.name}の記録を移す`} onClose={onClose}>
+    <Modal open title={`${from.name}の記録を移行する`} onClose={onClose}>
       <div>
+        {/* 見出しの行に検索を畳む。組みはカタログと同じ（`CatalogPicker`） */}
         <div className={s.catalogHead}>
-          <span className={s.pickerLabel}>移行先</span>
+          <span className={s.pickerLabel}>
+            移行先{picked == null && `（${narrowed.length}件）`}
+          </span>
+          {picked == null && <SearchToggle query={query} onQuery={setQuery} label="種目を検索" />}
         </div>
 
         {/*
-          **既定はマイ種目**——行き先はたいてい手元にある。カタログまで開くのは、
-          まだ持っていない種目へ移すときだけ。すべてにはカタログの種目と自作種目が入る。
+          絞り込みはカタログと同じ形にそろえる。ラベル付きのチップ行を並べ、
+          出しっぱなしにする（チップは押す的であると同時に、いま何で絞っているかの表示）。
 
-          選び終わったら、これも畳む（選び直すまで使わない）。
+          選び終わったら、絞り込みごと畳む（選び直すまで使わない）。
         */}
         {picked == null && (
-          <div className={ui.chipRow} role="group" aria-label="移行先の出どころ">
-            {SOURCES.map((src) => (
+          <div className={s.filters}>
+            {/*
+              **既定はマイ種目**——行き先はたいてい手元にある。
+              すべてにはカタログの種目と自作種目の両方が入る。
+            */}
+            {/*
+              見出しは「候補」。カタログの 器具 / 部位 はどちらも種目の性質だが、
+              この行が選んでいるのは性質ではなく**候補の広さ**なので、そう名づける。
+            */}
+            <div className={s.pickerLabel} id="move-source">
+              候補
+            </div>
+            <div
+              className={`${ui.chipRow} ${s.filterRow}`}
+              role="group"
+              aria-labelledby="move-source"
+            >
+              {SOURCES.map((src) => (
+                <button
+                  key={src.id}
+                  type="button"
+                  className={ui.chip}
+                  aria-pressed={source === src.id}
+                  onClick={() => setSource(src.id)}
+                >
+                  {src.label}
+                </button>
+              ))}
+            </div>
+
+            <div className={s.pickerLabel} id="move-group">
+              部位
+            </div>
+            <div
+              className={`${ui.chipRow} ${s.filterRow}`}
+              role="group"
+              aria-labelledby="move-group"
+            >
               <button
-                key={src.id}
                 type="button"
                 className={ui.chip}
-                aria-pressed={source === src.id}
-                onClick={() => setSource(src.id)}
+                aria-pressed={group === 'all'}
+                onClick={() => setGroup('all')}
               >
-                {src.label}
+                すべて
               </button>
-            ))}
+              {EXERCISE_GROUP_ORDER.map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  className={ui.chip}
+                  aria-pressed={group === g}
+                  onClick={() => setGroup(g)}
+                >
+                  {GROUP_LABELS[g]}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -274,51 +371,20 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
           選び直したいときは、選んだ行をもう一度押す。
         */}
         {picked ? (
-          <div className={s.pickerList}>
-            <button
-              type="button"
-              className={s.pickerBtn}
-              aria-pressed
-              aria-label={`${picked.name}へ移す`}
-              onClick={() => setToId(null)}
-            >
-              ✓ {picked.name}
-              {picked.loadMode !== from.loadMode && (
-                <span className={s.catalogTag}>{LOAD_MODE_LABELS[picked.loadMode]}</span>
-              )}
-              {!picked.mine && <span className={s.adhocTag}>未追加</span>}
-            </button>
-          </div>
+          <div className={s.pickerList}>{pill(picked, true)}</div>
+        ) : narrowed.length === 0 ? (
+          <p className={ui.emptyState}>このフィルターに合う種目はありません。</p>
+        ) : searching ? (
+          /* 探しているあいだは部位で束ねない（カタログと同じ） */
+          <div className={s.pickerList}>{hits.map((c) => pill(c, false))}</div>
         ) : (
           EXERCISE_GROUP_ORDER.map((g) => {
-            const items = candidates.filter((c) => c.group === g);
+            const items = narrowed.filter((c) => c.group === g);
             if (items.length === 0) return null;
             return (
               <div key={g} className={s.pickerGroup}>
                 <div className={s.pickerLabel}>{GROUP_LABELS[g]}</div>
-                <div className={s.pickerList}>
-                  {items.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className={s.pickerBtn}
-                      aria-pressed={toId === c.id}
-                      aria-label={`${c.name}へ移す`}
-                      onClick={() => setToId(c.id)}
-                    >
-                      {c.name}
-                      {/*
-                      数え方が違う候補には印を付ける。**選ぶのを止めはしない**——
-                      器具が違えば数え方も違うのが普通で、それを直すのが移行の目的。
-                      変わる量は下に数字で出す。
-                    */}
-                      {c.loadMode !== from.loadMode && (
-                        <span className={s.catalogTag}>{LOAD_MODE_LABELS[c.loadMode]}</span>
-                      )}
-                      {!c.mine && <span className={s.adhocTag}>未追加</span>}
-                    </button>
-                  ))}
-                </div>
+                <div className={s.pickerList}>{items.map((c) => pill(c, false))}</div>
               </div>
             );
           })
@@ -377,7 +443,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
         {target && (
           <div className={s.presetBody}>
             <div className={s.groupSummary}>
-              <span>移す記録</span>
+              <span>移行する記録</span>
               <span className={s.boardValue}>
                 {moving}日ぶん
                 {moving > 0 &&
@@ -417,7 +483,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
             disabled={target == null || moving === 0}
             onClick={submit}
           >
-            移す
+            移行
           </button>
         </div>
       </div>

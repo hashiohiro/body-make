@@ -338,7 +338,7 @@ export function ExerciseManager({
             <ExerciseSettingsForm exercise={settingsExercise} onUpdate={onUpdate} />
 
             {/*
-              **記録を別の種目へ移す入口。**ここにしか置かない。
+              **記録を別の種目へ移行する入口。**ここにしか置かない。
               「別の種目として記録してしまった」を直す操作で、滅多にやらないうえ
               過去を書き換えるので、種目の性質を見ている場所の末尾に置く。
               記録が 1 日も無ければ、移すものが無い。
@@ -350,7 +350,7 @@ export function ExerciseManager({
                   className={`${ui.btn} ${ui.btnSm}`}
                   onClick={() => setMoving(true)}
                 >
-                  記録を別の種目へ移す
+                  記録を別の種目へ移行
                 </button>
               </div>
             )}
