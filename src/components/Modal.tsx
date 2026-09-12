@@ -16,6 +16,16 @@ interface Props {
    * 元居た面まで一緒に失われるため。
    */
   onBack?: (() => void) | undefined;
+  /**
+   * 高さを決め打ちにする。**一覧を出す面で使う。**
+   *
+   * 既定は中身なり（`max-height`）で、短い面が無駄に伸びないようにしてある。
+   * ただし一覧では、絞り込みや検索で件数が減るたびに高さが縮む。
+   * スマホでは下から出るシートなので、縮むと**上の縁が下がって**、
+   * いま読んでいた結果が画面の下へ逃げていく。
+   * 件数で高さが動かないようにして、読む位置を留める。
+   */
+  tall?: boolean | undefined;
   children: ReactNode;
 }
 
@@ -57,7 +67,7 @@ function unlockScroll() {
  * ネイティブ `<dialog>` の薄いラッパー。
  * フォーカストラップ・Esc・背面の不活性化はブラウザに任せる（依存を足さない）。
  */
-export function Modal({ open, title, onClose, onBack, children }: Props) {
+export function Modal({ open, title, onClose, onBack, tall, children }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -91,7 +101,12 @@ export function Modal({ open, title, onClose, onBack, children }: Props) {
   }, [open]);
 
   return (
-    <dialog ref={ref} className={s.dialog} onCancel={onBack ?? onClose} onClose={onBack ?? onClose}>
+    <dialog
+      ref={ref}
+      className={`${s.dialog} ${tall ? s.tall : ''}`}
+      onCancel={onBack ?? onClose}
+      onClose={onBack ?? onClose}
+    >
       <div className={s.head}>
         {onBack && (
           <button type="button" className={s.back} onClick={onBack}>
@@ -103,7 +118,7 @@ export function Modal({ open, title, onClose, onBack, children }: Props) {
           閉じる
         </button>
       </div>
-      <div className={s.body}>{open && children}</div>
+      <div className={`${s.body} ${tall ? s.bodyTall : ''}`}>{open && children}</div>
     </dialog>
   );
 }

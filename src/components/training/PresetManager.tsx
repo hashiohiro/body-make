@@ -55,7 +55,7 @@ function PickDialog({
 
   if (catalog) {
     return (
-      <Modal open title="カタログから足す" onClose={onClose} onBack={() => setCatalog(false)}>
+      <Modal open title="カタログから足す" tall onClose={onClose} onBack={() => setCatalog(false)}>
         <div>
           {/*
             **カタログから選んだ種目は、マイ種目とこの組み合わせの両方に入る。**
@@ -80,7 +80,7 @@ function PickDialog({
   }
 
   return (
-    <Modal open title={`${label}に種目を足す`} onClose={onClose}>
+    <Modal open title={`${label}に種目を足す`} tall onClose={onClose}>
       <div>
         {choices.length === 0 ? (
           /*

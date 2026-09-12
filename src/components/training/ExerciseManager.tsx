@@ -246,7 +246,8 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
       </div>
 
       {/* 一覧の続きに出すと、どこまでが追加の画面か分からなくなるのでモーダルにする */}
-      <Modal open={adding} title="マイ種目に追加" onClose={() => setAdding(false)}>
+      {/* カタログは一覧なので高さを固定する（検索で件数が減っても縮まない） */}
+      <Modal open={adding} title="マイ種目に追加" tall onClose={() => setAdding(false)}>
         <div>
           <CatalogPicker exercises={exercises} onAdd={onAdd} />
 

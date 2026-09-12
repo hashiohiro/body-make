@@ -168,6 +168,12 @@ export function ExercisePicker({
       <Modal
         open={open}
         title={TITLES[panel]}
+        /*
+          一覧を出す面は高さを固定する。絞り込みや検索で件数が減るたびに縮むと、
+          下から出るシートなので上の縁が下がって、読んでいた結果が下へ逃げていく。
+          足し方のメニューと「マイ種目にも追加しますか？」は中身なり（短い面）。
+        */
+        tall={panel === 'exercises' || panel === 'catalog' || panel === 'presets'}
         onClose={close}
         // 答えずに戻ったら、その種目は入れない。戻り先は選んでいた面
         onBack={

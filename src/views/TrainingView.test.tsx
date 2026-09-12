@@ -4437,6 +4437,28 @@ describe('種目の絞り込み（部位）', () => {
    * ブラウザは type="search" の欄に × を付ける。それと「やめる」の × が
    * 同じ形で並ぶと、押す前にどちらがどちらか分からない（CSS で内側を消してある）。
    */
+  /*
+   * 検索で件数が減るたびにダイアログの高さが縮むと、下から出るシートでは
+   * 上の縁が下がって、読んでいた結果が画面の下へ逃げていく。
+   */
+  it('一覧のダイアログは高さを固定する', () => {
+    seedMany();
+    render(<Harness />);
+
+    // 足し方のメニューは短い面なので、中身なり
+    openMenu();
+    const dialog = () => document.querySelector('dialog[open]') as HTMLElement;
+    expect(dialog().className).not.toMatch(/tall/);
+
+    // 一覧を出す面は固定
+    fireEvent.click(screen.getByRole('button', { name: /^マイ種目から選ぶ/ }));
+    expect(dialog().className).toMatch(/tall/);
+
+    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+    fireEvent.click(screen.getByRole('button', { name: /^カタログから選ぶ/ }));
+    expect(dialog().className).toMatch(/tall/);
+  });
+
   it('× は 1 つだけにする', () => {
     seedMany();
     render(<ManagerHarness />);
