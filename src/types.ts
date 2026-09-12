@@ -417,13 +417,32 @@ export interface SessionExercise {
 export type Workouts = Record<string, SessionExercise[]>;
 
 /**
- * 週あたりの部位別セット数の目標。null は未設定。
+ * 部位の目標の立て方。**部位別に見る値と同じ軸**（`GROUP_VALUES`）。
+ *
+ *   sets   … 週のセット数。どれだけ回数を重ねたか
+ *   volume … 週の挙上量（kg）。どれだけの量を動かしたか
+ *
+ * 種目の目標（`GoalType`）とは別に持つ。あちらは重量・回数・距離まで含む
+ * 種目ごとの話で、こちらは部位に積み上がる量の話。
+ */
+export type GroupGoalType = 'sets' | 'volume';
+
+/** 部位の目標。立て方と値を対で持つ（種目の `ExerciseTarget` と同じ形） */
+export interface GroupTarget {
+  type: GroupGoalType;
+  value: number;
+}
+
+/**
+ * 週あたりの部位別の目標。null は未設定。
  *
  * 体組成の設定（身長・目標体重）とは別のレイヤーなので Settings には混ぜない。
- * 目標があると「今週の配分」のゲージが進捗として読めるようになる。
  * 無いときは基準値をこちらで発明せず、数値だけを出す。
+ *
+ * **以前はセット数だけの `number | null` だった。**読み込みで素の数値を
+ * 見つけたら「セット数の目標」として読み替える（`sanitizeGroupGoals`）。
  */
-export type GroupGoals = Record<MuscleGroup, number | null>;
+export type GroupGoals = Record<MuscleGroup, GroupTarget | null>;
 
 /* ---- 以下は導出値。保存しない ---- */
 

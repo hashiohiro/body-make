@@ -1,7 +1,7 @@
 import { ExerciseGoalsCard } from './ExerciseGoalsCard';
 import { WeeklyVolumeCard } from './WeeklyVolumeCard';
 import type { ExerciseGoal, TrainingStats } from '../../lib/training';
-import type { Exercise, GroupGoals, MuscleGroup, SessionPoint } from '../../types';
+import type { Exercise, GroupGoals, GroupTarget, MuscleGroup, SessionPoint } from '../../types';
 
 interface Props {
   goals: readonly ExerciseGoal[];
@@ -10,7 +10,7 @@ interface Props {
   exercises: readonly Exercise[];
   /** 目標を決めるときに「いま」と「過去最大」を出すために使う */
   sessions: readonly SessionPoint[];
-  onSetGroupGoal: (group: MuscleGroup, value: number | null) => void;
+  onSetGroupGoal: (group: MuscleGroup, target: GroupTarget | null) => void;
   onUpdate: (exercise: Exercise) => void;
 }
 

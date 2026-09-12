@@ -150,6 +150,12 @@ function answer(name: string | RegExp) {
   fireEvent.click(topDialog().getByRole('button', { name }));
 }
 
+/** いちばん手前のダイアログ（確認に限らない面を見るとき） */
+function topDialogAny() {
+  const dialogs = [...document.querySelectorAll('dialog[open]')];
+  return within(dialogs[dialogs.length - 1] as HTMLElement);
+}
+
 /** 確認をやめる */
 function decline() {
   fireEvent.click(topDialog().getByRole('button', { name: 'やめる' }));
@@ -2133,23 +2139,55 @@ describe('全体状況の指標', () => {
   });
 });
 
-describe('部位別セット数の目標', () => {
+describe('部位の目標', () => {
   it('値域外は保存されず、範囲内は丸めて保存される', async () => {
     const { sanitizeData, GROUP_GOAL_RANGE } = await import('../lib/storage');
     const data = sanitizeData({
-      groupGoals: { chest: 12, back: 12.6, legs: 0, shoulders: GROUP_GOAL_RANGE[1] + 1, arms: 'x' },
+      groupGoals: {
+        chest: { type: 'sets', value: 12 },
+        back: { type: 'sets', value: 12.6 },
+        legs: { type: 'sets', value: 0 },
+        shoulders: { type: 'sets', value: GROUP_GOAL_RANGE[1] + 1 },
+        arms: { type: 'sets', value: 'x' },
+      },
     });
-    expect(data.groupGoals.chest).toBe(12);
-    expect(data.groupGoals.back).toBe(13); // 整数に丸める
+    expect(data.groupGoals.chest).toEqual({ type: 'sets', value: 12 });
+    expect(data.groupGoals.back).toEqual({ type: 'sets', value: 13 }); // 整数に丸める
     expect(data.groupGoals.legs).toBeNull(); // 下限未満
     expect(data.groupGoals.shoulders).toBeNull(); // 上限超え
     expect(data.groupGoals.arms).toBeNull();
     expect(data.groupGoals.core).toBeNull(); // 未指定
   });
 
+  /*
+   * **立て方を持たせる前のデータは、セット数の目標として読む。**
+   * `chest: 20` と書いてあるバックアップも、版を上げずにそのまま生きる。
+   */
+  it('素の数値はセット数の目標として読み替える', async () => {
+    const { sanitizeData } = await import('../lib/storage');
+    const data = sanitizeData({ groupGoals: { chest: 20, back: 0, legs: 'x' } });
+    expect(data.groupGoals.chest).toEqual({ type: 'sets', value: 20 });
+    expect(data.groupGoals.back).toBeNull();
+    expect(data.groupGoals.legs).toBeNull();
+  });
+
+  it('挙上量の目標も持てる（セット数より桁が上がる）', async () => {
+    const { sanitizeData, GROUP_VOLUME_GOAL_RANGE } = await import('../lib/storage');
+    const data = sanitizeData({
+      groupGoals: {
+        chest: { type: 'volume', value: 20000 },
+        back: { type: 'volume', value: GROUP_VOLUME_GOAL_RANGE[1] + 1 },
+      },
+    });
+    expect(data.groupGoals.chest).toEqual({ type: 'volume', value: 20000 });
+    expect(data.groupGoals.back).toBeNull();
+  });
+
   it('目標はバックアップに含まれて往復する', async () => {
     const { sanitizeData } = await import('../lib/storage');
-    const original = sanitizeData({ groupGoals: { chest: 12, back: 15 } });
+    const original = sanitizeData({
+      groupGoals: { chest: { type: 'sets', value: 12 }, back: { type: 'volume', value: 30000 } },
+    });
     const roundTripped = sanitizeData(JSON.parse(JSON.stringify(original)));
     expect(roundTripped.groupGoals).toEqual(original.groupGoals);
   });
@@ -2495,7 +2533,7 @@ describe('バックアップの読み込み', () => {
 
     const after = await storedData();
     expect(after.presets).toHaveLength(1);
-    expect(after.groupGoals.chest).toBe(12);
+    expect(after.groupGoals.chest).toEqual({ type: 'sets', value: 12 });
     expect(after.entries['2026-03-01']).toBeDefined();
   });
 
@@ -2514,7 +2552,7 @@ describe('バックアップの読み込み', () => {
     fireEvent.click(screen.getByRole('button', { name: 'いまの記録に足す' }));
     const after = await storedData();
     expect(after.presets[0]!.name).toBe('押す日');
-    expect(after.groupGoals.chest).toBe(15);
+    expect(after.groupGoals.chest).toEqual({ type: 'sets', value: 15 });
   });
 
   it('やめるを押したら、何も取り込まない', async () => {
@@ -3136,23 +3174,21 @@ describe('目標画面', () => {
     expect(screen.getByLabelText(/目標日/)).toBeTruthy();
   });
 
-  it('目安のチップは、開いている部位にだけ効く', () => {
+  /*
+   * **開いたらそのまま決める。**以前は「読む面 →『部位目標を設定』→ 決める面」の
+   * 2 段だった。部位を開く用はほぼ目標を触ることなので、1 枚にした。
+   * 組みは種目の目標と同じ（トグルで立て方、欄で値、外すのはボタン）。
+   */
+  it('部位を開くと、その場で目標を決められる', () => {
     render(<GoalsHarness domain="training" />);
 
-    // 一覧には出さない。決めるのは部位を開いた先
-    expect(screen.queryByRole('button', { name: '標準 12' })).toBeNull();
+    // 一覧には決める道具を出さない
+    expect(goalFields(/^胸の目標$/)).toHaveLength(0);
 
     fireEvent.click(screen.getByRole('button', { name: '胸の今週の量' }));
-    // 決めるのは 1 段先の面。表示部と押す場所を分ける
-    fireEvent.click(screen.getByRole('button', { name: '部位目標を設定' }));
-    fireEvent.click(screen.getByRole('button', { name: '標準 12' }));
-    expect((screen.getByLabelText('胸') as HTMLInputElement).value).toBe('12');
-
-    // 打つ前の目安。そのあと手で変えられる
-    fireEvent.change(screen.getByLabelText('胸'), { target: { value: '6' } });
-    fireEvent.blur(screen.getByLabelText('胸'));
-    // 深い面では右上が「‹ 戻る」。閉じるとダイアログごと消えて元の面まで失われる
-    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+    // 1 段で編集。間に入口を挟まない（見出しと欄が同じ名前なので、欄だけを拾う）
+    const field = goalField(/^胸の目標$/);
+    fireEvent.change(field, { target: { value: '6' } });
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     // ほかの部位は動かさない（1 か所を開いているのに 6 か所が変わると驚く）
@@ -3160,12 +3196,35 @@ describe('目標画面', () => {
     // 決めていない部位は割る相手がないので、分母を「—」にしてバーも出さない
     expect(screen.getAllByText('0 / —')).toHaveLength(5);
 
+    // 外すのはボタン 1 つ（欄を空にしただけでは消さない）
     fireEvent.click(screen.getByRole('button', { name: '胸の今週の量' }));
-    fireEvent.click(screen.getByRole('button', { name: '部位目標を設定' }));
-    fireEvent.click(screen.getByRole('button', { name: '決めない' }));
-    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+    fireEvent.click(screen.getByRole('button', { name: '目標を外す' }));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     expect(screen.getAllByText('0 / —')).toHaveLength(6);
+  });
+
+  /*
+   * セット数だけでなく**挙上量でも立てられる。**選ぶのは種目の目標と同じトグル。
+   * 桁が 3 つ違うので、立て方を変えたときに値は持ち越さない。
+   */
+  it('部位の目標は挙上量でも立てられる', async () => {
+    seedData(['ex_bench'], {
+      [todayISO()]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+    });
+    render(<GoalsHarness domain="training" />);
+
+    fireEvent.click(screen.getByRole('button', { name: '胸の今週の量' }));
+    const dialog = topDialogAny();
+    expect(dialog.getByRole('button', { name: 'セット数', pressed: true })).toBeTruthy();
+
+    fireEvent.click(dialog.getByRole('button', { name: '挙上量' }));
+    fireEvent.change(goalField(/^胸の目標$/), { target: { value: '20000' } });
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+
+    const stored = await storedData();
+    expect(stored.groupGoals.chest).toEqual({ type: 'volume', value: 20000 });
+    // 行の数字も挙上量の軸で出る（60 × 10 = 600kg）
+    expect(screen.getByText('600 / 20000')).toBeTruthy();
   });
 
   it('種目の目標は目標画面で決め、その場から推移も見られる', () => {
@@ -3296,9 +3355,7 @@ describe('目標画面', () => {
     // 目標を決めれば、一覧の行にバーが出る（数字だけだと割り算をしないと分からない）
     expect(chestRow.querySelector('[role="progressbar"]')).toBeNull();
     fireEvent.click(chestRow);
-    fireEvent.click(screen.getByRole('button', { name: '部位目標を設定' }));
-    fireEvent.click(screen.getByRole('button', { name: '標準 12' }));
-    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+    fireEvent.change(goalField(/^胸の目標$/), { target: { value: '12' } });
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     // 進捗は読み上げにも出る（Meter が role="progressbar" を持つ）
@@ -4695,17 +4752,20 @@ describe('有酸素', () => {
     expect(dialog.queryByText('有酸素')).toBeNull();
   });
 
-  it('目標画面には部位とは別の行で出る（週のセット数ではなく回数と時間）', () => {
+  /*
+   * **有酸素の行は押せない。**部位ではないので目標を持たず、開いた先に決める
+   * ものが無い。押せる行と同じ形で並べて、開いたら行き止まりのほうが悪い。
+   */
+  it('目標画面には部位とは別の行で出る（回数と時間・押せない）', () => {
     seedCardio(['ex_running'], {
       [todayISO()]: [{ exerciseId: 'ex_running', sets: [{ weight: 5, reps: 30 }] }],
     });
     render(<GoalsHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '有酸素の今週の量' }));
-    const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
-    expect(dialog.getByText('1回 / 30分')).toBeTruthy();
-    // 部位目標（週のセット数）は持たない
-    expect(dialog.queryByText('部位目標を設定')).toBeNull();
+    expect(screen.getByText('1回 / 30分')).toBeTruthy();
+    // 部位の行は押せる。有酸素だけ押せない
+    expect(screen.getByRole('button', { name: '胸の今週の量' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '有酸素の今週の量' })).toBeNull();
   });
 
   it('カタログに有酸素の欄がある（部位の並びで切ると出てこない）', () => {

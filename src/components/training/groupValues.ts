@@ -1,7 +1,11 @@
 import type { WeekSetCount } from '../../lib/training';
-import type { MuscleGroup } from '../../types';
+import type { GroupGoalType, MuscleGroup } from '../../types';
 
-export type GroupValueId = 'sets' | 'volume';
+/**
+ * 見る値の軸。**部位の目標の立て方と同じもの**（`GroupGoalType`）。
+ * 別に持つと、目標は挙上量で立てられるのに配分の表には出ない、という食い違いが起きる。
+ */
+export type GroupValueId = GroupGoalType;
 
 export interface GroupValue {
   id: GroupValueId;

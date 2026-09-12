@@ -625,6 +625,11 @@ export interface TrainingStats {
   /** 今週の部位別セット数。0 の部位は daysSinceGroup で「何日空いているか」を見る */
   thisWeekSetsByGroup: Record<MuscleGroup, number>;
   /**
+   * 今週の部位別挙上量（kg）。**部位の目標を挙上量で立てたときに割る相手。**
+   * セット数と同じ週・同じ係数（補助部位ぶん）で数える。
+   */
+  thisWeekVolumeByGroup: Record<MuscleGroup, number>;
+  /**
    * 先週の部位別セット数。
    *
    * 今週が 0 のときに添えるためだけに持つ。**週は日曜に 0 へ戻る**ので、
@@ -735,6 +740,7 @@ export function computeTrainingStats(
     daysSinceGroup: noGroups,
     daysSinceCardio: null,
     thisWeekSetsByGroup: { ...EMPTY_GROUPS },
+    thisWeekVolumeByGroup: { ...EMPTY_GROUPS },
     lastWeekSetsByGroup: { ...EMPTY_GROUPS },
     recentBests: 0,
     stalled: 0,
@@ -845,6 +851,7 @@ export function computeTrainingStats(
     daysSinceGroup,
     daysSinceCardio,
     thisWeekSetsByGroup: weekOf(thisStart)?.setsByGroup ?? { ...EMPTY_GROUPS },
+    thisWeekVolumeByGroup: weekOf(thisStart)?.volumeByGroup ?? { ...EMPTY_GROUPS },
     lastWeekSetsByGroup: weekOf(lastStart)?.setsByGroup ?? { ...EMPTY_GROUPS },
     recentBests,
     stalled,

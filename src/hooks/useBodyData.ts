@@ -33,6 +33,7 @@ import type {
   Entries,
   Exercise,
   Measurement,
+  GroupTarget,
   MuscleGroup,
   Preset,
   SessionExercise,
@@ -121,7 +122,7 @@ export interface BodyData {
   /** 過去の日から種目だけをまとめて足す。すでにある種目は飛ばす */
   addDayExercises: (date: string, exerciseIds: readonly string[]) => void;
 
-  setGroupGoal: (group: MuscleGroup, value: number | null) => void;
+  setGroupGoal: (group: MuscleGroup, target: GroupTarget | null) => void;
   /** いまの組み合わせに名前を付けて残す。同じ名前があれば中身を置き換える */
   savePreset: (name: string, exerciseIds: readonly string[]) => void;
   /** 名前と中身を書き換える（設定側の編集） */
@@ -536,8 +537,8 @@ export function useBodyData(initial: AppData): BodyData {
     setData((prev) => ({ ...prev, presets: prev.presets.filter((p) => p.id !== id) }));
   }, []);
 
-  const setGroupGoal = useCallback((group: MuscleGroup, value: number | null) => {
-    setData((prev) => ({ ...prev, groupGoals: { ...prev.groupGoals, [group]: value } }));
+  const setGroupGoal = useCallback((group: MuscleGroup, target: GroupTarget | null) => {
+    setData((prev) => ({ ...prev, groupGoals: { ...prev.groupGoals, [group]: target } }));
   }, []);
 
   const updateChecks = useCallback((patch: Partial<CheckSettings>) => {

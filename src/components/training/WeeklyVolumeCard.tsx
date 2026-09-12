@@ -1,33 +1,16 @@
 import { useState } from 'react';
-import { ChipGroup } from '../ChipGroup';
+import { GroupGoalEditor } from './GroupGoalEditor';
 import { Meter } from '../Meter';
 import { Modal } from '../Modal';
-import { NumericInput } from '../NumericInput';
 import { GROUP_LABELS, GROUP_ORDER, isCardio, isListed } from '../../lib/exerciseCatalog';
-import { GROUP_GOAL_RANGE } from '../../lib/storage';
 import { addDays, formatMD, startOfWeek, todayISO } from '../../lib/date';
+import { fmtVolume } from '../../lib/format';
 import { formatSets } from '../../lib/training';
 import type { TrainingStats } from '../../lib/training';
-import type { Exercise, ExerciseGroup, GroupGoals, MuscleGroup, SessionPoint } from '../../types';
+import type { Exercise, GroupGoals, GroupTarget, MuscleGroup, SessionPoint } from '../../types';
 import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
-import { MiniButton } from '../MiniButton';
 import s from './training.module.scss';
-
-/**
- * 週のセット数の目安。開いている部位にだけ入る。
- *
- * 「胸は何セットが妥当か」は始めたばかりの人には決めようがないので、
- * 打つ前に押せる値を並べておく。値は部位ごとに変えていない。
- * 補助部位は係数ぶんで数えるので、腕や肩はプレスや懸垂から自然に積み上がる。
- * こちらで部位ごとの上下を決めると、その積み上がりと二重に効いてしまう。
- */
-const PRESETS: { label: string; sets: number | null }[] = [
-  { label: '少なめ 8', sets: 8 },
-  { label: '標準 12', sets: 12 },
-  { label: '多め 16', sets: 16 },
-  { label: '決めない', sets: null },
-];
 
 /** 最終実施からの日数の言い方。回復ダイアログと同じ語彙を使う */
 function lastDoneLabel(days: number | null): string {
@@ -43,7 +26,7 @@ interface Props {
   exercises: readonly Exercise[];
   /** 有酸素の今週（回数と時間）を数えるために使う */
   sessions: readonly SessionPoint[];
-  onSetGroupGoal: (group: MuscleGroup, value: number | null) => void;
+  onSetGroupGoal: (group: MuscleGroup, target: GroupTarget | null) => void;
 }
 
 /**
@@ -73,14 +56,8 @@ export function WeeklyVolumeCard({
   sessions,
   onSetGroupGoal,
 }: Props) {
-  const [open, setOpen] = useState<ExerciseGroup | null>(null);
-  /** 部位目標の設定を開いているか。面を差し替える（重ねない） */
-  const [editing, setEditing] = useState(false);
-
-  const close = () => {
-    setOpen(null);
-    setEditing(false);
-  };
+  /** 開いている部位。押したらそのまま目標を決める面（段は増やさない） */
+  const [open, setOpen] = useState<MuscleGroup | null>(null);
 
   const totalSets = GROUP_ORDER.reduce((sum, g) => sum + stats.thisWeekSetsByGroup[g], 0);
   const thisWeekStart = startOfWeek(todayISO());
@@ -108,18 +85,23 @@ export function WeeklyVolumeCard({
   const rows = GROUP_ORDER.map((group) => {
     const target = groupGoals[group];
     const sets = stats.thisWeekSetsByGroup[group];
+    const volume = stats.thisWeekVolumeByGroup[group];
+    // 立て方で割る相手が変わる。行に出す数字も進捗も、同じ軸から引く
+    const done = target?.type === 'volume' ? volume : sets;
     return {
       group,
       target,
       sets,
+      volume,
+      done,
       days: stats.daysSinceGroup[group],
       /** 量の進捗。目標を決めていない部位は出さない（割る相手がない） */
-      progress: target == null ? null : Math.min(1, sets / target),
+      progress: target == null ? null : Math.min(1, done / target.value),
     };
   });
 
   const hasCardio = exercises.some((e) => isCardio(e.group) && isListed(e));
-  const current = open == null || open === 'cardio' ? null : rows.find((r) => r.group === open)!;
+  const current = open == null ? null : rows.find((r) => r.group === open)!;
 
   return (
     <>
@@ -153,9 +135,14 @@ export function WeeklyVolumeCard({
               <Meter value={row.progress} label={`${GROUP_LABELS[row.group]}の今週の量`} />
             )}
 
-            {/* 単位（セット）はカードの見出しが持つ。行に書くとバーがそのぶん痩せる */}
+            {/*
+              単位は行に書かない（バーがそのぶん痩せる）。セット数なら見出しが言っていて、
+              挙上量なら桁で分かる。**目標の立て方に合わせた軸で出す**——
+              セット数の目標に挙上量を並べても、足りているかが読めない。
+            */}
             <span className={s.volValue}>
-              {formatSets(row.sets)} / {row.target ?? '—'}
+              {row.target?.type === 'volume' ? fmtVolume(row.volume) : formatSets(row.sets)} /{' '}
+              {row.target?.value ?? '—'}
             </span>
             {/*
               最終実施からの日数。「4日空き」は余裕があるようにも読めるので、
@@ -174,22 +161,19 @@ export function WeeklyVolumeCard({
           代わりに出すのは回数と時間で、これは種目をまたいでも足せる量。
           行が出るのは有酸素の種目を持っているときだけ（持たない人に空の行を見せない）。
         */}
+        {/*
+          **有酸素の行は押せない。**部位ではないので目標を持たず、開いた先に決める
+          ものが無い。押せる行と同じ形で並べて、開いたら行き止まりのほうが悪い。
+          「›」も出さない（形から押せないことが読める）。
+        */}
         {hasCardio && (
-          <button
-            type="button"
-            className={s.volRow}
-            aria-label={`${GROUP_LABELS.cardio}の今週の量`}
-            onClick={() => setOpen('cardio')}
-          >
+          <div className={s.volRow}>
             <span className={s.volName}>{GROUP_LABELS.cardio}</span>
             <span className={s.volWide}>
               {cardioWeek.days}回 / {cardioWeek.minutes}分
             </span>
             <span className={s.volStatus}>{lastDoneLabel(stats.daysSinceCardio)}</span>
-            <span className={s.chevron} aria-hidden="true">
-              ›
-            </span>
-          </button>
+          </div>
         )}
 
         <p className={ui.note}>
@@ -197,118 +181,21 @@ export function WeeklyVolumeCard({
         </p>
       </section>
 
-      {open != null && (
-        <Modal
-          open
-          title={editing ? `${GROUP_LABELS[open]}の部位目標` : `${GROUP_LABELS[open]}の量`}
-          onClose={close}
-          onBack={editing ? () => setEditing(false) : undefined}
-        >
-          {editing && current ? (
-            /*
-              **部位目標を決める面。**入口を押すと面を差し替える。
-              決める作業のあいだ、読むための数字が下に残っていると
-              「どれを触ればいいのか」が 2 つ見えてしまう。
-            */
-            <div>
-              {/*
-                打つ前に押せる値を先に置く。効くのは開いている部位だけで、
-                ほかの部位は動かさない（1 か所を開いているのに 6 か所が変わると驚く）
-              */}
-              <ChipGroup
-                options={PRESETS.map((p) => ({ id: p.sets ?? 0, label: p.label }))}
-                value={current.target ?? 0}
-                onChange={(sets) => onSetGroupGoal(current.group, sets === 0 ? null : sets)}
-                label="目安から決める"
-              />
-
-              <div className={ui.formRow}>
-                <label htmlFor={`group-goal-${current.group}`}>週のセット数</label>
-                <span className={ui.inputUnit}>
-                  <NumericInput
-                    id={`group-goal-${current.group}`}
-                    ariaLabel={GROUP_LABELS[current.group]}
-                    value={current.target}
-                    min={GROUP_GOAL_RANGE[0]}
-                    max={GROUP_GOAL_RANGE[1]}
-                    step={1}
-                    placeholder="—"
-                    onCommit={(v) =>
-                      onSetGroupGoal(current.group, v == null ? null : Math.round(v))
-                    }
-                  />
-                  <span>セット</span>
-                </span>
-              </div>
-
-              {/* 決めた値がいまの実績にどう当たるかを、同じ面で見せる */}
-              {current.target != null && (
-                <Meter
-                  value={current.progress ?? 0}
-                  label={`${GROUP_LABELS[current.group]}の今週の量`}
-                  block
-                />
-              )}
-
-              <p className={ui.note}>
-                今週 {formatSets(current.sets)} セット。補助部位は既定で 0.5 セットとして数えます。
-                この値は日曜に 0 へ戻ります。
-              </p>
-            </div>
-          ) : (
-            <div>
-              <div className={s.groupSummary}>
-                <span>{current ? '今週のセット数' : '今週'}</span>
-                <span className={s.boardValue}>
-                  {current ? (
-                    <>
-                      {formatSets(current.sets)}
-                      {current.target == null
-                        ? ' セット（目標なし）'
-                        : ` / ${current.target} セット`}
-                    </>
-                  ) : (
-                    `${cardioWeek.days}回 / ${cardioWeek.minutes}分`
-                  )}
-                </span>
-              </div>
-
-              {current?.target != null && (
-                <Meter
-                  value={current.progress ?? 0}
-                  label={`${GROUP_LABELS[current.group]}の今週の量`}
-                  block
-                />
-              )}
-
-              <p className={ui.note}>
-                {(() => {
-                  const days = current ? current.days : stats.daysSinceCardio;
-                  if (days == null) {
-                    return current
-                      ? 'この部位の記録はまだありません'
-                      : '有酸素の記録はまだありません';
-                  }
-                  return days === 0 ? '今日やりました' : `最後にやってから ${days}日`;
-                })()}
-                。
-                {current
-                  ? '補助部位は既定で 0.5 セットとして数えます。'
-                  : /* 走った km と漕いだ km を足しても読めない（§11-18） */
-                    '距離は種目ごとに見ます（種目の目標から開けます）。'}
-              </p>
-
-              {/*
-                **決める場所は小さいボタン 1 つ。**表示部と同じ大きさで並べると、
-                どちらが読むもので どちらが押すものか分からなくなる。
-              */}
-              {current && (
-                <div className={ui.btnRow}>
-                  <MiniButton onClick={() => setEditing(true)}>部位目標を設定</MiniButton>
-                </div>
-              )}
-            </div>
-          )}
+      {/*
+        **開いたらそのまま決める面。**以前は「読む面 →『部位目標を設定』→ 決める面」の
+        2 段だったが、部位を開く用はほぼ目標を触ることなので、1 枚にした。
+        組みは種目の目標と同じ（`GroupGoalEditor`）。
+      */}
+      {current && (
+        <Modal open title={`${GROUP_LABELS[current.group]}の目標`} onClose={() => setOpen(null)}>
+          <GroupGoalEditor
+            group={current.group}
+            target={current.target}
+            sets={current.sets}
+            volume={current.volume}
+            days={current.days}
+            onChange={(target) => onSetGroupGoal(current.group, target)}
+          />
         </Modal>
       )}
     </>

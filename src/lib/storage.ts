@@ -7,6 +7,8 @@ import type {
   ExerciseGroup,
   ExerciseTarget,
   GroupGoals,
+  GroupGoalType,
+  GroupTarget,
   LoadMode,
   Measurement,
   MuscleGroup,
@@ -91,10 +93,27 @@ export function emptyData(): AppData {
   };
 }
 
+/**
+ * 部位の目標。**素の数値はセット数の目標として読み替える。**
+ * 立て方を持たせる前のデータ（`chest: 20`）が、版を上げずにそのまま生きる。
+ */
+function sanitizeGroupTarget(raw: unknown): GroupTarget | null {
+  if (typeof raw === 'number' || typeof raw === 'string') {
+    const sets = int(raw, GROUP_GOAL_RANGE[0], GROUP_GOAL_RANGE[1]);
+    return sets == null ? null : { type: 'sets', value: sets };
+  }
+  if (raw == null || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const type: GroupGoalType = o.type === 'volume' ? 'volume' : 'sets';
+  const range = type === 'volume' ? GROUP_VOLUME_GOAL_RANGE : GROUP_GOAL_RANGE;
+  const value = int(o.value, range[0], range[1]);
+  return value == null ? null : { type, value };
+}
+
 function sanitizeGroupGoals(raw: unknown): GroupGoals {
   const o = (raw ?? {}) as Record<string, unknown>;
   const out = { ...EMPTY_GROUP_GOALS };
-  for (const g of GROUPS) out[g] = int(o[g], GROUP_GOAL_RANGE[0], GROUP_GOAL_RANGE[1]);
+  for (const g of GROUPS) out[g] = sanitizeGroupTarget(o[g]);
   return out;
 }
 
@@ -157,6 +176,12 @@ export const TARGET_WEIGHT_RANGE: [number, number] = [0, 500];
 export const TARGET_VOLUME_RANGE: [number, number] = [0, 100000];
 export const TARGET_REPS_RANGE: [number, number] = [1, 200];
 export const GROUP_GOAL_RANGE: [number, number] = [1, 50];
+/**
+ * 部位の挙上量の目標（kg/週）。
+ * 上限は種目 1 つの目標（`TARGET_VOLUME_RANGE`）と同じにそろえる。
+ * 桁を無闇に広げると、行に出す数字の幅もそのぶん取ることになる。
+ */
+export const GROUP_VOLUME_GOAL_RANGE: [number, number] = [1, 100000];
 /** 有酸素の目標。距離(m) / 時間(分) / 速度(m/分)。どれも入力欄と同じ単位 */
 export const TARGET_DISTANCE_RANGE: [number, number] = [1, 200000];
 export const TARGET_DURATION_RANGE: [number, number] = [1, 600];
