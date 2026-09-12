@@ -4325,6 +4325,278 @@ describe('有酸素', () => {
   });
 });
 
+/*
+ * 記録を別の種目へ移す。**唯一「過去を書き換える」操作。**
+ * 「別の種目として記録してしまった」を、消して打ち直さずに直すために持つ。
+ */
+describe('記録の移行', () => {
+  function MoveHarness() {
+    const body = useBodyData(seeded);
+    const usage = new Map<string, number>();
+    for (const day of Object.values(body.data.workouts)) {
+      for (const e of day) usage.set(e.exerciseId, (usage.get(e.exerciseId) ?? 0) + 1);
+    }
+    return (
+      <ExerciseManager
+        exercises={body.data.exercises}
+        sessions={body.sessions}
+        usage={usage}
+        body={body}
+        onAdd={body.addExercises}
+        onUpdate={body.upsertExercise}
+        onRemove={body.removeExercise}
+      />
+    );
+  }
+
+  /** 種目の「設定」を開いて、記録の移行を始める */
+  function openMove(name: RegExp) {
+    fireEvent.click(screen.getByRole('button', { name }));
+    fireEvent.click(screen.getByRole('button', { name: '記録を別の種目へ移す' }));
+  }
+
+  it('マイ種目の別の種目へ、全期間ぶん移せる', async () => {
+    seedData(['ex_hammer_curl', 'ex_curl'], {
+      '2026-03-01': [{ exerciseId: 'ex_hammer_curl', sets: [{ weight: 10, reps: 10 }] }],
+      '2026-03-08': [{ exerciseId: 'ex_hammer_curl', sets: [{ weight: 12, reps: 10 }] }],
+    });
+    render(<MoveHarness />);
+    openMove(/ハンマーカールの設定/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移す' }));
+    expect(screen.getByText('2日ぶん（3/1 〜 3/8）')).toBeTruthy();
+
+    /*
+     * 打った重量は動かないが、挙上量は移行先の数え方で計算し直される。
+     * ハンマーカールは「ウエイト2つ」で 10×2×10 + 12×2×10 = 440、
+     * カールは「ウエイト1つ」なので半分の 220。
+     */
+    expect(screen.getByText('440 kg → 220 kg')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '移す' }));
+
+    const stored = await storedData();
+    expect(
+      Object.values(stored.workouts)
+        .flat()
+        .map((e) => e.exerciseId),
+    ).toEqual(['ex_curl', 'ex_curl']);
+    // セットの値は 1 つも書き換えない
+    expect(stored.workouts['2026-03-01']![0]!.sets).toEqual([{ weight: 10, reps: 10 }]);
+  });
+
+  it('期間を切って移せる', async () => {
+    seedData(['ex_hammer_curl', 'ex_curl'], {
+      '2026-03-01': [{ exerciseId: 'ex_hammer_curl', sets: [{ weight: 10, reps: 10 }] }],
+      '2026-03-08': [{ exerciseId: 'ex_hammer_curl', sets: [{ weight: 12, reps: 10 }] }],
+    });
+    render(<MoveHarness />);
+    openMove(/ハンマーカールの設定/);
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移す' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'この日以降' }));
+    fireEvent.change(screen.getByLabelText('開始日'), { target: { value: '2026-03-05' } });
+    expect(screen.getByText('1日ぶん（3/8 〜 3/8）')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '移す' }));
+
+    const stored = await storedData();
+    expect(stored.workouts['2026-03-01']![0]!.exerciseId).toBe('ex_hammer_curl');
+    expect(stored.workouts['2026-03-08']![0]!.exerciseId).toBe('ex_curl');
+  });
+
+  /* 消えるものがあるので、そこだけ聞く（§2.2） */
+  it('移行先に記録がある日は、上書きか残すかを聞く', async () => {
+    seedData(['ex_hammer_curl', 'ex_curl'], {
+      '2026-03-01': [
+        { exerciseId: 'ex_curl', sets: [{ weight: 20, reps: 5 }] },
+        { exerciseId: 'ex_hammer_curl', sets: [{ weight: 10, reps: 10 }] },
+      ],
+    });
+    render(<MoveHarness />);
+    openMove(/ハンマーカールの設定/);
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移す' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '移す' }));
+    expect(screen.getByText('移行先に記録がある日')).toBeTruthy();
+
+    // その日は移さない＝移し元に残る（何も失わない）
+    fireEvent.click(screen.getByRole('button', { name: 'その日は移さない' }));
+    const kept = await storedData();
+    expect(kept.workouts['2026-03-01']!.map((e) => e.exerciseId)).toEqual([
+      'ex_curl',
+      'ex_hammer_curl',
+    ]);
+  });
+
+  it('上書きすると、移行先のその日の記録は消える', async () => {
+    seedData(['ex_hammer_curl', 'ex_curl'], {
+      '2026-03-01': [
+        { exerciseId: 'ex_curl', sets: [{ weight: 20, reps: 5 }] },
+        { exerciseId: 'ex_hammer_curl', sets: [{ weight: 10, reps: 10 }] },
+      ],
+    });
+    render(<MoveHarness />);
+    openMove(/ハンマーカールの設定/);
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移す' }));
+    fireEvent.click(screen.getByRole('button', { name: '移す' }));
+    fireEvent.click(screen.getByRole('button', { name: '上書きする' }));
+
+    const stored = await storedData();
+    expect(stored.workouts['2026-03-01']!.map((e) => e.exerciseId)).toEqual(['ex_curl']);
+    // 残るのは移し元から来たセット
+    expect(stored.workouts['2026-03-01']![0]!.sets).toEqual([{ weight: 10, reps: 10 }]);
+  });
+
+  /* カタログにしかない種目も選べる。選ぶとマイ種目にも入る */
+  it('カタログにしかない種目へも移せる', async () => {
+    seedData(['ex_hammer_curl'], {
+      '2026-03-01': [{ exerciseId: 'ex_hammer_curl', sets: [{ weight: 10, reps: 10 }] }],
+    });
+    render(<MoveHarness />);
+    openMove(/ハンマーカールの設定/);
+
+    // 既定はマイ種目。カタログまで広げれば、まだ持っていない種目も選べる
+    const box = within(
+      within(document.querySelector('dialog[open]') as HTMLElement).getByRole('group', {
+        name: '移行先の出どころ',
+      }),
+    );
+    fireEvent.click(box.getByRole('button', { name: 'すべて' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ケーブルハンマーカールへ移す' }));
+    fireEvent.click(screen.getByRole('button', { name: '移す' }));
+
+    const stored = await storedData();
+    expect(stored.workouts['2026-03-01']![0]!.exerciseId).toBe('ex_cable_hammer_curl');
+    // 記録の行き先になる種目は実体が要る。マイ種目にも入る
+    expect(stored.exercises.map((e) => e.id)).toContain('ex_cable_hammer_curl');
+  });
+
+  /*
+   * 移行先は**部位ごとに見出しを付けて**並べる（マイ種目・カタログと同じ切り方）。
+   * 出どころはトグルで切り替える。既定はカタログ——取り違えを直す場面では、
+   * 行き先はまだ手元に無いことが多い。
+   */
+  it('移行先は すべて / マイ種目 で選べて、部位ごとに並ぶ', () => {
+    // 自作種目を 1 つ持たせる（カタログには無い種目）
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      exercises: [
+        fromCatalog(
+          CATALOG.find((c) => c.id === 'ex_hammer_curl')!,
+          0,
+        ),
+        {
+          id: 'custom-1',
+          name: '謎のマシン',
+          group: 'chest',
+          subGroups: [],
+          loadMode: 'standard',
+          repUnit: 'reps',
+          bodyweightFactor: null,
+          rmDivisor: 30,
+          goal: null,
+          order: 1,
+          shelf: 'listed',
+          axial: false,
+          minutesPerSet: null,
+          repeated: true,
+        },
+      ],
+      workouts: {
+        '2026-03-01': [{ exerciseId: 'ex_hammer_curl', sets: [{ weight: 10, reps: 10 }] }],
+      },
+    });
+    render(<MoveHarness />);
+    openMove(/ハンマーカールの設定/);
+
+    const dialog = () => within(document.querySelector('dialog[open]') as HTMLElement);
+    // 期間の行にも「すべて」があるので、出どころのほうを名前で指す
+    const box = () => within(dialog().getByRole('group', { name: '移行先の出どころ' }));
+
+    /*
+     * **既定はマイ種目。並びは マイ種目 → すべて。**
+     * 行き先はたいてい手元にあるので、狭いほうを先に出す。
+     */
+    const chips = box().getAllByRole('button');
+    expect(chips.map((b) => b.textContent)).toEqual(['マイ種目', 'すべて']);
+    expect(box().getByRole('button', { name: 'マイ種目', pressed: true })).toBeTruthy();
+
+    // マイ種目には自作種目も並ぶ。カタログにしかない種目は出ない
+    expect(dialog().getByRole('button', { name: '謎のマシンへ移す' })).toBeTruthy();
+    expect(dialog().queryByRole('button', { name: 'ケーブルハンマーカールへ移す' })).toBeNull();
+
+    // すべてに広げると、カタログの種目も並ぶ（自作種目は残る）
+    fireEvent.click(box().getByRole('button', { name: 'すべて' }));
+    expect(dialog().getByRole('button', { name: 'ケーブルハンマーカールへ移す' })).toBeTruthy();
+    expect(dialog().getByRole('button', { name: '謎のマシンへ移す' })).toBeTruthy();
+    // 部位の見出しが付く（マイ種目・カタログと同じ切り方）
+    expect(dialog().getByText('腕')).toBeTruthy();
+    expect(dialog().getByText('胸')).toBeTruthy();
+  });
+
+  /*
+   * 選び終わったら、候補は読むものではない。**畳んで、期間と「移す」を引き上げる。**
+   * 113 種を残したままだと、押したいボタンが画面の外へ出る。
+   */
+  it('移行先を選ぶと、ほかの候補は畳まれる', () => {
+    seedData(['ex_hammer_curl', 'ex_curl'], {
+      '2026-03-01': [{ exerciseId: 'ex_hammer_curl', sets: [{ weight: 10, reps: 10 }] }],
+    });
+    render(<MoveHarness />);
+    openMove(/ハンマーカールの設定/);
+
+    const dialog = () => within(document.querySelector('dialog[open]') as HTMLElement);
+    expect(dialog().getByRole('group', { name: '移行先の出どころ' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移す' }));
+
+    // 残るのは選んだ 1 件だけ。出どころのトグルも畳む
+    expect(dialog().getAllByRole('button', { name: /へ移す$/ })).toHaveLength(1);
+    expect(dialog().queryByRole('group', { name: '移行先の出どころ' })).toBeNull();
+    // 部位の見出しも消える（1 件を束ねる意味が無い）
+    expect(dialog().queryByText('腕')).toBeNull();
+
+    // もう一度押すと選び直せる
+    fireEvent.click(screen.getByRole('button', { name: 'カール（バーベル）へ移す' }));
+    expect(dialog().getByRole('group', { name: '移行先の出どころ' })).toBeTruthy();
+  });
+
+  /*
+   * 数え方が違う候補にも移せる。**止めない**——器具が違えば数え方も違うのが普通で、
+   * それを直すのが移行の目的。印を付けて、変わる量は数字で出す。
+   */
+  it('数え方が違う候補には印を付けるが、選べる', () => {
+    seedData(['ex_hammer_curl'], {
+      '2026-03-01': [{ exerciseId: 'ex_hammer_curl', sets: [{ weight: 10, reps: 10 }] }],
+    });
+    render(<MoveHarness />);
+    openMove(/ハンマーカールの設定/);
+    fireEvent.click(
+      within(
+        within(document.querySelector('dialog[open]') as HTMLElement).getByRole('group', {
+          name: '移行先の出どころ',
+        }),
+      ).getByRole('button', { name: 'すべて' }),
+    );
+
+    // ハンマーカールは「ウエイト2つ」。ケーブル版は「ウエイト1つ」なので印が付く
+    const cable = screen.getByRole('button', { name: 'ケーブルハンマーカールへ移す' });
+    expect(cable.textContent).toContain('ウエイト1つ');
+    expect((cable as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  /* 記録が 1 日も無ければ、移すものが無い */
+  it('記録が無い種目には入口を出さない', () => {
+    seedExercises('ex_hammer_curl', 'ex_curl');
+    render(<MoveHarness />);
+    fireEvent.click(screen.getByRole('button', { name: /ハンマーカールの設定/ }));
+    expect(screen.queryByRole('button', { name: '記録を別の種目へ移す' })).toBeNull();
+  });
+});
+
 describe('種目の絞り込み（部位）', () => {
   function ManagerHarness() {
     const body = useBodyData(seeded);

@@ -18,6 +18,8 @@ import {
   exerciseGoals,
 } from '../lib/training';
 import { buildCheckHistory } from '../lib/check';
+import { moveRecords as moveWorkoutRecords, planMove } from '../lib/move';
+import type { OnConflict } from '../lib/move';
 import type { ImportPayload } from '../lib/io';
 import type {
   AppData,
@@ -131,6 +133,24 @@ export interface BodyData {
   unsuppressWarning: (key: string) => void;
 
   upsertExercise: (exercise: Exercise) => void;
+  /**
+   * 記録を別の種目へ移す。**唯一「過去を書き換える」操作。**
+   *
+   * 「別の種目として記録してしまった」を、消して打ち直さずに直すために持つ。
+   * セットの値は 1 つも書き換えない——動かすのは参照先（`exerciseId`）だけ。
+   * 挙上量と推定1RM は移行先の数え方で計算し直される（数え方は種目側にある）。
+   *
+   * 移行先がマイ種目に無ければ、その実体を足してから移す
+   * （カタログにしかない種目を選べるようにするため）。
+   */
+  moveRecords: (opts: {
+    fromId: string;
+    to: Exercise;
+    /** 期間。含む。null なら切らない */
+    from?: string | null;
+    until?: string | null;
+    onConflict: OnConflict;
+  }) => void;
   addExercises: (exercises: readonly Exercise[]) => void;
   /** マイ種目から消す。その種目の記録も一緒に消える（参照だけ残すとログが黙って落ちるため） */
   removeExercise: (id: string) => void;
@@ -575,6 +595,43 @@ export function useBodyData(initial: AppData): BodyData {
     });
   }, []);
 
+  const moveRecords = useCallback(
+    ({
+      fromId,
+      to,
+      from = null,
+      until = null,
+      onConflict,
+    }: {
+      fromId: string;
+      to: Exercise;
+      from?: string | null;
+      until?: string | null;
+      onConflict: OnConflict;
+    }) => {
+      setData((prev) => {
+        // 移行先がまだ無ければ足す（カタログから選ばれた場合）
+        const exercises = prev.exercises.some((e) => e.id === to.id)
+          ? prev.exercises.map((e) =>
+              // 伏せてあった・入れていなかった種目へ移すなら、候補に戻す
+              e.id === to.id && e.shelf !== 'listed' ? { ...e, shelf: 'listed' as const } : e,
+            )
+          : [...prev.exercises, { ...to, order: prev.exercises.length }];
+
+        const plan = planMove(prev.workouts, fromId, to.id, from, until);
+        if (plan.dates.length === 0 && (plan.conflicts.length === 0 || onConflict === 'keep')) {
+          return exercises === prev.exercises ? prev : { ...prev, exercises };
+        }
+        return {
+          ...prev,
+          exercises,
+          workouts: moveWorkoutRecords(prev.workouts, fromId, to.id, plan, onConflict),
+        };
+      });
+    },
+    [],
+  );
+
   const removeExercise = useCallback((id: string) => {
     setData((prev) => {
       // 種目を消してログを残すと、sanitize が参照先のないログとして黙って落とす。
@@ -626,6 +683,7 @@ export function useBodyData(initial: AppData): BodyData {
     updatePreset,
     removePreset,
     upsertExercise,
+    moveRecords,
     addExercises,
     removeExercise,
   };

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  CATALOG,
+  CATALOG_CHOICES,
   GROUP_LABELS,
   EXERCISE_GROUP_ORDER,
   IMPLEMENT_LABELS,
@@ -8,7 +8,7 @@ import {
   fromCatalog,
   isCatalogCandidate,
 } from '../../lib/exerciseCatalog';
-import type { CatalogEntry, Implement } from '../../lib/exerciseCatalog';
+import type { CatalogChoice } from '../../lib/exerciseCatalog';
 import { matchRank, matchesQuery } from './ExerciseFilterBar';
 import { SearchToggle } from './SearchToggle';
 import type { Exercise, ExerciseGroup } from '../../types';
@@ -30,24 +30,6 @@ const CATALOG_FILTERS: { id: CatalogFilter; label: string }[] = [
   { id: 'dumbbell', label: 'ダンベル' },
   { id: 'bodyweight', label: '自重' },
 ];
-
-/**
- * カタログの 1 行と、それを登録するときの器具の組。
- *
- * バーベルとダンベルを選べる種目は 2 つに展開する。
- * 絞り込みで器具を兼ねると「すべて」で片方しか出せない
- * （＝すべてなのに全部出ない）ので、行のほうを分ける。
- */
-interface CatalogChoice {
-  entry: CatalogEntry;
-  implement: Implement;
-}
-
-const CATALOG_CHOICES: CatalogChoice[] = CATALOG.flatMap((entry) =>
-  entry.implements
-    ? entry.implements.map((implement) => ({ entry, implement }))
-    : [{ entry, implement: 'barbell' as Implement }],
-);
 
 function matchesFilter({ entry, implement }: CatalogChoice, filter: CatalogFilter): boolean {
   switch (filter) {

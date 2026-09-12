@@ -249,6 +249,8 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
         <ExerciseManager
           exercises={data.exercises}
           usage={usage}
+          // 記録の移行に使う（workouts と体重が要る）
+          body={body}
           onAdd={addExercises}
           onUpdate={upsertExercise}
           onRemove={removeExercise}

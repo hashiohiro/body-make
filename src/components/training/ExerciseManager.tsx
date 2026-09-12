@@ -6,6 +6,7 @@ import {
   goalTypeLabel,
   isListed,
 } from '../../lib/exerciseCatalog';
+import type { BodyData } from '../../hooks/useBodyData';
 import type { Exercise, ExerciseGroup, SessionPoint } from '../../types';
 import { CatalogPicker } from './CatalogPicker';
 import { CustomExerciseForm } from './CustomExerciseForm';
@@ -18,6 +19,7 @@ import {
 } from './ExerciseFilterBar';
 import { SearchToggle } from './SearchToggle';
 import { ExerciseSettingsForm } from './ExerciseSettingsForm';
+import { RecordMoveDialog } from './RecordMoveDialog';
 import { GoalEditor } from './GoalEditor';
 import { ExerciseSummaryCard } from './ExerciseSummaryCard';
 import { Modal } from '../Modal';
@@ -34,6 +36,11 @@ interface Props {
   /** その種目の目標へ。決めるのは目標タブの仕事で、ここは入口だけ持つ */
   /** 目標を決めるときに「いま」と「過去最大」を出すために使う */
   sessions: readonly SessionPoint[];
+  /**
+   * 記録の移行に使う（`RecordMoveDialog`）。
+   * 移すには workouts と体重（自重換算）が要るので、ここだけまとめて受け取る。
+   */
+  body?: BodyData | undefined;
 }
 
 /**
@@ -65,11 +72,21 @@ function goalValue(exercise: Exercise): string | null {
  * 目標値はここに置かない。進捗を見ながら何度も変わるので目標タブが持つ。
  * 一覧には目標をタグとして出す。どの種目に目標があるかは、ここでも見えていたほうがいい。
  */
-export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, sessions }: Props) {
+export function ExerciseManager({
+  exercises,
+  usage,
+  onAdd,
+  onUpdate,
+  onRemove,
+  sessions,
+  body,
+}: Props) {
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<ExerciseGroup | 'all'>('all');
   /** 名前で探す。打ちはじめたら、部位の見出しをやめて平たい候補に差し替える */
   const [query, setQuery] = useState('');
+  /** 記録の移行を開いているか。種目の設定の面から開く */
+  const [moving, setMoving] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   /** 目標を開いている種目。設定（詳細）とは同時に開かない */
   const [goalOf, setGoalOf] = useState<string | null>(null);
@@ -315,10 +332,34 @@ export function ExerciseManager({ exercises, usage, onAdd, onUpdate, onRemove, s
         </Modal>
       )}
 
-      {settingsExercise && (
+      {settingsExercise && !moving && (
         <Modal open title={`${settingsExercise.name}の設定`} onClose={() => setEditing(null)}>
-          <ExerciseSettingsForm exercise={settingsExercise} onUpdate={onUpdate} />
+          <div>
+            <ExerciseSettingsForm exercise={settingsExercise} onUpdate={onUpdate} />
+
+            {/*
+              **記録を別の種目へ移す入口。**ここにしか置かない。
+              「別の種目として記録してしまった」を直す操作で、滅多にやらないうえ
+              過去を書き換えるので、種目の性質を見ている場所の末尾に置く。
+              記録が 1 日も無ければ、移すものが無い。
+            */}
+            {(usage.get(settingsExercise.id) ?? 0) > 0 && (
+              <div className={ui.btnRow}>
+                <button
+                  type="button"
+                  className={`${ui.btn} ${ui.btnSm}`}
+                  onClick={() => setMoving(true)}
+                >
+                  記録を別の種目へ移す
+                </button>
+              </div>
+            )}
+          </div>
         </Modal>
+      )}
+
+      {settingsExercise && moving && body && (
+        <RecordMoveDialog body={body} from={settingsExercise} onClose={() => setMoving(false)} />
       )}
     </section>
   );

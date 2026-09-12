@@ -1561,6 +1561,25 @@ function toSubGroup(entry: MuscleGroup | [MuscleGroup, number]): SubGroup {
 }
 
 /** 器具を選べる種目は、選んだ器具ごとに別の ID・名前で登録する */
+/**
+ * カタログの 1 行と、それを登録するときの器具の組。
+ *
+ * バーベルとダンベルを選べる種目は 2 つに展開する。
+ * 絞り込みで器具を兼ねると「すべて」で片方しか出せない
+ * （＝すべてなのに全部出ない）ので、行のほうを分ける。
+ */
+export interface CatalogChoice {
+  entry: CatalogEntry;
+  implement: Implement;
+}
+
+/** カタログを、器具まで展開した並び。**カタログを出す面はすべてこれを読む。** */
+export const CATALOG_CHOICES: readonly CatalogChoice[] = CATALOG.flatMap((entry) =>
+  entry.implements
+    ? entry.implements.map((implement) => ({ entry, implement }))
+    : [{ entry, implement: 'barbell' as Implement }],
+);
+
 export function catalogId(entry: CatalogEntry, implement: Implement): string {
   return entry.implements ? `${entry.id}${IMPLEMENT_SUFFIX[implement]}` : entry.id;
 }
