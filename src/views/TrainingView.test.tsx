@@ -177,6 +177,19 @@ function goalField(pattern: RegExp): HTMLInputElement {
   return field;
 }
 
+/**
+ * マイ種目に並んでいる行（非表示の欄も含む）。
+ * 件数の見出しを外したので、**一覧そのものを数える**。
+ */
+function managerRows(): HTMLElement[] {
+  return [...document.querySelectorAll('[class*="_itemCard_"]')] as HTMLElement[];
+}
+
+/** 「表示に戻す」を持つ行＝伏せてある種目 */
+function hiddenRows(): HTMLElement[] {
+  return managerRows().filter((row) => row.textContent?.includes('表示に戻す'));
+}
+
 /** テスト内で日付をずらす。lib/date の addDays と同じ（同期で使いたいのでここに置く） */
 function isoAdd(iso: string, days: number): string {
   const d = new Date(`${iso}T12:00:00`);
@@ -691,17 +704,107 @@ describe('種目管理（設定タブ）', () => {
     );
   }
 
+  /*
+   * **種目を写して、別の種目として作る。**
+   *
+   * グリップやスタンスを変えた版（ワイドグリップ懸垂、スモウデッドリフト）は
+   * 回数も部位の配分も変わるので記録は分けたい。ただし作るたびに部位・補助部位・
+   * 体重係数・1RM の分母を入れ直すのは現実的でないので、開いている種目から写す。
+   */
+  it('開いている種目を複製して、別の種目として作れる', async () => {
+    render(<ManagerHarness />);
+    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByText('＋ 懸垂'));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '懸垂の設定' }));
+    fireEvent.click(screen.getByRole('button', { name: 'この種目を複製' }));
+
+    // 面を差し替える（重ねない）。深い面なので「‹ 戻る」が出る
+    expect(topDialogAny().getByRole('heading', { name: '懸垂を複製' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '‹ 戻る' })).toBeTruthy();
+
+    // 元の名前が入っている。同じ名前では作れないので、変えることが形から分かる
+    const field = screen.getByLabelText('新しい種目の名前') as HTMLInputElement;
+    expect(field.value).toBe('懸垂');
+    expect((screen.getByRole('button', { name: '複製する' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(screen.getByText(/同じ名前の種目があります/)).toBeTruthy();
+
+    fireEvent.change(field, { target: { value: 'ワイドグリップ懸垂' } });
+    fireEvent.click(screen.getByRole('button', { name: '複製する' }));
+
+    // 作ったら、その種目の設定がそのまま開く（補助部位を直す場所に着いている）
+    expect(topDialogAny().getByRole('heading', { name: 'ワイドグリップ懸垂の設定' })).toBeTruthy();
+
+    const stored = await storedData();
+    const names = stored.exercises.map((e) => e.name);
+    expect(names).toEqual(['懸垂', 'ワイドグリップ懸垂']);
+
+    // 計算に効く値と部位は写る。ID は新しく振る（目標は引き継がない）
+    const [base, copy] = stored.exercises;
+    expect(copy!.group).toBe(base!.group);
+    expect(copy!.subGroups).toEqual(base!.subGroups);
+    expect(copy!.loadMode).toBe(base!.loadMode);
+    expect(copy!.bodyweightFactor).toBe(base!.bodyweightFactor);
+    expect(copy!.rmDivisor).toBe(base!.rmDivisor);
+    expect(copy!.id).not.toBe(base!.id);
+    expect(copy!.goal).toBeNull();
+    expect(copy!.shelf).toBe('listed');
+  });
+
+  /*
+   * **削除の確認は記録だけで決める。**カタログに元があるか（＝選び直して
+   * 戻せるか）では分けない。一度は「複製と自作は ID が二度と同じにならないので
+   * 記録が無くても聞く」としたが、カタログの有無は使う側の関心事ではないし、
+   * バックアップの案内を削除のたびに繰り返すことにもなる。
+   */
+  it('複製した種目も、記録が無ければ確認せずに消える', async () => {
+    render(<ManagerHarness />);
+    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByText('＋ 懸垂'));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    fireEvent.click(screen.getByRole('button', { name: '懸垂の設定' }));
+    fireEvent.click(screen.getByRole('button', { name: 'この種目を複製' }));
+    fireEvent.change(screen.getByLabelText('新しい種目の名前'), {
+      target: { value: 'ワイド懸垂' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '複製する' }));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+
+    fireEvent.click(screen.getByLabelText('ワイド懸垂を削除'));
+    expect(asking()).toBe(false);
+    expect((await storedData()).exercises.map((e) => e.name)).toEqual(['懸垂']);
+  });
+
+  /* 深い面なので「‹ 戻る」で元の設定に戻る（閉じるとダイアログごと消える） */
+  it('複製はやめて元の設定に戻れる', async () => {
+    render(<ManagerHarness />);
+    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByText('＋ 懸垂'));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '懸垂の設定' }));
+    fireEvent.click(screen.getByRole('button', { name: 'この種目を複製' }));
+    fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
+
+    expect(screen.queryByLabelText('新しい種目の名前')).toBeNull();
+    expect(topDialogAny().getByRole('heading', { name: '懸垂の設定' })).toBeTruthy();
+    expect((await storedData()).exercises).toHaveLength(1);
+  });
+
   it('初期状態は空で、追加したぶんだけ増える', () => {
     render(<ManagerHarness />);
-    expect(screen.getByText(/^0件 \/ 目標/)).toBeTruthy();
+    expect(managerRows()).toHaveLength(0);
     expect(screen.getByText(/マイ種目はまだ空です/)).toBeTruthy();
 
     fireEvent.click(screen.getByText('＋ マイ種目に追加'));
     // 器具を選べる種目は、バーベル版とダンベル版が別の行として並ぶ
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
-    expect(screen.getByText(/^1件 \/ 目標/)).toBeTruthy();
+    expect(managerRows()).toHaveLength(1);
     fireEvent.click(screen.getByText('＋ ベンチプレス（ダンベル）'));
-    expect(screen.getByText(/^2件 \/ 目標/)).toBeTruthy();
+    expect(managerRows()).toHaveLength(2);
   });
 
   it('1 種目ぶんの形は、目標画面の種目カードと同じ（事実 → 入口の順）', () => {
@@ -839,11 +942,11 @@ describe('種目管理（設定タブ）', () => {
     fireEvent.click(screen.getByText('＋ マイ種目に追加'));
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
     fireEvent.click(screen.getByText(/^＋ スクワット/));
-    expect(screen.getByText(/^2件 \/ 目標/)).toBeTruthy();
+    expect(managerRows()).toHaveLength(2);
 
     // 記録の無い種目は失うものが無いので確認しない
     fireEvent.click(screen.getByLabelText('ベンチプレス（バーベル）を削除'));
-    expect(screen.getByText(/^1件 \/ 目標/)).toBeTruthy();
+    expect(managerRows()).toHaveLength(1);
     expect(asking()).toBe(false);
   });
 });
@@ -2939,6 +3042,97 @@ describe('カタログの整合性', () => {
     }
   });
 
+  /*
+   * **別名は探すための入口。持ちものの名前ではない。**
+   *
+   * 検索して別名で当たったときだけ、打った語を行に添える——「プッシュダウン」で
+   * 探して「トライセプスプレスダウン」が出ると、一瞬「これは違うのでは」と思う。
+   * **登録されるのは正式名**。手元の一覧で呼び方が揺れると、同じ種目が
+   * 別々のものに見える。
+   */
+  it('別名で当たった行には打った語を添え、登録は正式名でする', async () => {
+    render(<Harness />);
+    openCatalog();
+
+    // 探していないうちは札を出さない（並ぶのは正式名だけ）
+    expect(screen.queryByText('プッシュダウン')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '種目を検索' }));
+    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'プッシュダウン' } });
+
+    const row = screen.getByText(/トライセプスプレスダウン/).closest('button')!;
+    // 打った語が行に添う
+    expect(within(row).getByText('プッシュダウン')).toBeTruthy();
+
+    fireEvent.click(row);
+    // 記録画面から足すときは「マイ種目にも残すか」を聞かれる
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
+
+    const stored = await storedData();
+    // 入るのは正式名のほう
+    expect(stored.exercises.find((e) => e.id === 'ex_pushdown')?.name).toBe(
+      'トライセプスプレスダウン',
+    );
+  });
+
+  /* 名前で当たったときは札を出さない（「ベンチ」→ ベンチプレスに理由は要らない） */
+  it('名前で当たった行には札を出さない', () => {
+    render(<Harness />);
+    openCatalog();
+    fireEvent.click(screen.getByRole('button', { name: '種目を検索' }));
+    fireEvent.change(screen.getByLabelText('種目を検索'), { target: { value: 'プレスダウン' } });
+
+    const row = screen.getByText(/トライセプスプレスダウン/).closest('button')!;
+    // 出るのは部位の札だけ
+    expect(within(row).queryByText('プッシュダウン')).toBeNull();
+    expect(within(row).getByText('腕')).toBeTruthy();
+  });
+
+  /*
+   * 変種は**別 ID で持つ**（記録を混ぜない）。カタログに載せるのは
+   * よく別物として扱われるものだけで、残りは「写して作る」が拾う。
+   */
+  it('グリップやスタンスの変種は、別の種目として並ぶ', async () => {
+    const { CATALOG } = await import('../lib/exerciseCatalog');
+    const byId = new Map(CATALOG.map((c) => [c.id, c]));
+
+    // 握りで腕の関与が変わる。同じ「懸垂」に混ぜると最大回数の推移が握りで動く
+    expect(byId.get('ex_pullup')?.subGroups).toEqual([['shoulders', 0.25], 'arms']);
+    expect(byId.get('ex_wide_pullup')?.subGroups).toEqual([
+      ['shoulders', 0.25],
+      ['arms', 0.25],
+    ]);
+    expect(byId.get('ex_parallel_pullup')?.subGroups).toEqual([
+      ['shoulders', 0.25],
+      ['arms', 0.75],
+    ]);
+
+    // スタンスで引ける重量帯が変わる。どちらも軸荷重
+    for (const id of ['ex_sumo_deadlift', 'ex_sumo_squat']) {
+      expect(byId.has(id)).toBe(true);
+    }
+  });
+
+  /*
+   * 別名は**探すためだけ**に持つ（保存しない）。
+   * 名前と同じ語や、別の種目の名前を入れると、探して出てきたものが打ちたいものと
+   * 違うことになる——出てこないより悪い。
+   */
+  it('別名は名前と重ならず、ほかの種目の名前でもない', async () => {
+    const { CATALOG } = await import('../lib/exerciseCatalog');
+    const names = new Set(CATALOG.map((c) => c.name));
+
+    for (const entry of CATALOG) {
+      for (const alias of entry.aliases ?? []) {
+        expect(alias).not.toBe(entry.name);
+        // 名前で当たるものを別名に書いても意味が無い
+        expect(entry.name.includes(alias)).toBe(false);
+        // ほかの種目の名前は入れない
+        expect(names.has(alias)).toBe(false);
+      }
+    }
+  });
+
   it('絞り込みは器具だけで決まり、どの行もちょうど1つに入る', async () => {
     const { CATALOG } = await import('../lib/exerciseCatalog');
 
@@ -4441,7 +4635,7 @@ describe('種目の表示 / 非表示', () => {
     render(<ManagerHarness />);
 
     // 伏せた種目は非表示欄に並ぶ（本人が伏せたので、戻す相手がいる）
-    expect(screen.getByText(/非表示 1件/)).toBeTruthy();
+    expect(hiddenRows()).toHaveLength(1);
     expect(screen.getByLabelText('スクワットを表示に戻す')).toBeTruthy();
 
     // カタログには印つきで出る。押せば表示に戻る
@@ -4504,20 +4698,21 @@ describe('種目の表示 / 非表示', () => {
     render(<ManagerHarness />);
 
     // 本人が伏せたものではないので「表示に戻す」と言える相手がいない
-    expect(screen.queryByText(/非表示 \d+件/)).toBeNull();
     expect(screen.queryByLabelText('スクワットを表示に戻す')).toBeNull();
-    expect(screen.getByText(/^0件 \/ 目標 0件$/)).toBeTruthy();
+    expect(managerRows()).toHaveLength(0);
   });
 
   it('非表示にすると候補から外れ、記録は残る', () => {
     seedExercises('ex_lat_pulldown', 'ex_squat');
     render(<ManagerHarness usage={new Map([['ex_lat_pulldown', 12]])} />);
-    expect(screen.getByText(/^2件 \/ 目標 0件$/)).toBeTruthy();
+    expect(managerRows()).toHaveLength(2);
+    expect(hiddenRows()).toHaveLength(0);
 
     fireEvent.click(screen.getByLabelText('ラットプルダウンを非表示にする'));
 
-    // 件数は「使う種目が何件あるか」。非表示は別に添える
-    expect(screen.getByText(/^1件 \/ 目標 0件 \/ 非表示 1件$/)).toBeTruthy();
+    // 消えるのではなく、末尾の「非表示」欄へ移る
+    expect(managerRows()).toHaveLength(2);
+    expect(hiddenRows()).toHaveLength(1);
     // 消えたのではなく末尾の「非表示」欄へ移る。記録の件数もそのまま出る
     expect(screen.getByLabelText('ラットプルダウンを表示に戻す')).toBeTruthy();
     expect(screen.getByText('記録 12日')).toBeTruthy();
@@ -4551,17 +4746,17 @@ describe('種目の表示 / 非表示', () => {
 
     expect(screen.getByLabelText('ランニングを表示に戻す')).toBeTruthy();
     expect(screen.queryByLabelText('スクワットを表示に戻す')).toBeNull();
-    // 件数の見出しは一覧ぜんぶの話なので、絞り込みでは動かない
-    expect(screen.getByText(/非表示 2件$/)).toBeTruthy();
+    // 絞り込みは一覧ぜんぶに掛かる（非表示の欄も部位で切る）
+    expect(hiddenRows()).toHaveLength(1);
   });
 
   it('表示に戻せる', () => {
     seedHidden(['ex_lat_pulldown'], 'ex_lat_pulldown');
     render(<ManagerHarness />);
-    expect(screen.getByText(/^0件 \/ 目標 0件 \/ 非表示 1件$/)).toBeTruthy();
+    expect(hiddenRows()).toHaveLength(1);
 
     fireEvent.click(screen.getByLabelText('ラットプルダウンを表示に戻す'));
-    expect(screen.getByText(/^1件 \/ 目標 0件$/)).toBeTruthy();
+    expect(hiddenRows()).toHaveLength(0);
     expect(screen.getByLabelText('ラットプルダウンを非表示にする')).toBeTruthy();
   });
 
@@ -4573,7 +4768,9 @@ describe('種目の表示 / 非表示', () => {
     fireEvent.click(screen.getByText('＋ マイ種目に追加'));
     fireEvent.click(screen.getByText('＋ ラットプルダウン'));
 
-    expect(screen.getByText(/^1件 \/ 目標 0件$/)).toBeTruthy();
+    // 二重にならず、非表示の欄からも出る
+    expect(managerRows()).toHaveLength(1);
+    expect(hiddenRows()).toHaveLength(0);
     expect(screen.getByText('記録 5日')).toBeTruthy();
   });
 

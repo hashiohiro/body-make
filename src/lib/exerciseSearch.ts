@@ -24,10 +24,42 @@ export function normalizeName(text: string): string {
     .replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 }
 
-/** 空の検索語はすべてに当たる（絞り込んでいない状態） */
-export function matchesQuery(name: string, query: string): boolean {
+/**
+ * 空の検索語はすべてに当たる（絞り込んでいない状態）。
+ *
+ * **別名も見る。**同じ種目の呼び方は揺れる（チェストサポーテッドロウ /
+ * チェストサポートロウ、トライセプスプレスダウン / プッシュダウン）。
+ * 片方の綴りしか当たらないと、**あるのに無いと思われる**——それが
+ * いちばん困る（同じ種目をもう 1 つ自分で作ることになる）。
+ */
+export function matchesQuery(name: string, query: string, aliases?: readonly string[]): boolean {
   const q = normalizeName(query);
-  return q === '' || normalizeName(name).includes(q);
+  if (q === '') return true;
+  if (normalizeName(name).includes(q)) return true;
+  return (aliases ?? []).some((alias) => normalizeName(alias).includes(q));
+}
+
+/**
+ * 当たった別名。**名前で当たったときは null**（札に出す理由がない）。
+ *
+ * 「プッシュダウン」で探して「トライセプスプレスダウン」が出ると、
+ * 一瞬「これは違うのでは」と思う。打った語を行に添えれば、なぜ出たのかが読める。
+ * 複数に当たっても**先頭の 1 つだけ**（札を並べると行が伸びる）。
+ */
+export function matchedAlias(
+  name: string,
+  query: string,
+  aliases?: readonly string[],
+): string | null {
+  const q = normalizeName(query);
+  if (q === '' || normalizeName(name).includes(q)) return null;
+  const hits = (aliases ?? []).filter((alias) => normalizeName(alias).includes(q));
+  /*
+   * **打った語に近いほうを出す。**「プッシュダウン」と打ったときに
+   * 「トライセプスプッシュダウン」を添えると、打った語が消えて読みにくい。
+   * 前方一致があればそれを採る（打ち始めがその語）。
+   */
+  return hits.find((alias) => normalizeName(alias).startsWith(q)) ?? hits[0] ?? null;
 }
 
 /**
@@ -36,11 +68,12 @@ export function matchesQuery(name: string, query: string): boolean {
  * 前方一致を先に出す。「ベンチ」と打った人がまず見たいのはベンチプレスで、
  * 「ナローベンチプレス」ではない。同じ近さなら元の並び（部位 → マイ種目の順）のまま。
  */
-export function matchRank(name: string, query: string): number {
+export function matchRank(name: string, query: string, aliases?: readonly string[]): number {
   const q = normalizeName(query);
-  const n = normalizeName(name);
   if (q === '') return 0;
-  return n.startsWith(q) ? 0 : 1;
+  if (normalizeName(name).startsWith(q)) return 0;
+  // 別名の前方一致も「近い」とみなす（「プッシュダウン」で当てた人の目当てはそれ）
+  return (aliases ?? []).some((alias) => normalizeName(alias).startsWith(q)) ? 0 : 1;
 }
 
 /**

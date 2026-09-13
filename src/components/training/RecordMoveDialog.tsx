@@ -61,6 +61,8 @@ interface Candidate {
   loadMode: LoadMode;
   /** すでにマイ種目にあるか。無ければ移行するときに足す */
   mine: boolean;
+  /** 検索で拾う別の呼び方。カタログから並べた候補だけが持つ */
+  aliases?: readonly string[] | undefined;
   /** 移行先として渡す実体 */
   make: () => Exercise;
 }
@@ -131,6 +133,8 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
           group: made.group,
           loadMode: made.loadMode,
           mine: held != null,
+          // カタログから並べた候補は、別名でも探せるようにする（カタログと同じ）
+          aliases: c.entry.aliases,
           make: () => made,
         });
       });
@@ -208,7 +212,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
    *
    * @param chosen 選んだ 1 件として出すか。もう一度押すと選び直しに戻る
    */
-  const pill = (c: Candidate, chosen: boolean, searching = false) => (
+  const pill = (c: Candidate, chosen: boolean, searching = false, alias: string | null = null) => (
     <Pill
       key={c.id}
       pressed={chosen || toId === c.id}
@@ -217,6 +221,8 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
     >
       {chosen && '✓ '}
       {c.name}
+      {/* 打った語で当たったなら、その語を添える（カタログと同じ） */}
+      {alias != null && <Tag>{alias}</Tag>}
       {/* 探した結果では束ねる見出しが無いので、部位も行に添える（カタログと同じ） */}
       {searching && !chosen && <Tag>{GROUP_LABELS[c.group]}</Tag>}
       {/*
@@ -312,7 +318,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
             <ExercisePickList
               items={candidates}
               heading="移行先"
-              renderItem={(c, searching) => pill(c, false, searching)}
+              renderItem={(c, searching, alias) => pill(c, false, searching, alias)}
             />
           </>
         )}

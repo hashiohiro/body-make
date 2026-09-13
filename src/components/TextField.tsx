@@ -14,6 +14,12 @@ interface Props {
   onCommit?: (() => void) | undefined;
   /** Esc でやめる */
   onCancel?: (() => void) | undefined;
+  /**
+   * 開いた瞬間に打てるようにするか。
+   * **その面で打つことしか無いときだけ**渡す（複製の名前・検索）。
+   * ほかに読むものがある面で当てると、開いた瞬間にキーボードが覆う。
+   */
+  autoFocus?: boolean | undefined;
 }
 
 /**
@@ -37,12 +43,14 @@ export function TextField({
   className,
   onCommit,
   onCancel,
+  autoFocus,
 }: Props) {
   return (
     <input
       id={id}
       className={className}
       type="text"
+      autoFocus={autoFocus}
       value={value}
       maxLength={maxLength}
       placeholder={placeholder}

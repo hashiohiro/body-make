@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { EXERCISE_GROUP_ORDER, GROUP_LABELS } from '../../lib/exerciseCatalog';
-import { FILTER_THRESHOLD, matchRank, matchesGroup, matchesQuery } from '../../lib/exerciseSearch';
+import {
+  FILTER_THRESHOLD,
+  matchRank,
+  matchedAlias,
+  matchesGroup,
+  matchesQuery,
+} from '../../lib/exerciseSearch';
 import { GroupChips } from './GroupChips';
 import { SearchToggle } from './SearchToggle';
 import type { ExerciseGroup } from '../../types';
@@ -13,6 +19,12 @@ interface Item {
   id: string;
   name: string;
   group: ExerciseGroup;
+  /**
+   * 検索で拾う別の呼び方。**カタログだけが持つ。**
+   * 手元に置いたあとは名前を知っているので、要るのは「まだ持っていないものを
+   * 探すとき」だけ（`CatalogEntry.aliases`）。
+   */
+  aliases?: readonly string[] | undefined;
 }
 
 interface Props<T extends Item> {
@@ -20,8 +32,14 @@ interface Props<T extends Item> {
   items: readonly T[];
   /** 見出し。件数は呼び出し側が足さない（絞り込みで動くので、ここが持つ） */
   heading: string;
-  /** 1 件の見せ方。`searching` が真なら、束ねる見出しが無いので部位を添える */
-  renderItem: (item: T, searching: boolean) => ReactNode;
+  /**
+   * 1 件の見せ方。
+   *
+   * `searching` が真なら、束ねる見出しが無いので部位を添える。
+   * `alias` は**当たった別名**（名前で当たったときは null）——打った語を
+   * 行に添えられるようにする。なぜ出たのかが読めないと、別の種目に見える。
+   */
+  renderItem: (item: T, searching: boolean, alias: string | null) => ReactNode;
   /** 0 件のときの文言。絞り込みで 0 件になった場合は共通の文を出す */
   empty?: ReactNode;
   /**
@@ -76,10 +94,14 @@ export function ExercisePickList<T extends Item>({
 
   const searching = query.trim() !== '';
   // 検索とチップは AND。「腕で絞ってからカールを探す」がそのまま通る
-  const narrowed = items.filter((e) => matchesGroup(e, group) && matchesQuery(e.name, query));
+  const narrowed = items.filter(
+    (e) => matchesGroup(e, group) && matchesQuery(e.name, query, e.aliases),
+  );
   /* 打っている最中の並び。前方一致を先に出し、同じ近さなら元の並びのまま */
   const hits = searching
-    ? [...narrowed].sort((a, b) => matchRank(a.name, query) - matchRank(b.name, query))
+    ? [...narrowed].sort(
+        (a, b) => matchRank(a.name, query, a.aliases) - matchRank(b.name, query, b.aliases),
+      )
     : narrowed;
 
   // チップは絞り込む前の一覧から決める（押したとたんにチップが消えないように）
@@ -108,7 +130,9 @@ export function ExercisePickList<T extends Item>({
       {narrowed.length === 0 ? (
         <p className={ui.emptyState}>このフィルターに合う種目はありません。</p>
       ) : searching ? (
-        <div className={s.pickerList}>{hits.map((e) => renderItem(e, true))}</div>
+        <div className={s.pickerList}>
+          {hits.map((e) => renderItem(e, true, matchedAlias(e.name, query, e.aliases)))}
+        </div>
       ) : (
         EXERCISE_GROUP_ORDER.map((g) => {
           const list = narrowed.filter((e) => e.group === g);
@@ -116,7 +140,7 @@ export function ExercisePickList<T extends Item>({
           return (
             <div key={g} className={s.pickerGroup}>
               <div className={s.pickerLabel}>{GROUP_LABELS[g]}</div>
-              <div className={s.pickerList}>{list.map((e) => renderItem(e, false))}</div>
+              <div className={s.pickerList}>{list.map((e) => renderItem(e, false, null))}</div>
             </div>
           );
         })

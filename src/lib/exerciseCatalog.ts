@@ -1,3 +1,4 @@
+import { newId } from './id';
 import type {
   Exercise,
   ExerciseGroup,
@@ -56,6 +57,28 @@ export type CatalogEntry = Omit<
   repeated?: boolean;
 } & {
   repUnit?: RepUnit;
+  /**
+   * 検索で拾う別の呼び方。**カタログだけが持つ（保存しない）。**
+   *
+   * 同じ種目の呼び方は揺れる（チェストサポーテッドロウ / チェストサポートロウ、
+   * トライセプスプレスダウン / プッシュダウン、フレンチプレス）。
+   * 片方の綴りしか当たらないと**あるのに無いと思われ**、同じ種目をもう 1 つ
+   * 自分で作ることになる。手元に置いたあとは名前を知っているので、
+   * 要るのは「まだ持っていないものを探すとき」＝カタログだけ。
+   *
+   * 入れるのは**同じ種目の別の呼び方だけ。**似ているが別の種目
+   * （スパイダーカール ≠ プリーチャーカール）は入れない——探して出てきたものが
+   * 打ちたいものと違うのは、出てこないより悪い。
+   *
+   * **名前で当たる語も入れない**（「ラットプル」は「ラットプルダウン」に含まれる）。
+   * 名前との重なりとほかの種目の名前は試験で弾いている。
+   *
+   * **同じ語が 2 種目に付くことはある。**「フレンチプレス」は寝て行う側
+   * （スカルクラッシャー）と立って行う側（オーバーヘッドエクステンション）の
+   * どちらにも使われる。**どちらか一方に決めない**——2 件出して選ばせるほうが、
+   * 打ちたいほうが出てこないより良い。
+   */
+  aliases?: readonly string[];
   /**
    * 補助的に使う部位。明らかなものだけ入れてある。種目の詳細設定で変えられる。
    * 既定の 0.5 と違う割合にしたいものだけ [部位, 割合] で書く
@@ -175,12 +198,16 @@ const RM_DEFAULT = 30;
  */
 const AXIAL: ReadonlySet<string> = new Set([
   'ex_deadlift',
+  'ex_sumo_deadlift',
   'ex_squat',
+  'ex_sumo_squat',
   'ex_front_squat',
   'ex_rdl',
   'ex_good_morning',
   'ex_military_press',
   'ex_bb_row',
+  'ex_pendlay_row',
+  'ex_rack_pull',
   'ex_t_bar_row',
   'ex_back_extension',
   'ex_ohp',
@@ -203,6 +230,9 @@ const MINUTES_PER_SET: Readonly<Record<string, number>> = {
   ex_bench: 4.5,
   ex_ohp: 4.5,
   ex_rdl: 4.5,
+  ex_rack_pull: 4.5,
+  ex_sumo_deadlift: 4.5,
+  ex_sumo_squat: 4.5,
   // 有酸素は 1 本がそのままセッションの一部を占める。既定の 3 分では見積もりが崩れる
   ex_running: 30,
   ex_walking: 30,
@@ -212,6 +242,8 @@ const MINUTES_PER_SET: Readonly<Record<string, number>> = {
   ex_elliptical: 25,
   ex_stair_climber: 20,
   ex_jump_rope: 10,
+  // 1 セットぶん。通しで数分やるものではない
+  ex_burpee: 5,
   // 1 ラウンドぶん
   ex_circuit: 6,
   ex_swim_free: 30,
@@ -296,6 +328,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_pec_fly',
+    aliases: ['マシンフライ', 'バタフライ'],
     name: 'ペックフライ',
     group: 'chest',
     subGroups: [['shoulders', 0.25]],
@@ -305,6 +338,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_pushup',
+    aliases: ['プッシュアップ'],
     equipment: 'bodyweight',
     name: '腕立て伏せ',
     group: 'chest',
@@ -316,6 +350,7 @@ export const CATALOG: readonly CatalogEntry[] = [
 
   {
     id: 'ex_knee_pushup',
+    aliases: ['ニープッシュアップ'],
     equipment: 'bodyweight',
     name: '膝つき腕立て伏せ',
     group: 'chest',
@@ -342,6 +377,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_decline_pushup',
+    aliases: ['足上げプッシュアップ'],
     equipment: 'bodyweight',
     name: 'デクラインプッシュアップ',
     group: 'chest',
@@ -368,6 +404,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_cable_crossover',
+    aliases: ['ケーブルフライ'],
     // ケーブル。可動域の終わりまで張力が残るのがフライとの違い
     name: 'ケーブルクロスオーバー',
     group: 'chest',
@@ -386,9 +423,67 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_SQUAT_DEADLIFT,
   },
+
+  /*
+   * 膝上あたりから引く部分可動。**デッドリフトとは別種目で持つ。**
+   * 床から引かないぶん扱う重量帯が上がるので、同じ種目にまとめると
+   * 最高重量の推移が「その日どこから引いたか」で動く。
+   */
+  {
+    id: 'ex_rack_pull',
+    aliases: ['ハーフデッドリフト', 'トップサイドデッドリフト'],
+    name: 'ラックプル',
+    group: 'back',
+    subGroups: [['legs', 0.5], ['arms', 0.25], 'core'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_SQUAT_DEADLIFT,
+  },
+
+  /*
+   * 足を広く取って引く版。**引ける重量帯も、脚と内転の関与も違う。**
+   * ナローと混ぜると最高重量の推移がスタンスで動く。
+   */
+  {
+    id: 'ex_sumo_deadlift',
+    aliases: ['ワイドスタンスデッドリフト'],
+    name: 'スモウデッドリフト',
+    group: 'back',
+    subGroups: [['legs', 1], ['arms', 0.25], 'core'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_SQUAT_DEADLIFT,
+  },
   {
     id: 'ex_bb_row',
+    aliases: ['バーベルロウ', 'ベントロウ'],
     name: 'ベントオーバーロウ',
+    group: 'back',
+    subGroups: [['shoulders', 0.25], 'arms'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+
+  /* 手のひらを上に向けて引く版。上腕二頭の関与が大きく、握りで引ける重量も変わる */
+  {
+    id: 'ex_underhand_row',
+    aliases: ['リバースグリップロウ'],
+    name: 'アンダーグリップロウ',
+    group: 'back',
+    subGroups: [
+      ['shoulders', 0.25],
+      ['arms', 0.75],
+    ],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+
+  /* 毎回床に置いてから引くロウ。反動を使わないぶん 1 回ごとに前傾を作り直す */
+  {
+    id: 'ex_pendlay_row',
+    name: 'ペンドレイロウ',
     group: 'back',
     subGroups: [['shoulders', 0.25], 'arms'],
     loadMode: 'standard',
@@ -404,8 +499,52 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+
+  /* Vバーなどで手のひらを向かい合わせる版。腕の関与が大きい */
+  {
+    id: 'ex_parallel_pulldown',
+    aliases: ['Vバーラットプルダウン', 'ニュートラルグリップラットプルダウン'],
+    name: 'パラレルグリップラットプルダウン',
+    group: 'back',
+    subGroups: [
+      ['shoulders', 0.25],
+      ['arms', 0.75],
+    ],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  /* 握りを広く取る版。腕が使えないぶん引ける重量が落ちる */
+  {
+    id: 'ex_wide_pulldown',
+    aliases: ['ワイドラットプルダウン', 'ワイドラットプル'],
+    name: 'ワイドグリップラットプルダウン',
+    group: 'back',
+    subGroups: [
+      ['shoulders', 0.25],
+      ['arms', 0.25],
+    ],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  /* 手のひらを上に向けて引く版。上腕二頭の関与が大きい */
+  {
+    id: 'ex_underhand_pulldown',
+    aliases: ['リバースグリップラットプルダウン', '逆手ラットプルダウン'],
+    name: 'アンダーグリップラットプルダウン',
+    group: 'back',
+    subGroups: [
+      ['shoulders', 0.25],
+      ['arms', 0.75],
+    ],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
   {
     id: 'ex_seated_row',
+    aliases: ['ロープーリーロウ', 'ケーブルロウ'],
     name: 'シーテッドロウ',
     group: 'back',
     subGroups: [['shoulders', 0.25], 'arms'],
@@ -415,6 +554,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_pullup',
+    aliases: ['プルアップ', 'チンニング'],
     equipment: 'bodyweight',
     name: '懸垂',
     group: 'back',
@@ -423,8 +563,43 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: 1,
     rmDivisor: RM_DEFAULT,
   },
+
+  /*
+   * 握りを広く取る版。**順手より腕が使えないぶん回数が落ちる。**
+   * 同じ「懸垂」に混ぜると、最大回数の推移がその日の握りで動く。
+   */
+  {
+    id: 'ex_wide_pullup',
+    aliases: ['ワイドプルアップ', 'ワイド懸垂'],
+    equipment: 'bodyweight',
+    name: 'ワイドグリップ懸垂',
+    group: 'back',
+    subGroups: [
+      ['shoulders', 0.25],
+      ['arms', 0.25],
+    ],
+    loadMode: 'bodyweight',
+    bodyweightFactor: 1,
+    rmDivisor: RM_DEFAULT,
+  },
+  /* 手のひらを向かい合わせる版。逆手寄りで腕の関与が大きい */
+  {
+    id: 'ex_parallel_pullup',
+    aliases: ['ニュートラルグリップ懸垂', 'パラレル懸垂'],
+    equipment: 'bodyweight',
+    name: 'パラレルグリップ懸垂',
+    group: 'back',
+    subGroups: [
+      ['shoulders', 0.25],
+      ['arms', 0.75],
+    ],
+    loadMode: 'bodyweight',
+    bodyweightFactor: 1,
+    rmDivisor: RM_DEFAULT,
+  },
   {
     id: 'ex_one_arm_row',
+    aliases: ['ダンベルロウ'],
     equipment: 'dumbbell',
     name: 'ワンハンドロウ',
     group: 'back',
@@ -466,6 +641,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   // 股関節伸展が主体で、ハムと大臀筋の関与が大きい
   {
     id: 'ex_back_extension',
+    aliases: ['ハイパーエクステンション'],
     equipment: 'bodyweight',
     name: 'バックエクステンション',
     group: 'back',
@@ -477,6 +653,7 @@ export const CATALOG: readonly CatalogEntry[] = [
 
   {
     id: 'ex_chinup',
+    aliases: ['チンアップ'],
     equipment: 'bodyweight',
     name: '逆手懸垂',
     group: 'back',
@@ -491,6 +668,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_inverted_row',
+    aliases: ['インバーテッドロウ'],
     equipment: 'bodyweight',
     name: '斜め懸垂',
     group: 'back',
@@ -515,6 +693,7 @@ export const CATALOG: readonly CatalogEntry[] = [
 
   {
     id: 'ex_chest_supported_row',
+    aliases: ['チェストサポートロウ', 'マシンロウ'],
     // 胸をパッドに預けるので、前傾の保持が要らない（＝軸荷重にならない）
     name: 'チェストサポーテッドロウ',
     group: 'back',
@@ -535,7 +714,20 @@ export const CATALOG: readonly CatalogEntry[] = [
   // 脚
   {
     id: 'ex_squat',
+    aliases: ['バックスクワット', 'バーベルスクワット'],
     name: 'スクワット',
+    group: 'legs',
+    subGroups: [['core', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_SQUAT_DEADLIFT,
+  },
+
+  /* 足を広く取る版。内転筋と臀部の関与が大きく、深さも変わる */
+  {
+    id: 'ex_sumo_squat',
+    aliases: ['ワイドスタンススクワット', 'スモウスクワット'],
+    name: 'ワイドスクワット',
     group: 'legs',
     subGroups: [['core', 0.25]],
     loadMode: 'standard',
@@ -561,6 +753,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_rdl',
+    aliases: ['RDL', 'スティフレッグデッドリフト'],
     name: 'ルーマニアンデッドリフト',
     group: 'legs',
     subGroups: ['back'],
@@ -591,6 +784,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_leg_curl',
+    aliases: ['ハムストリングカール'],
     name: 'レッグカール',
     group: 'legs',
     loadMode: 'standard',
@@ -660,6 +854,7 @@ export const CATALOG: readonly CatalogEntry[] = [
 
   {
     id: 'ex_bw_squat',
+    aliases: ['エアスクワット'],
     equipment: 'bodyweight',
     name: '自重スクワット',
     group: 'legs',
@@ -682,6 +877,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_hip_lift',
+    aliases: ['グルートブリッジ'],
     equipment: 'bodyweight',
     name: 'ヒップリフト',
     group: 'legs',
@@ -696,6 +892,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_nordic_curl',
+    aliases: ['ノルディックカール'],
     equipment: 'bodyweight',
     name: 'ノルディックハムカール',
     group: 'legs',
@@ -707,6 +904,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_wall_sit',
+    aliases: ['空気椅子'],
     equipment: 'bodyweight',
     name: 'ウォールシット',
     group: 'legs',
@@ -730,6 +928,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_side_lunge',
+    aliases: ['ラテラルランジ'],
     equipment: 'bodyweight',
     name: 'サイドランジ',
     group: 'legs',
@@ -751,6 +950,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_hip_abduction',
+    aliases: ['ヒップアブダクション'],
     name: 'アブダクション',
     group: 'legs',
     loadMode: 'standard',
@@ -759,6 +959,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_hip_adduction',
+    aliases: ['ヒップアダクション'],
     name: 'アダクション',
     group: 'legs',
     loadMode: 'standard',
@@ -768,6 +969,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   // 肩
   {
     id: 'ex_ohp',
+    aliases: ['オーバーヘッドプレス', 'OHP'],
     implements: BOTH,
     name: 'ショルダープレス',
     group: 'shoulders',
@@ -778,6 +980,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_lateral_raise',
+    aliases: ['ラテラルレイズ'],
     equipment: 'dumbbell',
     name: 'サイドレイズ',
     group: 'shoulders',
@@ -788,6 +991,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_rear_raise',
+    aliases: ['リアデルトレイズ'],
     equipment: 'dumbbell',
     name: 'リアレイズ',
     group: 'shoulders',
@@ -814,6 +1018,7 @@ export const CATALOG: readonly CatalogEntry[] = [
    */
   {
     id: 'ex_cable_lateral_raise',
+    aliases: ['ケーブルラテラルレイズ'],
     // 下から引くので、腕を下ろした位置でも張力が残る（ダンベル版は抜ける）
     name: 'ケーブルサイドレイズ',
     group: 'shoulders',
@@ -824,11 +1029,24 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_cable_rear_delt_fly',
+    aliases: ['ケーブルリバースフライ'],
     // 両手で 2 つのスタックを引く。書くのは片方ぶん
     name: 'ケーブルリアデルトフライ',
     group: 'shoulders',
     subGroups: [['back', 0.75]],
     loadMode: 'perSide',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+
+  /* マシンのリアデルト。ペックフライを逆向きに使う台も同じ動作 */
+  {
+    id: 'ex_machine_rear_delt',
+    aliases: ['リバースペックフライ', 'マシンリアデルト'],
+    name: 'リアデルトフライ',
+    group: 'shoulders',
+    subGroups: [['back', 0.5]],
+    loadMode: 'standard',
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
@@ -853,6 +1071,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_upright_row',
+    aliases: ['アップライトローイング'],
     implements: BOTH,
     name: 'アップライトロウ',
     group: 'shoulders',
@@ -875,6 +1094,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_handstand_pushup',
+    aliases: ['ハンドスタンドプッシュアップ'],
     equipment: 'bodyweight',
     name: '逆立ち腕立て伏せ',
     group: 'shoulders',
@@ -943,6 +1163,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   // 腕
   {
     id: 'ex_curl',
+    aliases: ['アームカール'],
     implements: BOTH,
     name: 'カール',
     group: 'arms',
@@ -991,6 +1212,16 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+
+  /* 順手で引くケーブルのカール。前腕（腕橈骨筋）の関与が大きい */
+  {
+    id: 'ex_cable_reverse_curl',
+    name: 'ケーブルリバースカール',
+    group: 'arms',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
   {
     id: 'ex_wrist_curl',
     name: 'リストカール',
@@ -1009,6 +1240,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_pushdown',
+    aliases: ['トライセプスプッシュダウン', 'プッシュダウン', 'ローププレスダウン'],
     name: 'トライセプスプレスダウン',
     group: 'arms',
     loadMode: 'standard',
@@ -1017,6 +1249,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_skull_crusher',
+    aliases: ['ライイングトライセプスエクステンション', 'フレンチプレス'],
     name: 'スカルクラッシャー',
     group: 'arms',
     loadMode: 'standard',
@@ -1033,6 +1266,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_overhead_extension',
+    aliases: ['フレンチプレス', 'トライセプスエクステンション'],
     name: 'オーバーヘッドエクステンション',
     group: 'arms',
     loadMode: 'standard',
@@ -1069,6 +1303,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   // 三頭が主働筋だが、胸の関与も大きい。ベンチの派生なので換算の分母も同じ
   {
     id: 'ex_close_grip_bench',
+    aliases: ['クローズグリップベンチプレス'],
     name: 'ナローグリップベンチプレス',
     group: 'arms',
     subGroups: [
@@ -1082,6 +1317,7 @@ export const CATALOG: readonly CatalogEntry[] = [
 
   {
     id: 'ex_diamond_pushup',
+    aliases: ['ナロープッシュアップ'],
     equipment: 'bodyweight',
     name: 'ダイヤモンドプッシュアップ',
     group: 'arms',
@@ -1159,10 +1395,26 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+
+  /*
+   * 斜めに引き下ろす回旋の種目。**パロフプレスの対**（あちらは回旋を止める側）。
+   * 体幹が主で、肩も少し使う。
+   */
+  {
+    id: 'ex_cable_woodchop',
+    aliases: ['ウッドチョッパー'],
+    name: 'ケーブルウッドチョップ',
+    group: 'core',
+    subGroups: [['shoulders', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
   // 秒で数える種目は挙上量に計上しない（単位から決まるので、種目側にフラグを持たない）。
   // アブローラーは重量を記録しないので、そのまま計上しても 0 になる
   {
     id: 'ex_ab_roller',
+    aliases: ['腹筋ローラー'],
     equipment: 'bodyweight',
     name: 'アブローラー',
     group: 'core',
@@ -1173,6 +1425,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_plank',
+    aliases: ['フロントブリッジ'],
     equipment: 'bodyweight',
     name: 'プランク',
     group: 'core',
@@ -1183,6 +1436,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_side_plank',
+    aliases: ['サイドブリッジ'],
     equipment: 'bodyweight',
     name: 'サイドプランク',
     group: 'core',
@@ -1245,6 +1499,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_situp',
+    aliases: ['上体起こし'],
     equipment: 'bodyweight',
     // 上体を起こしきる。可動域が狭いクランチとは別の種目として扱う
     name: 'シットアップ',
@@ -1281,6 +1536,7 @@ export const CATALOG: readonly CatalogEntry[] = [
    */
   {
     id: 'ex_running',
+    aliases: ['ジョギング'],
     // 通しで 1 回。分けて打つなら種目の設定から変えられる
     repeated: false,
     equipment: 'bodyweight',
@@ -1292,6 +1548,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_walking',
+    aliases: ['散歩'],
     // 通しで 1 回。分けて打つなら種目の設定から変えられる
     repeated: false,
     equipment: 'bodyweight',
@@ -1311,6 +1568,7 @@ export const CATALOG: readonly CatalogEntry[] = [
    */
   {
     id: 'ex_cycling',
+    aliases: ['ロードバイク', '自転車'],
     // 通しで 1 回。分けて打つなら種目の設定から変えられる
     repeated: false,
     equipment: 'bodyweight',
@@ -1322,6 +1580,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_stationary_bike',
+    aliases: ['フィットネスバイク', 'スピンバイク'],
     // 通しで 1 回。分けて打つなら種目の設定から変えられる
     repeated: false,
     name: 'サイクリング（エアロバイク）',
@@ -1332,6 +1591,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_rowing_erg',
+    aliases: ['ローイングエルゴ'],
     // 通しで 1 回。分けて打つなら種目の設定から変えられる
     repeated: false,
     // 背中の「シーテッドロウ」とは別物。こちらは漕ぎ続ける有酸素
@@ -1343,6 +1603,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_elliptical',
+    aliases: ['クロストレーナー'],
     // 通しで 1 回。分けて打つなら種目の設定から変えられる
     repeated: false,
     name: 'エリプティカル',
@@ -1353,6 +1614,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_stair_climber',
+    aliases: ['ステアマスター'],
     // 通しで 1 回。分けて打つなら種目の設定から変えられる
     repeated: false,
     name: 'ステアクライマー',
@@ -1377,8 +1639,23 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_jump_rope',
+    aliases: ['ジャンプロープ', 'なわとび'],
     equipment: 'bodyweight',
     name: '縄跳び',
+    group: 'cardio',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+
+  /*
+   * しゃがむ → 伏せる → 跳ぶを繰り返す。**距離は出ないので時間だけで扱う**
+   * （縄跳びと同じ）。全身を使うが、伸びを見たい種目ではないので有酸素に置く。
+   */
+  {
+    id: 'ex_burpee',
+    equipment: 'bodyweight',
+    name: 'バーピー',
     group: 'cardio',
     loadMode: 'standard',
     bodyweightFactor: null,
@@ -1398,6 +1675,7 @@ export const CATALOG: readonly CatalogEntry[] = [
    */
   {
     id: 'ex_swim_free',
+    aliases: ['自由形'],
     equipment: 'bodyweight',
     name: '水泳（クロール）',
     group: 'cardio',
@@ -1434,6 +1712,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_water_walking',
+    aliases: ['アクアウォーキング'],
     // 通しで 1 回。分けて打つなら種目の設定から変えられる
     repeated: false,
     equipment: 'bodyweight',
@@ -1580,6 +1859,35 @@ export const CATALOG_CHOICES: readonly CatalogChoice[] = CATALOG.flatMap((entry)
     : [{ entry, implement: 'barbell' as Implement }],
 );
 
+/**
+ * 種目を複製する。
+ *
+ * **グリップやスタンスを変えた版は、記録を分けたい。**ワイドグリップ懸垂は
+ * 順手より回数が落ち、腕の関与も小さい。スモウデッドリフトは重量帯もスタンスも違う。
+ * 同じ種目に混ぜると、最高記録の推移が「その日どの握りだったか」で動く
+ * （ラックプルをデッドリフトと分けたのと同じ理由）。
+ *
+ * ただし**変種をぜんぶカタログに載せると探すのが遅くなる**ので、
+ * よく別物として扱われるものだけを載せ、残りはここで複製する。
+ * 写すのは**計算に効く値と部位**——名前と ID 以外は元のままで、
+ * 触るのはたいてい補助部位の割合だけになる。
+ *
+ * 目標は写さない（別の種目なので、まだ何も決めていない状態から始める）。
+ * ID は新しく振る。カタログ由来の固定 ID ではないので、消して入れ直すと
+ * 過去の記録には繋がらない——それは自作種目と同じ性質。
+ */
+export function copyOf(source: Exercise, name: string, order: number): Exercise {
+  return {
+    ...source,
+    id: newId(),
+    name,
+    order,
+    // 写した先はマイ種目に並べる。臨時（adhoc）や非表示は引き継がない
+    shelf: 'listed',
+    goal: null,
+  };
+}
+
 export function catalogId(entry: CatalogEntry, implement: Implement): string {
   return entry.implements ? `${entry.id}${IMPLEMENT_SUFFIX[implement]}` : entry.id;
 }
@@ -1640,6 +1948,11 @@ export function fromCatalog(
     ...entry,
     ...checkValues(entry),
     id: catalogId(entry, implement),
+    /*
+     * **登録するのは正式名。**別名で探して当てた場合も、入るのは正式名のほう。
+     * 手元の一覧で呼び方が揺れると、同じ種目が別々のものに見える
+     * （別名は探すための入口で、持ちものの名前ではない）。
+     */
     name: dual ? `${entry.name}（${IMPLEMENT_LABELS[implement]}）` : entry.name,
     // ダンベルは左右に 1 つずつ持つので 2 倍。自重版は体重を係数ぶん乗せる
     loadMode: dual ? (IMPLEMENT_LOAD[implement] ?? entry.loadMode) : entry.loadMode,

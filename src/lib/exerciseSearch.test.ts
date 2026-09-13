@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { matchRank, matchesGroup, matchesQuery, normalizeName } from './exerciseSearch';
+import {
+  matchRank,
+  matchedAlias,
+  matchesGroup,
+  matchesQuery,
+  normalizeName,
+} from './exerciseSearch';
 
 /*
  * 種目を名前で探す。**カタログは 113 件あるので、当てに行く経路が要る。**
@@ -46,6 +52,50 @@ describe('種目を名前で探す', () => {
     expect(matchRank('ベンチプレス', 'ベンチ')).toBeLessThan(
       matchRank('ナローベンチプレス', 'ベンチ'),
     );
+  });
+
+  /*
+   * **別名でも拾う。**同じ種目の呼び方は揺れる（チェストサポーテッドロウ /
+   * チェストサポートロウ）。片方の綴りしか当たらないと**あるのに無いと思われ**、
+   * 同じ種目をもう 1 つ自分で作ることになる。
+   */
+  it('別名でも当たる（呼び方の揺れを拾う）', () => {
+    const aliases = ['チェストサポートロウ', 'マシンロウ'];
+    // 名前そのままでは当たらない綴り
+    expect(matchesQuery('チェストサポーテッドロウ', 'チェストサポート')).toBe(false);
+    expect(matchesQuery('チェストサポーテッドロウ', 'チェストサポート', aliases)).toBe(true);
+    expect(matchesQuery('チェストサポーテッドロウ', 'マシンロウ', aliases)).toBe(true);
+    // 別名にも無い語は当たらない
+    expect(matchesQuery('チェストサポーテッドロウ', 'スクワット', aliases)).toBe(false);
+  });
+
+  /*
+   * 当たった別名は**打った語に近いほうを出す。**「プッシュダウン」と打ったときに
+   * 「トライセプスプッシュダウン」を添えると、打った語が消えて読みにくい。
+   */
+  it('当たった別名を返す（名前で当たったときは返さない）', () => {
+    const aliases = ['トライセプスプッシュダウン', 'プッシュダウン', 'ローププレスダウン'];
+    const name = 'トライセプスプレスダウン';
+
+    // 前方一致のある別名を優先する
+    expect(matchedAlias(name, 'プッシュダウン', aliases)).toBe('プッシュダウン');
+    // 名前に無い語で当たれば、その別名を返す（前方一致が無ければ先頭）
+    expect(matchedAlias(name, 'セプスプッシュ', aliases)).toBe('トライセプスプッシュダウン');
+    expect(matchedAlias(name, 'ロープ', aliases)).toBe('ローププレスダウン');
+
+    // 名前で当たったなら、札に出す理由が無い
+    expect(matchedAlias(name, 'プレスダウン', aliases)).toBeNull();
+    expect(matchedAlias(name, '', aliases)).toBeNull();
+    // どれにも当たらない
+    expect(matchedAlias(name, 'スクワット', aliases)).toBeNull();
+    expect(matchedAlias(name, 'プッシュダウン')).toBeNull();
+  });
+
+  it('別名の前方一致も「近い」として先に出す', () => {
+    const aliases = ['プッシュダウン'];
+    expect(matchRank('トライセプスプレスダウン', 'プッシュ', aliases)).toBe(0);
+    // 別名を渡さなければ遠い（当たりはするが後ろ）
+    expect(matchRank('ナロープッシュアップ', 'プッシュ')).toBe(1);
   });
 
   /*

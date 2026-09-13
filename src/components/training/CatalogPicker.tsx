@@ -112,7 +112,7 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
    *
    * 探した結果では、束ねる見出しが無いので部位も行に添える。
    */
-  const pill = (c: CatalogChoice, searching: boolean) => {
+  const pill = (c: CatalogChoice, searching: boolean, alias: string | null) => {
     const id = catalogId(c.entry, c.implement);
     const picked = selectedIds?.has(id) ?? false;
     const shelf = byId.get(id)?.shelf;
@@ -128,6 +128,13 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
         {picked ? '✓ ' : '＋ '}
         {c.entry.name}
         {c.entry.implements && `（${IMPLEMENT_LABELS[c.implement]}）`}
+        {/*
+          **打った語で当たったなら、その語を添える。**
+          「プッシュダウン」で探して「トライセプスプレスダウン」が出ると、
+          一瞬「これは違うのでは」と思う。並びは 別名 → 部位 で固定する。
+          登録されるのは**正式名のまま**——手元の一覧で名前が揺れないように。
+        */}
+        {alias != null && <Tag>{alias}</Tag>}
         {searching && <Tag>{GROUP_LABELS[c.entry.group]}</Tag>}
         {shelf === 'hidden' && <Tag>非表示</Tag>}
         {shelf === 'adhoc' && <Tag>記録あり</Tag>}
@@ -143,6 +150,8 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
     id: catalogId(c.entry, c.implement),
     name: `${c.entry.name}${c.entry.implements ? `（${IMPLEMENT_LABELS[c.implement]}）` : ''}`,
     group: c.entry.group,
+    // 呼び方の揺れで「無い」と思われないように、別名でも拾えるようにする
+    aliases: c.entry.aliases,
     choice: c,
   }));
 
@@ -173,7 +182,7 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
               : 'カタログの種目はすべて追加済みです。'}
           </p>
         }
-        renderItem={(item, searching) => pill(item.choice, searching)}
+        renderItem={(item, searching, alias) => pill(item.choice, searching, alias)}
       />
     </div>
   );
