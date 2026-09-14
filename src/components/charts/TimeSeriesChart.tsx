@@ -38,6 +38,14 @@ export interface TimeSeriesChartProps {
   /** 既定は系列が 2 本以上のとき。同じ量を点と線で描く場合は明示的に消す */
   legend?: boolean;
   /**
+   * x 軸の日付ラベルを出すか。既定は出す。
+   *
+   * **同じ期間のグラフを縦に並べるときだけ切る**（体重の下に腹囲を添える場合）。
+   * 同じ目盛りが 2 回並ぶのを避けるためで、**余白（`MARGIN`）は変えない**——
+   * 変えるとプロットの高さの基準がずれて、上下で同じ日が同じ横位置に来なくなる。
+   */
+  xLabels?: boolean;
+  /**
    * 「いま」の点。日次のグラフなら今日、週次なら今週の x 値（`isoToTime`）。
    *
    * **色は系列のまま**にして、輪だけを重ねる。ここに別の色を足すと、
@@ -73,6 +81,7 @@ export function TimeSeriesChart({
   reference = null,
   emptyMessage = 'まだ記録がありません',
   legend,
+  xLabels = true,
   highlight = null,
 }: TimeSeriesChartProps) {
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
@@ -242,17 +251,18 @@ export function TimeSeriesChart({
               y2={MARGIN.top + plotH}
             />
 
-            {xTicks.map((t) => (
-              <text
-                key={t}
-                className={s.tickLabel}
-                x={x(t)}
-                y={MARGIN.top + plotH + 15}
-                textAnchor="middle"
-              >
-                {formatMD(toISO(new Date(t)))}
-              </text>
-            ))}
+            {xLabels &&
+              xTicks.map((t) => (
+                <text
+                  key={t}
+                  className={s.tickLabel}
+                  x={x(t)}
+                  y={MARGIN.top + plotH + 15}
+                  textAnchor="middle"
+                >
+                  {formatMD(toISO(new Date(t)))}
+                </text>
+              ))}
 
             {reference && (
               <>

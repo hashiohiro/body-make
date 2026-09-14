@@ -14,7 +14,26 @@ export const MA_WINDOW = 7;
 /** ペース推定に使う直近日数。短すぎると水分変動を拾い、長すぎると直近の変化に追随しない */
 const PACE_WINDOW = 28;
 
-export const EMPTY_MEASUREMENT: Measurement = { weight: null, bodyFat: null };
+export const EMPTY_MEASUREMENT: Measurement = { weight: null, bodyFat: null, waist: null };
+
+/**
+ * 1 回の計測が持つ値。**「その日は空か」の判定はここから回す。**
+ *
+ * 空の日はキーごと落とす（欠測日と未記録日を同じ扱いにする）という規則が、
+ * 保存（`sanitizeEntries`）と入力（`useBodyData.setValue`）の 2 か所にある。
+ * 以前はどちらも 4 つの項目を手で並べて書いていたので、項目を 1 つ足すたびに
+ * **両方に足さないと「その値だけ打った日が保存の瞬間に消える」**という形で出ていた。
+ */
+export const MEASUREMENT_FIELDS = [
+  'weight',
+  'bodyFat',
+  'waist',
+] as const satisfies readonly (keyof Measurement)[];
+
+/** その日の値がすべて空か。空なら日ごと落とす（保存と入力の両方がここを見る） */
+export function isBlankDay(day: { am: Measurement; pm: Measurement }): boolean {
+  return MEASUREMENT_FIELDS.every((field) => day.am[field] == null && day.pm[field] == null);
+}
 
 export function emptyDay(): { am: Measurement; pm: Measurement } {
   return { am: { ...EMPTY_MEASUREMENT }, pm: { ...EMPTY_MEASUREMENT } };
@@ -35,6 +54,17 @@ export function dayAverageBodyFat(day: { am: Measurement; pm: Measurement }): nu
   return mean([day.am.bodyFat, day.pm.bodyFat]);
 }
 
+export function dayAverageWaist(day: { am: Measurement; pm: Measurement }): number | null {
+  return mean([day.am.waist, day.pm.waist]);
+}
+
+/**
+ * 記録されたスロット数。**腹囲は数えない。**
+ *
+ * 腹囲は体重に添える補足の値で、記録の単位ではない（`types.ts` の `Measurement.waist`）。
+ * ここを数えると、連続記録日数・記録率・カレンダーの印・「◯日ぶん記録」のすべてが
+ * 「腹囲だけ測った日」で伸びる。**記録＝体重を測ったこと**を動かさない。
+ */
 export function slotCount(day: { am: Measurement; pm: Measurement }): 0 | 1 | 2 {
   let n = 0;
   if (day.am.weight != null || day.am.bodyFat != null) n++;
@@ -42,17 +72,28 @@ export function slotCount(day: { am: Measurement; pm: Measurement }): 0 | 1 | 2 
   return n as 0 | 1 | 2;
 }
 
-export function hasAnyValue(day: { am: Measurement; pm: Measurement }): boolean {
-  return slotCount(day) > 0;
+/**
+ * その日を推移の範囲に含めるか。**腹囲を含む。**
+ *
+ * `slots > 0`（記録＝体重を測ったこと）とは**別の問い**。
+ * あちらは「記録した日か」で、こちらは「何か測った日か」。
+ *
+ * 範囲の端をこれで決めないと、体重より先に腹囲だけを打った日が、
+ * 増分（週の移動平均は前の週から窓を持ち越す）には入って全計算（`buildDaily` は
+ * 範囲の外を持たない）には入らない、という形で 2 つの経路の答えが割れる。
+ */
+export function measured(point: { waist: number | null; slots: number }): boolean {
+  return point.slots > 0 || point.waist != null;
 }
 
 /**
- * 記録のある最初の日から「最終記録日 or 今日」までを 1 日も飛ばさずに並べる。
+ * 何か測った最初の日から「最終記録日 or 今日」までを 1 日も飛ばさずに並べる。
  * 欠測日を明示的に null で持つことで、記録率・ストリーク・移動平均が同じ配列から出せる。
  */
 export function buildDaily(entries: Entries): DailyPoint[] {
+  // 端は「何か測った日」で切る（腹囲だけの日も含む。理由は `measured`）
   const keys = Object.keys(entries)
-    .filter((k) => hasAnyValue(entries[k]!))
+    .filter((k) => !isBlankDay(entries[k]!))
     .sort();
   if (keys.length === 0) return [];
 
@@ -71,8 +112,10 @@ export function buildDaily(entries: Entries): DailyPoint[] {
       pm: entry.pm,
       weight: dayAverageWeight(entry),
       bodyFat: dayAverageBodyFat(entry),
+      waist: dayAverageWaist(entry),
       maWeight: null,
       maBodyFat: null,
+      maWaist: null,
       slots: slotCount(entry),
     });
   }
@@ -91,6 +134,8 @@ export function buildDaily(entries: Entries): DailyPoint[] {
     let countWeight = 0;
     let sumBodyFat = 0;
     let countBodyFat = 0;
+    let sumWaist = 0;
+    let countWaist = 0;
     for (let j = from; j <= i; j++) {
       const p = points[j]!;
       if (p.weight != null && Number.isFinite(p.weight)) {
@@ -101,9 +146,14 @@ export function buildDaily(entries: Entries): DailyPoint[] {
         sumBodyFat += p.bodyFat;
         countBodyFat++;
       }
+      if (p.waist != null && Number.isFinite(p.waist)) {
+        sumWaist += p.waist;
+        countWaist++;
+      }
     }
     points[i]!.maWeight = countWeight === 0 ? null : sumWeight / countWeight;
     points[i]!.maBodyFat = countBodyFat === 0 ? null : sumBodyFat / countBodyFat;
+    points[i]!.maWaist = countWaist === 0 ? null : sumWaist / countWaist;
   }
 
   return points;
@@ -188,14 +238,17 @@ export function computeStats(daily: DailyPoint[], weeks: WeekPoint[], settings: 
     latest: null,
     currentWeight: null,
     currentBodyFat: null,
+    currentWaist: null,
     currentFatMass: null,
     currentLeanMass: null,
     startWeight: null,
     startBodyFat: null,
+    startWaist: null,
     startFatMass: null,
     startLeanMass: null,
     weightDelta: null,
     bodyFatDelta: null,
+    waistDelta: null,
     fatMassDelta: null,
     leanMassDelta: null,
     bmi: null,
@@ -211,8 +264,10 @@ export function computeStats(daily: DailyPoint[], weeks: WeekPoint[], settings: 
 
   const currentWeight = lastNonNull(daily.map((d) => d.maWeight));
   const currentBodyFat = lastNonNull(daily.map((d) => d.maBodyFat));
+  const currentWaist = lastNonNull(daily.map((d) => d.maWaist));
   const startWeight = baseline(daily.map((d) => d.weight));
   const startBodyFat = baseline(daily.map((d) => d.bodyFat));
+  const startWaist = baseline(daily.map((d) => d.waist));
 
   const compose = (w: number | null, bf: number | null) =>
     w != null && bf != null ? { fat: (w * bf) / 100, lean: w - (w * bf) / 100 } : null;
@@ -248,15 +303,18 @@ export function computeStats(daily: DailyPoint[], weeks: WeekPoint[], settings: 
     latest: daily[daily.length - 1] ?? null,
     currentWeight,
     currentBodyFat,
+    currentWaist,
     currentFatMass: now?.fat ?? null,
     currentLeanMass: now?.lean ?? null,
     startWeight,
     startBodyFat,
+    startWaist,
     startFatMass: start?.fat ?? null,
     startLeanMass: start?.lean ?? null,
     weightDelta: currentWeight != null && startWeight != null ? currentWeight - startWeight : null,
     bodyFatDelta:
       currentBodyFat != null && startBodyFat != null ? currentBodyFat - startBodyFat : null,
+    waistDelta: currentWaist != null && startWaist != null ? currentWaist - startWaist : null,
     fatMassDelta: now && start ? now.fat - start.fat : null,
     leanMassDelta: now && start ? now.lean - start.lean : null,
     bmi,

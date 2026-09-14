@@ -17,6 +17,15 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  /*
+   * **「前回値」の席を、ボタンが無いときも空けておく。**
+   *
+   * あのボタンは「体重が未入力で、前に記録がある」ときだけ出る。高さは
+   * `--tap-row`（32px）で、出ていないときの行は 18px しかないので、
+   * 記録を入れた瞬間にカード全体が 14px ぶん縮んでいた。
+   * 記録の有無で器の高さが変わらないようにする。
+   */
+  min-height: var(--tap-row);
   margin-bottom: 9px;
   font-size: 12px;
   color: var(--ink-2);

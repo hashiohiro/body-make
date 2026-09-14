@@ -6,6 +6,16 @@ export interface Measurement {
   weight: number | null;
   /** % */
   bodyFat: number | null;
+  /**
+   * cm。**体重に添える補足の値**で、体重と並べて読むためにある。
+   *
+   * だから記録の単位にはしない——連続記録日数も記録率もカレンダーの印も、
+   * これまでどおり体重（と体脂肪率）で数える（`slotCount`）。
+   * 腹囲だけを打った日も保存はするが、それで「記録した日」にはならない。
+   *
+   * 入力欄は `Settings.waistEnabled` がオンのときだけ出す。
+   */
+  waist: number | null;
 }
 
 export interface DayEntry {
@@ -36,6 +46,15 @@ export interface Settings {
   /** 'YYYY-MM-DD' */
   targetDate: string | null;
   theme: ThemePref;
+  /**
+   * 腹囲を記録するか。**既定は false。**
+   *
+   * 測らない人のほうが多い値なので、欄を出したままにすると
+   * 体重の下に常に空欄が 1 つ並ぶことになる。使う人が自分で開ける。
+   *
+   * オフに戻しても記録は消さない（入力欄とグラフを隠すだけ）。
+   */
+  waistEnabled: boolean;
 }
 
 export interface AppData {
@@ -87,9 +106,18 @@ export interface DailyPoint {
   weight: number | null;
   /** 日平均体脂肪率 */
   bodyFat: number | null;
+  /** 日平均腹囲 */
+  waist: number | null;
   /** 7 日移動平均（後方 7 日窓・欠測日は分母から除外） */
   maWeight: number | null;
   maBodyFat: number | null;
+  /**
+   * 腹囲の 7 日移動平均。
+   *
+   * 体重と同じ理由で持つ。腹囲はメジャーを当てる位置と呼気で日々 1〜2cm 動くので、
+   * 単日の点だけを描くとギザギザで向きが読めない。判断は線のほうでさせる。
+   */
+  maWaist: number | null;
   /** 記録されたスロット数（0〜2）— ストリークと記録率の判定に使う */
   slots: 0 | 1 | 2;
 }
@@ -133,15 +161,19 @@ export interface Stats {
   /** 基準となる現在値（7 日移動平均。単日のブレを除く） */
   currentWeight: number | null;
   currentBodyFat: number | null;
+  /** 腹囲の現在値（7 日移動平均） */
+  currentWaist: number | null;
   currentFatMass: number | null;
   currentLeanMass: number | null;
   /** 開始時点の 7 日移動平均（最初に移動平均が立った日の値） */
   startWeight: number | null;
   startBodyFat: number | null;
+  startWaist: number | null;
   startFatMass: number | null;
   startLeanMass: number | null;
   weightDelta: number | null;
   bodyFatDelta: number | null;
+  waistDelta: number | null;
   fatMassDelta: number | null;
   leanMassDelta: number | null;
   /** BMI（身長設定時のみ） */

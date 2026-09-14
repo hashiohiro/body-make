@@ -10,7 +10,7 @@ import type {
   Stats,
   WeekPoint,
 } from '../types';
-import { MA_WINDOW, computeProjection } from './derive';
+import { MA_WINDOW, baseline, computeProjection, measured } from './derive';
 import { isListed } from './exerciseCatalog';
 import { addDays, formatMD, todayISO } from './date';
 import { buildCheckHistory } from './check';
@@ -75,14 +75,17 @@ const EMPTY_STATS: Stats = {
   latest: null,
   currentWeight: null,
   currentBodyFat: null,
+  currentWaist: null,
   currentFatMass: null,
   currentLeanMass: null,
   startWeight: null,
   startBodyFat: null,
+  startWaist: null,
   startFatMass: null,
   startLeanMass: null,
   weightDelta: null,
   bodyFatDelta: null,
+  waistDelta: null,
   fatMassDelta: null,
   leanMassDelta: null,
   bmi: null,
@@ -198,7 +201,12 @@ function combineBody(
    * 全期間を絞り込まなくても、端の週の中を見れば決まる。
    */
   const today = todayISO();
-  const firstWeek = built.findIndex((w) => w.recordedDays > 0);
+  /*
+   * 範囲の端は「何か測った日」で切る。**記録した日（`recordedDays`）ではない。**
+   * 腹囲だけの日を外すと、全計算（`buildDaily`）と範囲がずれて答えが割れる
+   * （`derive.ts` の `measured`）。
+   */
+  const firstWeek = built.findIndex((w) => w.measuredDays > 0);
   if (firstWeek < 0) {
     return {
       daily: [],
@@ -207,10 +215,9 @@ function combineBody(
       projection: computeProjection([], EMPTY_STATS, settings),
     };
   }
-  const lastWeek = findLastIndex(built, (w) => w.recordedDays > 0);
-  const firstAt = firstWeek * WEEK_DAYS + built[firstWeek]!.daily.findIndex((d) => d.slots > 0);
-  const lastRecordedAt =
-    lastWeek * WEEK_DAYS + findLastIndex(built[lastWeek]!.daily, (d) => d.slots > 0);
+  const lastWeek = findLastIndex(built, (w) => w.measuredDays > 0);
+  const firstAt = firstWeek * WEEK_DAYS + built[firstWeek]!.daily.findIndex(measured);
+  const lastRecordedAt = lastWeek * WEEK_DAYS + findLastIndex(built[lastWeek]!.daily, measured);
 
   const flat = built.flatMap((w) => w.daily);
   const lastRecorded = flat[lastRecordedAt]!.date;
@@ -258,15 +265,30 @@ function combineStats(
   // 現在値は後ろから最初に見つかったもの。配列を作り直さずに走る
   let currentWeight: number | null = null;
   let currentBodyFat: number | null = null;
-  for (let i = daily.length - 1; i >= 0 && (currentWeight == null || currentBodyFat == null); i--) {
+  let currentWaist: number | null = null;
+  for (
+    let i = daily.length - 1;
+    i >= 0 && (currentWeight == null || currentBodyFat == null || currentWaist == null);
+    i--
+  ) {
     const d = daily[i]!;
     if (currentWeight == null && d.maWeight != null) currentWeight = d.maWeight;
     if (currentBodyFat == null && d.maBodyFat != null) currentBodyFat = d.maBodyFat;
+    if (currentWaist == null && d.maWaist != null) currentWaist = d.maWaist;
   }
 
   // 開始値は最初の 7 個の実測。**集まった時点で打ち切る**（全期間を繋がない）
   const startWeight = headAverage(built, (w) => w.headWeights);
   const startBodyFat = headAverage(built, (w) => w.headBodyFats);
+  /*
+   * 腹囲の開始値だけは `daily` の先頭から出す。
+   *
+   * 週の部分結果（`headWeights` と同じ形）にすると、体組成の範囲より前から
+   * 始まる週——トレーニングだけが先にある期間——の腹囲まで拾ってしまう。
+   * 全計算側の `baseline` は `daily` しか見ないので、そこで答えが割れる。
+   * `baseline` は 7 個集まった時点で打ち切るので、走る距離は変わらない。
+   */
+  const startWaist = baseline(daily.map((d) => d.waist));
 
   const compose = (w: number | null, bf: number | null) =>
     w != null && bf != null ? { fat: (w * bf) / 100, lean: w - (w * bf) / 100 } : null;
@@ -313,15 +335,18 @@ function combineStats(
     latest: daily[daily.length - 1] ?? null,
     currentWeight,
     currentBodyFat,
+    currentWaist,
     currentFatMass: now?.fat ?? null,
     currentLeanMass: now?.lean ?? null,
     startWeight,
     startBodyFat,
+    startWaist,
     startFatMass: start?.fat ?? null,
     startLeanMass: start?.lean ?? null,
     weightDelta: currentWeight != null && startWeight != null ? currentWeight - startWeight : null,
     bodyFatDelta:
       currentBodyFat != null && startBodyFat != null ? currentBodyFat - startBodyFat : null,
+    waistDelta: currentWaist != null && startWaist != null ? currentWaist - startWaist : null,
     fatMassDelta: now && start ? now.fat - start.fat : null,
     leanMassDelta: now && start ? now.lean - start.lean : null,
     bmi,

@@ -90,7 +90,14 @@ export function EnergyTable({ points }: { points: readonly EnergyPoint[] }) {
 const INITIAL_ROWS = 60;
 const MORE_ROWS = 180;
 
-export function DailyTable({ daily }: { daily: readonly DailyPoint[] }) {
+/** グラフで見えた値の裏を取る場所。腹囲を出しているなら、ここにも要る */
+export function DailyTable({
+  daily,
+  waist = false,
+}: {
+  daily: readonly DailyPoint[];
+  waist?: boolean;
+}) {
   const [limit, setLimit] = useState(INITIAL_ROWS);
   const rows = useMemo(() => daily.slice(-limit).reverse(), [daily, limit]);
   const rest = daily.length - rows.length;
@@ -98,7 +105,17 @@ export function DailyTable({ daily }: { daily: readonly DailyPoint[] }) {
   return (
     <DataTable
       summary="日次データを表で見る"
-      columns={['日付', '朝 体重', '朝 体脂肪', '夜 体重', '夜 体脂肪', '日平均', '7日平均']}
+      columns={[
+        '日付',
+        '朝 体重',
+        '朝 体脂肪',
+        ...(waist ? ['朝 腹囲'] : []),
+        '夜 体重',
+        '夜 体脂肪',
+        ...(waist ? ['夜 腹囲'] : []),
+        '日平均',
+        '7日平均',
+      ]}
       footer={
         /* 古い日は押して伸ばす。全部が最初から要る場面は無い */
         rest > 0 ? (
@@ -115,8 +132,10 @@ export function DailyTable({ daily }: { daily: readonly DailyPoint[] }) {
           <th scope="row">{formatMDW(point.date)}</th>
           <Cell value={point.am.weight} />
           <Cell value={point.am.bodyFat} />
+          {waist && <Cell value={point.am.waist} />}
           <Cell value={point.pm.weight} />
           <Cell value={point.pm.bodyFat} />
+          {waist && <Cell value={point.pm.waist} />}
           <Cell value={point.weight} />
           <Cell value={point.maWeight} digits={2} />
         </tr>

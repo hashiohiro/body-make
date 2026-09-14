@@ -5,6 +5,7 @@ import {
   flushSave,
   loadData,
   resetStorageForTests,
+  sanitizeData,
   saveData,
   storedBytes,
 } from './storage';
@@ -61,7 +62,10 @@ function withWeight(kg: number): AppData {
   return {
     ...emptyData(),
     entries: {
-      '2026-03-01': { am: { weight: kg, bodyFat: null }, pm: { weight: null, bodyFat: null } },
+      '2026-03-01': {
+        am: { weight: kg, bodyFat: null, waist: null },
+        pm: { weight: null, bodyFat: null, waist: null },
+      },
     },
   };
 }
@@ -78,6 +82,61 @@ afterEach(() => {
   Object.defineProperty(globalThis, 'indexedDB', { value: realIndexedDB, configurable: true });
   resetDbForTests();
   resetStorageForTests();
+});
+
+/**
+ * 腹囲は**体重に添える補足**（`types.ts` の `Measurement.waist`）。
+ * 記録の数え方は動かさないが、**打った値は落とさない**——この 2 つを固定する。
+ */
+describe('腹囲', () => {
+  it('値域の外は落とす。中は小数第 1 位まで残る', () => {
+    const data = sanitizeData({
+      entries: {
+        '2026-03-01': {
+          am: { weight: 70, bodyFat: 20, waist: 81.25 },
+          pm: { weight: null, bodyFat: null, waist: 250 },
+        },
+      },
+    });
+    expect(data.entries['2026-03-01']?.am.waist).toBe(81.3);
+    expect(data.entries['2026-03-01']?.pm.waist).toBeNull();
+  });
+
+  /*
+   * ここが落ちるのは「腹囲だけ打った日が、保存した瞬間に消える」とき。
+   * 空判定を `MEASUREMENT_FIELDS` から回している理由そのもの。
+   */
+  it('腹囲だけの日も残る', () => {
+    const data = sanitizeData({
+      entries: { '2026-03-01': { am: { weight: null, bodyFat: null, waist: 81 } } },
+    });
+    expect(data.entries['2026-03-01']?.am.waist).toBe(81);
+  });
+
+  it('すべて空の日はこれまでどおり落とす', () => {
+    const data = sanitizeData({
+      entries: { '2026-03-01': { am: { weight: null, bodyFat: null, waist: null } } },
+    });
+    expect(data.entries['2026-03-01']).toBeUndefined();
+  });
+
+  it('設定の既定はオフ。真偽値以外は受け取らない', () => {
+    expect(sanitizeData({}).settings.waistEnabled).toBe(false);
+    expect(sanitizeData({ settings: { waistEnabled: true } }).settings.waistEnabled).toBe(true);
+    expect(sanitizeData({ settings: { waistEnabled: 'yes' } }).settings.waistEnabled).toBe(false);
+  });
+
+  /** 腹囲を持たない古いバックアップ（版は上げていない）がそのまま読めること */
+  it('腹囲を持たないバックアップは null とオフで埋まる', () => {
+    const data = sanitizeData({
+      version: 7,
+      settings: { heightCm: 172, theme: 'system' },
+      entries: { '2026-03-01': { am: { weight: 70, bodyFat: 20 } } },
+    });
+    expect(data.entries['2026-03-01']?.am.waist).toBeNull();
+    expect(data.settings.waistEnabled).toBe(false);
+    expect(data.settings.heightCm).toBe(172);
+  });
 });
 
 describe('保存先', () => {
@@ -124,7 +183,7 @@ describe('旧版からの引き取り', () => {
       DATA_KEY,
       JSON.stringify({
         version: 7,
-        entries: { '2026-03-01': { am: { weight: 68.4, bodyFat: 21.3 } } },
+        entries: { '2026-03-01': { am: { weight: 68.4, bodyFat: 21.3, waist: null } } },
       }),
     );
 
@@ -249,8 +308,14 @@ describe('週ごとのレコード', () => {
     return {
       ...emptyData(),
       entries: {
-        [DAY_A]: { am: { weight: a, bodyFat: null }, pm: { weight: null, bodyFat: null } },
-        [DAY_B]: { am: { weight: b, bodyFat: null }, pm: { weight: null, bodyFat: null } },
+        [DAY_A]: {
+          am: { weight: a, bodyFat: null, waist: null },
+          pm: { weight: null, bodyFat: null, waist: null },
+        },
+        [DAY_B]: {
+          am: { weight: b, bodyFat: null, waist: null },
+          pm: { weight: null, bodyFat: null, waist: null },
+        },
       },
     };
   }
@@ -303,7 +368,10 @@ describe('週ごとのレコード', () => {
       ...data,
       entries: {
         ...data.entries,
-        [DAY_A]: { am: { weight: 72, bodyFat: null }, pm: { weight: null, bodyFat: null } },
+        [DAY_A]: {
+          am: { weight: 72, bodyFat: null, waist: null },
+          pm: { weight: null, bodyFat: null, waist: null },
+        },
       },
     };
     await saveData(edited);

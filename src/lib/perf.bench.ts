@@ -38,8 +38,8 @@ function makeData(years: number): AppData {
     const iso = addDays(start, i);
     const weight = 70 + Math.sin(i / 30) * 2;
     entries[iso] = {
-      am: { weight: Math.round(weight * 10) / 10, bodyFat: 20 },
-      pm: { weight: Math.round((weight + 0.4) * 10) / 10, bodyFat: 20.4 },
+      am: { weight: Math.round(weight * 10) / 10, bodyFat: 20, waist: null },
+      pm: { weight: Math.round((weight + 0.4) * 10) / 10, bodyFat: 20.4, waist: null },
     };
     if (!SESSIONS_PER_WEEK.includes(i % 7)) continue;
     workouts[iso] = Array.from({ length: EXERCISES_PER_SESSION }, (_, k) => {
@@ -83,7 +83,7 @@ function fixture(years: number): Fixture {
 }
 
 /** 打ち替えに使う空の夜スロット。毎回作ると測っているものがぶれる */
-const EMPTY_PM = { weight: null, bodyFat: null };
+const EMPTY_PM = { weight: null, bodyFat: null, waist: null };
 const today = todayISO();
 let tick = 0;
 
@@ -144,7 +144,10 @@ for (const years of [1, 5, 10]) {
      */
     bench('体重入力（増分・体組成 + トレ）', () => {
       const entries = { ...f.data.entries };
-      entries[today] = { am: { weight: 70 + (tick++ % 50) / 100, bodyFat: 20 }, pm: EMPTY_PM };
+      entries[today] = {
+        am: { weight: 70 + (tick++ % 50) / 100, bodyFat: 20, waist: null },
+        pm: EMPTY_PM,
+      };
       deriveAll({ ...f.data, entries }, cache);
     });
 

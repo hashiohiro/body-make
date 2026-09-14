@@ -22,6 +22,7 @@ const SETTINGS: Settings = {
   targetBodyFat: 15,
   targetDate: null,
   theme: 'system',
+  waistEnabled: true,
 };
 
 /** 決定的な擬似乱数。落ちたときに同じ並びで再現できるようにする */
@@ -41,13 +42,26 @@ function entriesOf(days: number, seed: number, gapRate = 0.2): Entries {
     if (rand() < gapRate) continue; // 欠測日を混ぜる
     const iso = addDays(start, i);
     const w = 70 + Math.sin(i / 9) * 1.5;
+    /*
+     * 腹囲は体重よりまばらに入れる（補足の値なので毎日は測らない）。
+     * **体重を入れない日にも入れる**——腹囲だけの日は増分と全計算で
+     * 扱いが割れやすい場所なので、ここで通しておく。
+     */
+    const waist = rand() < 0.6 ? null : Math.round((82 + Math.sin(i / 11) * 2) * 10) / 10;
+    if (rand() < 0.08) {
+      out[iso] = {
+        am: { weight: null, bodyFat: null, waist: waist ?? 81 },
+        pm: { weight: null, bodyFat: null, waist: null },
+      };
+      continue;
+    }
     out[iso] = {
-      am: { weight: Math.round(w * 10) / 10, bodyFat: rand() < 0.15 ? null : 20 },
+      am: { weight: Math.round(w * 10) / 10, bodyFat: rand() < 0.15 ? null : 20, waist },
       // 夜だけ・朝だけの日も作る
       pm:
         rand() < 0.3
-          ? { weight: null, bodyFat: null }
-          : { weight: Math.round((w + 0.5) * 10) / 10, bodyFat: 20.5 },
+          ? { weight: null, bodyFat: null, waist: null }
+          : { weight: Math.round((w + 0.5) * 10) / 10, bodyFat: 20.5, waist: null },
     };
   }
   return out;
@@ -150,8 +164,8 @@ describe('編集を重ねても一致し続ける', () => {
 
     for (let n = 0; n < 20; n++) {
       entries[today] = {
-        am: { weight: 70 + n / 10, bodyFat: 20 },
-        pm: { weight: null, bodyFat: null },
+        am: { weight: 70 + n / 10, bodyFat: 20, waist: null },
+        pm: { weight: null, bodyFat: null, waist: null },
       };
       expect(deriveAll(dataOf(entries, workouts), cache)).toEqual(full(dataOf(entries, workouts)));
     }
@@ -166,7 +180,10 @@ describe('編集を重ねても一致し続ける', () => {
     // 週をまたいで散らばった日を直す。移動平均は跨ぐので後ろの週も変わる
     for (const back of [3, 40, 111, 250, 399, 8]) {
       const iso = addDays(todayISO(), -back);
-      entries[iso] = { am: { weight: 65, bodyFat: 18 }, pm: { weight: 66, bodyFat: 19 } };
+      entries[iso] = {
+        am: { weight: 65, bodyFat: 18, waist: null },
+        pm: { weight: 66, bodyFat: 19, waist: null },
+      };
       expect(deriveAll(dataOf(entries, workouts), cache)).toEqual(full(dataOf(entries, workouts)));
     }
   });
@@ -215,8 +232,8 @@ describe('作り直す範囲', () => {
     const kept = before.slice(0, -1);
 
     entries[todayISO()] = {
-      am: { weight: 71.2, bodyFat: 21 },
-      pm: { weight: null, bodyFat: null },
+      am: { weight: 71.2, bodyFat: 21, waist: null },
+      pm: { weight: null, bodyFat: null, waist: null },
     };
     deriveAll(dataOf(entries, workouts), cache);
 
@@ -235,8 +252,8 @@ describe('作り直す範囲', () => {
 
     // 真ん中あたりの日を直す
     entries[addDays(todayISO(), -150)] = {
-      am: { weight: 60, bodyFat: 15 },
-      pm: { weight: null, bodyFat: null },
+      am: { weight: 60, bodyFat: 15, waist: null },
+      pm: { weight: null, bodyFat: null, waist: null },
     };
     deriveAll(dataOf(entries, workouts), cache);
     const after = [...cache.bodyWeeks.values()];
@@ -294,8 +311,8 @@ describe('トレの作り直す範囲', () => {
 
     for (const back of [5, 90, 220]) {
       entries[addDays(todayISO(), -back)] = {
-        am: { weight: 55, bodyFat: 12 },
-        pm: { weight: null, bodyFat: null },
+        am: { weight: 55, bodyFat: 12, waist: null },
+        pm: { weight: null, bodyFat: null, waist: null },
       };
       expect(deriveAll(dataOf(entries, workouts), cache)).toEqual(full(dataOf(entries, workouts)));
     }
@@ -304,6 +321,78 @@ describe('トレの作り直す範囲', () => {
   it('体重が 1 件も無くても、トレだけで成り立つ', () => {
     const workouts = workoutsOf(120, 43);
     const data = dataOf({}, workouts);
+    expect(inc(data)).toEqual(full(data));
+  });
+});
+
+/**
+ * 腹囲は**体重に添える補足**で、記録の単位ではない（`types.ts` の `Measurement.waist`）。
+ * ここが崩れると、腹囲を測っただけの日で連続記録とカレンダーの印が伸びる。
+ */
+describe('腹囲は記録として数えない', () => {
+  const ago = (n: number) => addDays(todayISO(), -n);
+
+  /** 3日前・2日前は体重、昨日は腹囲だけ、今日は体重 */
+  const MIXED: Entries = {
+    [ago(3)]: {
+      am: { weight: 70, bodyFat: 20, waist: 82 },
+      pm: { weight: null, bodyFat: null, waist: null },
+    },
+    [ago(2)]: {
+      am: { weight: 69.8, bodyFat: 20, waist: null },
+      pm: { weight: null, bodyFat: null, waist: null },
+    },
+    [ago(1)]: {
+      am: { weight: null, bodyFat: null, waist: 81 },
+      pm: { weight: null, bodyFat: null, waist: null },
+    },
+    [todayISO()]: {
+      am: { weight: 69.5, bodyFat: 19.8, waist: 80.5 },
+      pm: { weight: null, bodyFat: null, waist: null },
+    },
+  };
+
+  it('腹囲だけの日は連続記録を繋がない', () => {
+    const { stats } = inc(dataOf(MIXED));
+    // 今日は体重を入れているが、昨日は腹囲だけ。連続は今日の 1 日で切れる
+    expect(stats.streak).toBe(1);
+    expect(stats.recordedDays).toBe(3);
+  });
+
+  it('腹囲だけの日も推移には出る（値は落とさない）', () => {
+    const { daily } = inc(dataOf(MIXED));
+    const yesterday = daily.find((d) => d.date === ago(1));
+    expect(yesterday?.waist).toBe(81);
+    // 記録としては数えないので slots は 0 のまま
+    expect(yesterday?.slots).toBe(0);
+  });
+
+  it('体重より先に腹囲だけの日があっても、増分と全計算が一致する', () => {
+    const data = dataOf(MIXED);
+    expect(inc(data)).toEqual(full(data));
+  });
+
+  /*
+   * 開始値は最初の 7 個の実測の平均（`baseline`）なので、
+   * それより短い記録では現在値と開き切らない。30 日ぶんで見る。
+   */
+  it('腹囲の開始比が出る', () => {
+    const entries: Entries = {};
+    for (let i = 29; i >= 0; i--) {
+      entries[ago(i)] = {
+        am: { weight: 70, bodyFat: 20, waist: 85 - (29 - i) * 0.1 },
+        pm: { weight: null, bodyFat: null, waist: null },
+      };
+    }
+    const data = dataOf(entries);
+    const { stats } = inc(data);
+
+    // 85.0 から 0.1cm/日 で細くなる。開始（最初の 7 日の平均）より現在は小さい
+    expect(stats.startWaist).toBeCloseTo(85 - 0.3, 10);
+    expect(stats.currentWaist).toBeCloseTo(85 - 2.6, 10);
+    expect(stats.waistDelta).toBeCloseTo(-2.3, 10);
+    // 体重は動かしていないので、そちらの開始比は 0
+    expect(stats.weightDelta).toBe(0);
     expect(inc(data)).toEqual(full(data));
   });
 });

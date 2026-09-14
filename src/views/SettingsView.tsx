@@ -17,6 +17,7 @@ import { THEME_OPTIONS } from '../lib/themes';
 import type { BodyData } from '../hooks/useBodyData';
 import { CardHeader } from '../components/CardHeader';
 import { Button } from '../components/Button';
+import { Pill } from '../components/Pill';
 import { Select } from '../components/Select';
 import ui from '../styles/ui.module.scss';
 import s from './SettingsView.module.scss';
@@ -35,6 +36,7 @@ import s from './SettingsView.module.scss';
  */
 export const SETTINGS_SECTIONS = [
   { id: 'general', label: '一般', hint: '表示・データ・このアプリについて' },
+  { id: 'body', label: '体組成', hint: '腹囲' },
   { id: 'training', label: 'トレーニング', hint: 'マイ種目・プリセット' },
 ] as const;
 
@@ -197,6 +199,30 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
             </button>
           ))}
         </div>
+      </section>
+    );
+  }
+
+  /* ---------------- 体組成 ---------------- */
+
+  /*
+   * 測る項目そのものの定義。滅多に変えないので設定タブが持つ。
+   * 目標体重のように進捗を見ながら変わる値は目標タブ。
+   */
+  if (section === 'body') {
+    return (
+      <section className={ui.card}>
+        <div className={ui.formRow}>
+          <label id="waist-enabled">腹囲を記録する</label>
+          <Pill
+            pressed={settings.waistEnabled}
+            label="腹囲を記録する"
+            onClick={() => updateSettings({ waistEnabled: !settings.waistEnabled })}
+          >
+            {settings.waistEnabled ? 'オン' : 'オフ'}
+          </Pill>
+        </div>
+        <p className={ui.note}>オフに戻しても記録は消えません。</p>
       </section>
     );
   }

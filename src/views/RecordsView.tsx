@@ -33,7 +33,7 @@ const INITIAL_ROWS = 60;
 const MORE_ROWS = 180;
 
 export function RecordsView({ body, date, onDateChange, domain }: Props) {
-  const { daily, data, sessions, stats, trainingStats, setValue } = body;
+  const { daily, weeks, data, sessions, stats, trainingStats, setValue } = body;
   const [limit, setLimit] = useState(INITIAL_ROWS);
   const [trendOpen, setTrendOpen] = useState(false);
 
@@ -93,6 +93,7 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
         date={date}
         entries={data.entries}
         daily={daily}
+        waistEnabled={data.settings.waistEnabled}
         onValue={setValue}
         onOpenTrend={() => setTrendOpen(true)}
       />
@@ -101,6 +102,7 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
         open={trendOpen}
         onClose={() => setTrendOpen(false)}
         daily={daily}
+        weeks={weeks}
         settings={data.settings}
         date={date}
       />

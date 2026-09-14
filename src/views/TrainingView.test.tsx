@@ -972,10 +972,21 @@ describe('設定（カテゴリ別の画面遷移）', () => {
     );
   }
 
-  it('カテゴリは 一般 と トレーニング の 2 つ', () => {
-    // 目標体重も週のセット数も種目の目標も、目標タブへ移した
-    expect(SETTINGS_SECTIONS.map((sec) => sec.id)).toEqual(['general', 'training']);
+  it('カテゴリは 一般 / 体組成 / トレーニング の 3 つ', () => {
+    expect(SETTINGS_SECTIONS.map((sec) => sec.id)).toEqual(['general', 'body', 'training']);
     render(<SettingsHarness section="general" />);
+    // 目標体重も週のセット数も種目の目標も、目標タブへ移した
+    expect(screen.queryByLabelText(/目標体重/)).toBeNull();
+    expect(screen.queryByLabelText(/身長/)).toBeNull();
+  });
+
+  /*
+   * 体組成のカテゴリが持つのは**測る項目の定義**だけ。
+   * 目標体重と身長は目標タブへ移したままで、ここへ戻さない。
+   */
+  it('体組成のカテゴリは腹囲の切り替えだけを持つ', () => {
+    render(<SettingsHarness section="body" />);
+    expect(screen.getByLabelText('腹囲を記録する')).toBeTruthy();
     expect(screen.queryByLabelText(/目標体重/)).toBeNull();
     expect(screen.queryByLabelText(/身長/)).toBeNull();
   });
@@ -1053,8 +1064,8 @@ describe('設定（カテゴリ別の画面遷移）', () => {
     expect(settingsSectionTitle('general')).toBe('一般');
     expect(settingsSectionTitle('training')).toBe('トレーニング');
     expect(settingsSectionTitle('unknown')).toBeNull();
-    // 体組成のカテゴリは無くなった（目標タブへ移した）
-    expect(settingsSectionTitle('body')).toBeNull();
+    // 体組成のカテゴリは腹囲だけ。目標体重と身長は目標タブのまま
+    expect(settingsSectionTitle('body')).toBe('体組成');
 
     // セクションの中の画面まで含めた見出し（`#settings/training/presets`）
     expect(settingsTitle('training', 'presets')).toBe('プリセット');
@@ -1097,9 +1108,9 @@ describe('グラフの「いま」の点', () => {
       exercises: [],
       workouts: {},
       entries: {
-        [isoAdd(todayISO(), -2)]: { am: { weight: 70, bodyFat: 20 } },
-        [isoAdd(todayISO(), -1)]: { am: { weight: 70.2, bodyFat: 20 } },
-        [todayISO()]: { am: { weight: 70.4, bodyFat: 20.1 } },
+        [isoAdd(todayISO(), -2)]: { am: { weight: 70, bodyFat: 20, waist: null } },
+        [isoAdd(todayISO(), -1)]: { am: { weight: 70.2, bodyFat: 20, waist: null } },
+        [todayISO()]: { am: { weight: 70.4, bodyFat: 20.1, waist: null } },
       },
     });
     render(<ChartHarness />);
@@ -1373,15 +1384,15 @@ describe('体組成の推移を記録から開く', () => {
 
   const openDialog = () => document.querySelector<HTMLDialogElement>('dialog[open]');
 
-  const seedDays = () => {
+  const seedDays = (settings: Record<string, unknown> = {}, waist = false) => {
     const entries: Record<string, unknown> = {};
     for (let i = 0; i < 20; i++) {
       entries[isoAdd(todayISO(), -i)] = {
-        am: { weight: 70 + i / 10, bodyFat: 20 },
-        pm: { weight: null, bodyFat: null },
+        am: { weight: 70 + i / 10, bodyFat: 20, waist: waist ? 82 + i / 10 : null },
+        pm: { weight: null, bodyFat: null, waist: null },
       };
     }
-    seedRaw({ version: 7, settings: {}, entries, exercises: [], workouts: {} });
+    seedRaw({ version: 7, settings, entries, exercises: [], workouts: {} });
   };
 
   it('記録タブから、体重と体脂肪率の推移を開ける', () => {
@@ -1406,6 +1417,106 @@ describe('体組成の推移を記録から開く', () => {
     fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
 
     expect(openDialog()!.querySelectorAll('[data-now]').length).toBeGreaterThan(0);
+  });
+
+  /*
+   * **同じ名前の面に、開き方で違うものを出さない。**
+   * 以前はここにグラフ 2 枚しか無く、週平均・カロリー収支・元データは推移画面にしか無かった。
+   */
+  it('推移画面と同じひとそろいが出る', () => {
+    seedDays();
+    render(<RecordsHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
+
+    const dialog = within(openDialog()!);
+    expect(dialog.getByRole('heading', { name: '週平均の体組成' })).toBeTruthy();
+    expect(dialog.getByRole('heading', { name: '推定カロリー収支' })).toBeTruthy();
+    expect(dialog.getByRole('heading', { name: '元データ' })).toBeTruthy();
+  });
+
+  /*
+   * 腹囲は体重に添える補足なので、対等な 3 枚目のカードにはしない。
+   * 体重のカードの中に入っていること（＝見出しが 2 枚のままであること）で見る。
+   */
+  it('腹囲はオンのときだけ、体重のカードの中に出る', () => {
+    seedDays({ waistEnabled: true }, true);
+    render(<RecordsHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
+
+    const dialog = within(openDialog()!);
+    expect(dialog.getByText('腹囲')).toBeTruthy();
+    expect(dialog.getByLabelText('日平均腹囲と7日移動平均の推移')).toBeTruthy();
+    // カードは「体重の推移」「体脂肪率の推移」の 2 枚のまま
+    expect(dialog.queryByRole('heading', { name: '腹囲の推移' })).toBeNull();
+  });
+
+  it('腹囲がオフなら、グラフごと出ない', () => {
+    seedDays({}, true);
+    render(<RecordsHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
+
+    expect(within(openDialog()!).queryByLabelText('日平均腹囲と7日移動平均の推移')).toBeNull();
+  });
+});
+
+/**
+ * 腹囲の入力欄。**設定でオンにしたときだけ出す。**
+ * 測らない人の画面に、体重の下の空欄をひとつ増やさない。
+ */
+describe('腹囲の入力', () => {
+  function RecordsHarness() {
+    const body = useBodyData(seeded);
+    const [date, setDate] = useState(todayISO);
+    return <RecordsView body={body} date={date} onDateChange={setDate} domain="body" />;
+  }
+
+  it('オフなら欄が出ない', () => {
+    seedRaw({ version: 7, settings: {}, entries: {}, exercises: [], workouts: {} });
+    render(<RecordsHarness />);
+    expect(screen.queryByLabelText('腹囲 cm')).toBeNull();
+    expect(screen.getAllByLabelText('体重 kg').length).toBe(2);
+  });
+
+  it('オンなら朝と夜それぞれに出て、打った値が残る', () => {
+    seedRaw({
+      version: 7,
+      settings: { waistEnabled: true },
+      entries: {},
+      exercises: [],
+      workouts: {},
+    });
+    render(<RecordsHarness />);
+
+    const fields = screen.getAllByLabelText('腹囲 cm');
+    expect(fields.length).toBe(2);
+
+    fireEvent.change(fields[0]!, { target: { value: '81.5' } });
+    fireEvent.blur(fields[0]!);
+    expect((screen.getAllByLabelText('腹囲 cm')[0] as HTMLInputElement).value).toBe('81.5');
+  });
+
+  /*
+   * 腹囲だけを打った日も**保存される**（空判定は `MEASUREMENT_FIELDS` から回す）。
+   * ただし記録として数えないので、カレンダーの印は付かない。
+   */
+  it('腹囲だけ打っても、記録一覧では未記録のまま', () => {
+    seedRaw({
+      version: 7,
+      settings: { waistEnabled: true },
+      entries: {},
+      exercises: [],
+      workouts: {},
+    });
+    render(<RecordsHarness />);
+
+    const field = screen.getAllByLabelText('腹囲 cm')[0]!;
+    fireEvent.change(field, { target: { value: '81' } });
+    fireEvent.blur(field);
+
+    // 値は残っている
+    expect((screen.getAllByLabelText('腹囲 cm')[0] as HTMLInputElement).value).toBe('81');
+    // 記録としては数えない
+    expect(screen.getAllByText('未記録').length).toBeGreaterThan(0);
   });
 });
 
@@ -1487,8 +1598,14 @@ describe('記録のカレンダー', () => {
       workouts: {},
       entries: {
         // 朝夜そろった日と、片方だけの日
-        [ago(1)]: { am: { weight: 70, bodyFat: 20 }, pm: { weight: 70.5, bodyFat: 20.5 } },
-        [ago(2)]: { am: { weight: 70, bodyFat: 20 }, pm: { weight: null, bodyFat: null } },
+        [ago(1)]: {
+          am: { weight: 70, bodyFat: 20, waist: null },
+          pm: { weight: 70.5, bodyFat: 20.5, waist: null },
+        },
+        [ago(2)]: {
+          am: { weight: 70, bodyFat: 20, waist: null },
+          pm: { weight: null, bodyFat: null, waist: null },
+        },
       },
     });
     render(<CalendarHarness />);
@@ -1512,7 +1629,7 @@ describe('記録のカレンダー', () => {
       settings: {},
       exercises: [],
       workouts: {},
-      entries: { [ago(1)]: { am: { weight: 70, bodyFat: 20 } } },
+      entries: { [ago(1)]: { am: { weight: 70, bodyFat: 20, waist: null } } },
     });
     render(<CalendarHarness />);
 
@@ -1532,7 +1649,7 @@ describe('記録のカレンダー', () => {
       settings: {},
       exercises: [],
       workouts: {},
-      entries: { [ago(2)]: { am: { weight: 70, bodyFat: 20 } } },
+      entries: { [ago(2)]: { am: { weight: 70, bodyFat: 20, waist: null } } },
     });
     render(<CalendarHarness />);
 
@@ -1560,7 +1677,7 @@ describe('記録のカレンダー', () => {
       settings: {},
       exercises: [],
       workouts: {},
-      entries: { [todayISO()]: { am: { weight: 70, bodyFat: 20 } } },
+      entries: { [todayISO()]: { am: { weight: 70, bodyFat: 20, waist: null } } },
     });
     render(<CalendarHarness />);
     expect(screen.getAllByRole('gridcell')).toHaveLength(14);
@@ -1579,7 +1696,7 @@ describe('記録のカレンダー', () => {
       settings: {},
       exercises: [],
       workouts: {},
-      entries: { [ago(1)]: { am: { weight: 70, bodyFat: 20 } } },
+      entries: { [ago(1)]: { am: { weight: 70, bodyFat: 20, waist: null } } },
     });
     render(<CalendarHarness />);
 
@@ -1606,7 +1723,7 @@ describe('記録のカレンダー', () => {
       version: 7,
       settings: {},
       exercises: [bench()],
-      entries: { [ago(1)]: { am: { weight: 70, bodyFat: 20 } } },
+      entries: { [ago(1)]: { am: { weight: 70, bodyFat: 20, waist: null } } },
       workouts: { [ago(2)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }] },
     });
 
@@ -1631,8 +1748,8 @@ describe('記録のカレンダー', () => {
       exercises: [],
       workouts: {},
       entries: {
-        [todayISO()]: { am: { weight: 70, bodyFat: 20 } },
-        [ago(3)]: { am: { weight: 68.4, bodyFat: 18 } },
+        [todayISO()]: { am: { weight: 70, bodyFat: 20, waist: null } },
+        [ago(3)]: { am: { weight: 68.4, bodyFat: 18, waist: null } },
       },
     });
     render(<CalendarHarness />);
@@ -1665,8 +1782,8 @@ describe('記録が消えることの案内', () => {
     const entries: Record<string, unknown> = {};
     for (let i = 0; i < n; i++) {
       entries[isoAdd(todayISO(), -i)] = {
-        am: { weight: 70, bodyFat: 20 },
-        pm: { weight: null, bodyFat: null },
+        am: { weight: 70, bodyFat: 20, waist: null },
+        pm: { weight: null, bodyFat: null, waist: null },
       };
     }
     seedRaw({ version: 7, settings: {}, entries, exercises: [], workouts: {} });
@@ -1736,8 +1853,8 @@ describe('記録タブ', () => {
     const entries: Record<string, unknown> = {};
     for (let i = 0; i < 200; i++) {
       entries[isoAdd(todayISO(), -i)] = {
-        am: { weight: 70, bodyFat: 20 },
-        pm: { weight: null, bodyFat: null },
+        am: { weight: 70, bodyFat: 20, waist: null },
+        pm: { weight: null, bodyFat: null, waist: null },
       };
     }
     seedRaw({ version: 7, settings: {}, entries, exercises: [], workouts: {} });
@@ -1759,8 +1876,8 @@ describe('記録タブ', () => {
     const entries: Record<string, unknown> = {};
     for (let i = 0; i < 10; i++) {
       entries[isoAdd(todayISO(), -i)] = {
-        am: { weight: 70, bodyFat: 20 },
-        pm: { weight: null, bodyFat: null },
+        am: { weight: 70, bodyFat: 20, waist: null },
+        pm: { weight: null, bodyFat: null, waist: null },
       };
     }
     seedRaw({ version: 7, settings: {}, entries, exercises: [], workouts: {} });
@@ -2606,7 +2723,7 @@ describe('バックアップの読み込み', () => {
   const backup = {
     version: 2,
     settings: {},
-    entries: { '2026-03-01': { am: { weight: 70, bodyFat: 20 } } },
+    entries: { '2026-03-01': { am: { weight: 70, bodyFat: 20, waist: null } } },
     exercises: [],
     workouts: {},
   };
@@ -4396,7 +4513,7 @@ describe('画面の位置（タブと下位画面）', () => {
   });
 
   it('ホームの入口から推移へ入り、遷移元へ戻る', () => {
-    seedData([], {}, { '2026-03-07': { am: { weight: 70, bodyFat: 20 } } });
+    seedData([], {}, { '2026-03-07': { am: { weight: 70, bodyFat: 20, waist: null } } });
     render(<App initial={seeded} />);
     fireEvent.click(screen.getByRole('button', { name: /体重・体脂肪率の推移/ }));
 

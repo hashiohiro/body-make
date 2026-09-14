@@ -21,8 +21,8 @@ function fullData(): AppData {
     // 保存する形は 1 日 = 朝 / 夕の 2 枠で、入れていない枠も null で持つ
     entries: {
       '2026-03-10': {
-        am: { weight: 70.2, bodyFat: 18.4 },
-        pm: { weight: null, bodyFat: null },
+        am: { weight: 70.2, bodyFat: 18.4, waist: null },
+        pm: { weight: null, bodyFat: null, waist: null },
       },
     },
     exercises: [
@@ -118,15 +118,15 @@ describe('書き出したものを読み込み直す', () => {
     const back = await readImportFile(
       asFile({
         entries: {
-          '2026-03-10': { am: { weight: 9999, bodyFat: -5 } },
-          '2026-03-11': { am: { weight: 9999, bodyFat: 18.4 } },
+          '2026-03-10': { am: { weight: 9999, bodyFat: -5, waist: null } },
+          '2026-03-11': { am: { weight: 9999, bodyFat: 18.4, waist: null } },
         },
       }),
     );
     // 全部落ちた日は消える
     expect(back.entries['2026-03-10']).toBeUndefined();
     // 片方だけ残った日は、落ちた値を null にして残す
-    expect(back.entries['2026-03-11']?.am).toEqual({ weight: null, bodyFat: 18.4 });
+    expect(back.entries['2026-03-11']?.am).toEqual({ weight: null, bodyFat: 18.4, waist: null });
     expect(back.count).toBe(1);
   });
 

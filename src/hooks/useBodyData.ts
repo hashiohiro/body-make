@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToday } from './useToday';
-import { emptyDay } from '../lib/derive';
+import { emptyDay, isBlankDay } from '../lib/derive';
 import { createDeriveCache, deriveAll } from '../lib/incremental';
 import { isCardio } from '../lib/exerciseCatalog';
 import {
@@ -243,14 +243,13 @@ export function useBodyData(initial: AppData): BodyData {
             [date]: { ...current, [slot]: { ...current[slot], [field]: value } },
           },
         };
-        // 4 項目すべて空になった日はキーごと落とす（欠測日と未記録日を同じ扱いにする）
+        /*
+         * すべて空になった日はキーごと落とす（欠測日と未記録日を同じ扱いにする）。
+         * 項目の並びは `MEASUREMENT_FIELDS` が持つ——ここと `sanitizeEntries` の
+         * 両方で手書きしていたので、項目を足すたびに片方に入れ忘れていた。
+         */
         const day = next.entries[date]!;
-        const blank =
-          day.am.weight == null &&
-          day.am.bodyFat == null &&
-          day.pm.weight == null &&
-          day.pm.bodyFat == null;
-        if (blank) {
+        if (isBlankDay(day)) {
           const { [date]: _removed, ...rest } = next.entries;
           next.entries = rest;
         }

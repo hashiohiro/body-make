@@ -31,7 +31,8 @@ const SPARK_DAYS = 30;
  */
 export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
   // 部位別の配分は全期間ぶん（表側が直近 5 週に切る）。作るのは useBodyData で 1 回だけ
-  const { daily, stats, sessions, weeklySets, trainingStats } = body;
+  const { daily, stats, sessions, weeklySets, trainingStats, data } = body;
+  const waistEnabled = data.settings.waistEnabled;
   // 表とダイアログのグラフで同じ値を見る
   const [groupValueId, setGroupValueId] = useState<GroupValueId>('sets');
 
@@ -43,6 +44,10 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
   const leanSpark = recent
     .filter((p) => p.maWeight != null && p.maBodyFat != null)
     .map((p) => ({ t: p.time, v: p.maWeight! - (p.maWeight! * p.maBodyFat!) / 100 }));
+  // 腹囲も移動平均ベース。メジャーを当てる位置と呼気で単日は 1〜2cm 振れる
+  const waistSpark = recent
+    .filter((p) => p.maWaist != null)
+    .map((p) => ({ t: p.time, v: p.maWaist! }));
 
   /*
    * 実績もいまの側だけを出す。
@@ -93,6 +98,10 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
               lean={stats.currentLeanMass}
               leanDelta={stats.leanMassDelta}
               leanSpark={leanSpark}
+              // 設定でオフなら行ごと出ない（記録は残っていても隠す）
+              waist={waistEnabled ? stats.currentWaist : null}
+              waistDelta={stats.waistDelta}
+              waistSpark={waistSpark}
               caption={caption}
             />
             <StatTiles stats={stats} />

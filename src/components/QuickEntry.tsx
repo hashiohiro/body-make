@@ -1,6 +1,6 @@
-import { dayAverageBodyFat, dayAverageWeight, emptyDay } from '../lib/derive';
+import { dayAverageBodyFat, dayAverageWaist, dayAverageWeight, emptyDay } from '../lib/derive';
 import { fmt } from '../lib/format';
-import { BODYFAT_RANGE, WEIGHT_RANGE } from '../lib/storage';
+import { BODYFAT_RANGE, WAIST_RANGE, WEIGHT_RANGE } from '../lib/storage';
 import type { DailyPoint, Entries, SlotId } from '../types';
 import type { MeasurementField } from '../hooks/useBodyData';
 import { NumberField } from './NumberField';
@@ -14,6 +14,8 @@ interface Props {
   entries: Entries;
   daily: readonly DailyPoint[];
   onValue: (date: string, slot: SlotId, field: MeasurementField, value: number | null) => void;
+  /** 腹囲の欄を出すか（設定 › 一般 › 体組成）。測らない人に空欄を置かない */
+  waistEnabled: boolean;
   /**
    * 推移を開く。**渡されたときだけ入口を出す。**
    *
@@ -50,10 +52,11 @@ function lastKnown(
  * 日付ナビは持たない。日付は記録タブ全体の状態（体組成とトレーニングで同じ日を見続ける）で、
  * 置き場所はヘッダに 1 つ。カードには入力欄だけを残す。
  */
-export function QuickEntry({ date, entries, daily, onValue, onOpenTrend }: Props) {
+export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpenTrend }: Props) {
   const entry = entries[date] ?? emptyDay();
   const avgWeight = dayAverageWeight(entry);
   const avgBodyFat = dayAverageBodyFat(entry);
+  const avgWaist = dayAverageWaist(entry);
 
   return (
     <section className={ui.card}>
@@ -64,6 +67,7 @@ export function QuickEntry({ date, entries, daily, onValue, onOpenTrend }: Props
           const measurement = entry[slot.id];
           const prevWeight = lastKnown(daily, date, slot.id, 'weight');
           const prevBodyFat = lastKnown(daily, date, slot.id, 'bodyFat');
+          const prevWaist = lastKnown(daily, date, slot.id, 'waist');
           const canCopy = measurement.weight == null && prevWeight != null;
 
           return (
@@ -77,6 +81,10 @@ export function QuickEntry({ date, entries, daily, onValue, onOpenTrend }: Props
                     onClick={() => {
                       onValue(date, slot.id, 'weight', prevWeight);
                       if (prevBodyFat != null) onValue(date, slot.id, 'bodyFat', prevBodyFat);
+                      // 腹囲も一緒に写す。欄を開けている人にとっては体重と同じ 1 回の計測
+                      if (waistEnabled && prevWaist != null) {
+                        onValue(date, slot.id, 'waist', prevWaist);
+                      }
                     }}
                   >
                     前回値
@@ -102,6 +110,17 @@ export function QuickEntry({ date, entries, daily, onValue, onOpenTrend }: Props
                 max={BODYFAT_RANGE[1]}
                 onCommit={(v) => onValue(date, slot.id, 'bodyFat', v)}
               />
+              {waistEnabled && (
+                <NumberField
+                  label="腹囲 cm"
+                  value={measurement.waist}
+                  fallback={prevWaist}
+                  step={0.1}
+                  min={WAIST_RANGE[0]}
+                  max={WAIST_RANGE[1]}
+                  onCommit={(v) => onValue(date, slot.id, 'waist', v)}
+                />
+              )}
             </div>
           );
         })}
@@ -110,7 +129,7 @@ export function QuickEntry({ date, entries, daily, onValue, onOpenTrend }: Props
       <div className={s.summary}>
         <span>この日の平均</span>
         <b>
-          {fmt(avgWeight)} kg / {fmt(avgBodyFat)} %
+          {fmt(avgWeight)} kg / {fmt(avgBodyFat)} %{waistEnabled && <> / {fmt(avgWaist)} cm</>}
         </b>
       </div>
 

@@ -55,7 +55,7 @@ function entry(sets: SessionSet[], exerciseId = 'ex_test'): SessionExercise {
 }
 
 function day(date: string, weight: number | null, maWeight: number | null = weight): DailyPoint {
-  const blank = { weight: null, bodyFat: null };
+  const blank = { weight: null, bodyFat: null, waist: null };
   return {
     date,
     time: 0,
@@ -63,8 +63,10 @@ function day(date: string, weight: number | null, maWeight: number | null = weig
     pm: blank,
     weight,
     bodyFat: null,
+    waist: null,
     maWeight,
     maBodyFat: null,
+    maWaist: null,
     slots: weight == null ? 0 : 1,
   };
 }
@@ -378,7 +380,10 @@ describe('サニタイズと移行', () => {
       version: 1,
       settings: { heightCm: 170, theme: 'dark' },
       entries: {
-        '2026-03-01': { am: { weight: 70, bodyFat: 20 }, pm: { weight: null, bodyFat: null } },
+        '2026-03-01': {
+          am: { weight: 70, bodyFat: 20, waist: null },
+          pm: { weight: null, bodyFat: null, waist: null },
+        },
       },
     };
     const data = sanitizeData(v1);
@@ -417,7 +422,10 @@ describe('サニタイズと移行', () => {
       exercises: [{ id: 'ex_bench', name: 'ベンチプレス', mechanic: 'compound', group: 'chest' }],
       workouts: { '2026-03-01': [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }] },
       entries: {
-        '2026-03-01': { am: { weight: 70, bodyFat: null }, pm: { weight: null, bodyFat: null } },
+        '2026-03-01': {
+          am: { weight: 70, bodyFat: null, waist: null },
+          pm: { weight: null, bodyFat: null, waist: null },
+        },
       },
     });
     const roundTripped = sanitizeData(JSON.parse(JSON.stringify(original)));

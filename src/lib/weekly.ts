@@ -19,10 +19,12 @@ import { GROUP_ORDER, isCardio, muscleOf } from './exerciseCatalog';
 import {
   MA_WINDOW,
   dayAverageBodyFat,
+  dayAverageWaist,
   dayAverageWeight,
   emptyDay,
-  hasAnyValue,
+  isBlankDay,
   mean,
+  measured,
   slotCount,
 } from './derive';
 import { addDays, isoToTime, startOfWeek, todayISO } from './date';
@@ -58,6 +60,7 @@ export interface WorkoutSlice {
 interface DayAverage {
   weight: number | null;
   bodyFat: number | null;
+  waist: number | null;
   slots: 0 | 1 | 2;
 }
 
@@ -90,10 +93,19 @@ export interface BodyWeek {
   daily: DailyPoint[];
   /** 週次集計。`label` と前週差は合成のときに埋める */
   week: Omit<WeekPoint, 'label' | 'weightDelta' | 'bodyFatDelta'>;
+  /** 記録した日数（体重・体脂肪率で数える。ストリークと記録率と同じ数え方） */
   recordedDays: number;
+  /** 何か測った日数。**腹囲だけの日も入る**——推移の範囲を決めるのはこちら */
+  measuredDays: number;
   fullDays: number;
   streak: StreakPart;
-  /** 開始値のための、この週の日平均（欠測を除いた並び順のまま） */
+  /**
+   * 開始値のための、この週の日平均（欠測を除いた並び順のまま）。
+   *
+   * **腹囲はここに持たない。** 週の並びはトレーニングも含んで体組成より前から
+   * 始まることがあり、そこに腹囲だけの日があると、`daily` しか見ない全計算側
+   * （`baseline`）とずれる。腹囲の開始値は合成側で `daily` から出す。
+   */
   headWeights: number[];
   headBodyFats: number[];
 }
@@ -120,7 +132,8 @@ function sameDays<T>(a: readonly (T | null)[], b: readonly (T | null)[]): boolea
  */
 export function weekStarts(entries: Entries, workouts: Workouts): string[] {
   const dates = [
-    ...Object.keys(entries).filter((k) => hasAnyValue(entries[k]!)),
+    // 端は「何か測った日」で切る（腹囲だけの日も含む。`derive.ts` の `measured`）
+    ...Object.keys(entries).filter((k) => !isBlankDay(entries[k]!)),
     ...Object.keys(workouts).filter((k) => (workouts[k]?.length ?? 0) > 0),
   ];
   if (dates.length === 0) return [];
@@ -154,8 +167,13 @@ export function sliceEntries(
     starts,
     cache,
     (iso) => {
+      /*
+       * **腹囲だけの日も持ち歩く。** ここを「記録した日か」（`slotCount`）で切ると、
+       * その日の腹囲が増分側からだけ消えて、全計算（`buildDaily` は範囲の中の
+       * `entries[iso]` をそのまま読む）と答えが割れる。落とすのは本当に空の日だけ。
+       */
       const entry = entries[iso];
-      return entry && hasAnyValue(entry) ? entry : null;
+      return entry && !isBlankDay(entry) ? entry : null;
     },
     (start, days) => ({ start, days }),
   );
@@ -211,6 +229,7 @@ function averageOf(day: DayEntry | null): DayAverage {
   return {
     weight: dayAverageWeight(entry),
     bodyFat: dayAverageBodyFat(entry),
+    waist: dayAverageWaist(entry),
     slots: slotCount(entry),
   };
 }
@@ -257,8 +276,10 @@ export function deriveBodyWeek(slice: WeekSlice, prev: BodyWeek | null): BodyWee
       pm: entry.pm as Measurement,
       weight: avg.weight,
       bodyFat: avg.bodyFat,
+      waist: avg.waist,
       maWeight: mean(win.map((w) => w.weight)),
       maBodyFat: mean(win.map((w) => w.bodyFat)),
+      maWaist: mean(win.map((w) => w.waist)),
       slots: avg.slots,
     };
   });
@@ -283,6 +304,7 @@ export function deriveBodyWeek(slice: WeekSlice, prev: BodyWeek | null): BodyWee
       days: averages.filter((a) => a.weight != null).length,
     },
     recordedDays: averages.filter((a) => a.slots > 0).length,
+    measuredDays: daily.filter(measured).length,
     fullDays: slice.days.filter((d) => d != null && d.am.weight != null && d.pm.weight != null)
       .length,
     streak: streakOf(averages),

@@ -4,6 +4,7 @@ import { isoToTime, todayISO } from '../../lib/date';
 import type { DailyPoint, Settings } from '../../types';
 import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
+import s from './charts.module.scss';
 
 interface Props {
   /** 期間で絞ったあとの日次。絞るのは呼び出し側の仕事 */
@@ -16,7 +17,7 @@ interface Props {
 }
 
 /**
- * 体重と体脂肪率の推移。
+ * 体重と体脂肪率の推移。**腹囲は体重の下に添える。**
  *
  * **推移画面と記録から開くダイアログで同じものを使う。**
  * 同じグラフを 2 通りに組むと、片方だけ直る事故が起きる
@@ -47,6 +48,34 @@ export function BodyTrendCharts({ daily, settings, highlight = null, note = fals
     },
   ];
 
+  const waistSeries: ChartSeries[] = [
+    {
+      id: 'waist-raw',
+      label: '日平均（実測）',
+      color: 'var(--s-waist)',
+      kind: 'dots',
+      points: daily.filter((p) => p.waist != null).map((p) => ({ t: p.time, v: p.waist! })),
+    },
+    {
+      id: 'waist-ma',
+      label: '7日移動平均',
+      color: 'var(--s-waist)',
+      kind: 'line',
+      emphasis: true,
+      points: daily.filter((p) => p.maWaist != null).map((p) => ({ t: p.time, v: p.maWaist! })),
+    },
+  ];
+
+  /*
+   * 腹囲の目盛りを出すか。**まだ 1 件も無いときは出さない。**
+   *
+   * 下のグラフが空のまま日付ラベルだけを引き継ぐと、体重のグラフからも
+   * 下のグラフからも目盛りが消える。欄は出す（設定がオンであることの手がかり）が、
+   * x 軸の受け持ちは戻す。
+   */
+  const waistPlotted =
+    settings.waistEnabled && waistSeries.some((serie) => serie.points.length > 0);
+
   const bodyFatSeries: ChartSeries[] = [
     {
       id: 'bf-raw',
@@ -75,6 +104,8 @@ export function BodyTrendCharts({ daily, settings, highlight = null, note = fals
           unit="kg"
           highlight={highlight}
           ariaLabel="日平均体重と7日移動平均の推移"
+          /* 腹囲を下に敷くときは、同じ日付目盛りを 2 回並べない */
+          xLabels={!waistPlotted}
           reference={
             settings.targetWeight != null
               ? {
@@ -84,6 +115,35 @@ export function BodyTrendCharts({ daily, settings, highlight = null, note = fals
               : null
           }
         />
+
+        {/*
+          腹囲は**体重に添える補足**なので、対等なカードにはせず同じカードの中へ置く。
+          軸は分ける——単位が違う（kg と cm）ので 1 本の y 軸に重ねると、
+          レンジの広いほうに潰されて片方が横線になる。第 2 軸を立てるのも採らない。
+          2 つの軸の原点と縮尺をこちらで決めることになり、線が交わる位置に
+          意味があるように見えてしまう（実際には何も意味しない）。
+
+          縦に積めば y 軸はそれぞれ独立のまま、x 軸だけが揃う。`MARGIN` は固定で
+          `domain` も同じものを渡すので、**同じ日が必ず同じ横位置に来る**。
+        */}
+        {settings.waistEnabled && (
+          <>
+            <p className={s.subTitle}>
+              腹囲 <small>cm</small>
+            </p>
+            <TimeSeriesChart
+              series={waistSeries}
+              domain={domain}
+              unit="cm"
+              height={150}
+              highlight={highlight}
+              ariaLabel="日平均腹囲と7日移動平均の推移"
+              legend={false}
+              emptyMessage="まだ腹囲の記録がありません"
+            />
+          </>
+        )}
+
         {note && (
           <p className={ui.note}>
             体重は水分や食事で1日のうちに1〜2kg動きます。判断は移動平均の線のほうで。

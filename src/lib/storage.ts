@@ -33,6 +33,7 @@ import { startOfWeek } from './date';
 import { IS_DEMO } from './env';
 import { SEED_DATA } from './seed';
 import { LEGACY_RECORD_KEY, deleteRecord, readAll, writeMany } from './db';
+import { isBlankDay } from './derive';
 
 /** キー名はスキーマ版ではなく保存先のアドレス。v2 でも変えない（変えると既存データが見えなくなる） */
 const DATA_KEY = 'bodymake.data.v1';
@@ -57,6 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   targetBodyFat: null,
   targetDate: null,
   theme: 'system',
+  waistEnabled: false,
 };
 
 /**
@@ -138,6 +140,8 @@ function int(value: unknown, min: number, max: number): number | null {
 
 export const WEIGHT_RANGE: [number, number] = [20, 300];
 export const BODYFAT_RANGE: [number, number] = [1, 70];
+/** cm。腹囲。子どもの 30cm から、測れる上限に十分な 200cm まで */
+export const WAIST_RANGE: [number, number] = [30, 200];
 export const HEIGHT_RANGE: [number, number] = [100, 250];
 
 /** セットの重量は体重と値域が違う（自重種目の追加重量は 0 もありうる） */
@@ -202,6 +206,10 @@ export function parseBodyFat(value: unknown): number | null {
   return num(value, BODYFAT_RANGE[0], BODYFAT_RANGE[1]);
 }
 
+export function parseWaist(value: unknown): number | null {
+  return num(value, WAIST_RANGE[0], WAIST_RANGE[1]);
+}
+
 export function parseSetWeight(value: unknown): number | null {
   return num(value, SET_WEIGHT_RANGE[0], SET_WEIGHT_RANGE[1]);
 }
@@ -213,7 +221,11 @@ export function parseReps(value: unknown, repUnit: RepUnit = 'reps'): number | n
 
 function sanitizeMeasurement(raw: unknown): Measurement {
   const o = (raw ?? {}) as Record<string, unknown>;
-  return { weight: parseWeight(o.weight), bodyFat: parseBodyFat(o.bodyFat) };
+  return {
+    weight: parseWeight(o.weight),
+    bodyFat: parseBodyFat(o.bodyFat),
+    waist: parseWaist(o.waist),
+  };
 }
 
 function sanitizeDay(raw: unknown): DayEntry {
@@ -228,14 +240,8 @@ export function sanitizeEntries(raw: unknown): Entries {
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     if (!ISO_RE.test(key)) continue;
     const day = sanitizeDay(value);
-    if (
-      day.am.weight == null &&
-      day.am.bodyFat == null &&
-      day.pm.weight == null &&
-      day.pm.bodyFat == null
-    ) {
-      continue;
-    }
+    // 項目の並びは `MEASUREMENT_FIELDS` が持つ。ここで手で並べると足し忘れる
+    if (isBlankDay(day)) continue;
     out[key] = day;
   }
   return out;
@@ -566,6 +572,8 @@ function sanitizeSettings(raw: unknown): Settings {
     targetDate: typeof o.targetDate === 'string' && ISO_RE.test(o.targetDate) ? o.targetDate : null,
     // 知らない配色を持つバックアップは 'system' に落とす
     theme: THEME_IDS.includes(theme as ThemePref) ? (theme as ThemePref) : 'system',
+    // 持っていないバックアップは既定（オフ）。真偽値以外は受け取らない
+    waistEnabled: o.waistEnabled === true,
   };
 }
 
