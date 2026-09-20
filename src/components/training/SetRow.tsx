@@ -5,6 +5,8 @@ import {
   SET_WEIGHT_RANGE,
   repRangeOf,
 } from '../../lib/storage';
+import { WEIGHT_UNIT_LABEL, fromKgOrNull, rangeIn, toKgOrNull } from '../../lib/weight';
+import type { WeightUnit } from '../../lib/weight';
 import type { CardioSet, RepUnit, SessionSet, SetPoint, WorkSet } from '../../types';
 import type { SetField } from '../../hooks/useBodyData';
 import s from './training.module.scss';
@@ -61,6 +63,12 @@ interface Props {
   cardio: boolean;
   /** 重量欄を出すか。自重種目と秒で数える種目では畳む（ExerciseCard が決める） */
   showWeight: boolean;
+  /**
+   * 重量欄で打つ単位。**保存は常に kg**（`lib/weight.ts`）。
+   *
+   * 換算するのはこの欄の中だけ。回数・距離・時間には効かない。
+   */
+  weightUnit: WeightUnit;
   fallbackWeight: number | null;
   fallbackReps: number | null;
   onValue: (field: SetField, value: number | null) => void;
@@ -84,6 +92,7 @@ export function SetRow({
   repUnit,
   cardio,
   showWeight,
+  weightUnit,
   fallbackWeight,
   fallbackReps,
   onValue,
@@ -157,12 +166,17 @@ export function SetRow({
               </span>
 
               <NumberCell
-                value={work.weight}
-                fallback={fallbackWeight}
-                min={SET_WEIGHT_RANGE[0]}
-                max={SET_WEIGHT_RANGE[1]}
-                ariaLabel={`${index + 1}セット目の重量`}
-                onCommit={(v) => onValue('weight', v)}
+                /*
+                  打つのは選んだ単位、持つのは kg。
+                  **値域も打つ単位のまま見る**（`rangeIn`）——kg に直してから見ると、
+                  上限ちょうど（500kg = 1102.31lb）が丸めの向きで弾かれる。
+                */
+                value={fromKgOrNull(work.weight, weightUnit)}
+                fallback={fromKgOrNull(fallbackWeight, weightUnit)}
+                min={rangeIn(SET_WEIGHT_RANGE, weightUnit)[0]}
+                max={rangeIn(SET_WEIGHT_RANGE, weightUnit)[1]}
+                ariaLabel={`${index + 1}セット目の重量（${WEIGHT_UNIT_LABEL[weightUnit]}）`}
+                onCommit={(v) => onValue('weight', toKgOrNull(v, weightUnit))}
               />
             </>
           )}

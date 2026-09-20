@@ -4,7 +4,6 @@ import { isoToTime, todayISO } from '../../lib/date';
 import type { DailyPoint, Settings } from '../../types';
 import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
-import s from './charts.module.scss';
 
 interface Props {
   /** 期間で絞ったあとの日次。絞るのは呼び出し側の仕事 */
@@ -17,7 +16,7 @@ interface Props {
 }
 
 /**
- * 体重と体脂肪率の推移。**腹囲は体重の下に添える。**
+ * 体重・腹囲・体脂肪率の推移。
  *
  * **推移画面と記録から開くダイアログで同じものを使う。**
  * 同じグラフを 2 通りに組むと、片方だけ直る事故が起きる
@@ -66,16 +65,6 @@ export function BodyTrendCharts({ daily, settings, highlight = null, note = fals
     },
   ];
 
-  /*
-   * 腹囲の目盛りを出すか。**まだ 1 件も無いときは出さない。**
-   *
-   * 下のグラフが空のまま日付ラベルだけを引き継ぐと、体重のグラフからも
-   * 下のグラフからも目盛りが消える。欄は出す（設定がオンであることの手がかり）が、
-   * x 軸の受け持ちは戻す。
-   */
-  const waistPlotted =
-    settings.waistEnabled && waistSeries.some((serie) => serie.points.length > 0);
-
   const bodyFatSeries: ChartSeries[] = [
     {
       id: 'bf-raw',
@@ -104,8 +93,6 @@ export function BodyTrendCharts({ daily, settings, highlight = null, note = fals
           unit="kg"
           highlight={highlight}
           ariaLabel="日平均体重と7日移動平均の推移"
-          /* 腹囲を下に敷くときは、同じ日付目盛りを 2 回並べない */
-          xLabels={!waistPlotted}
           reference={
             settings.targetWeight != null
               ? {
@@ -116,40 +103,36 @@ export function BodyTrendCharts({ daily, settings, highlight = null, note = fals
           }
         />
 
-        {/*
-          腹囲は**体重に添える補足**なので、対等なカードにはせず同じカードの中へ置く。
-          軸は分ける——単位が違う（kg と cm）ので 1 本の y 軸に重ねると、
-          レンジの広いほうに潰されて片方が横線になる。第 2 軸を立てるのも採らない。
-          2 つの軸の原点と縮尺をこちらで決めることになり、線が交わる位置に
-          意味があるように見えてしまう（実際には何も意味しない）。
-
-          縦に積めば y 軸はそれぞれ独立のまま、x 軸だけが揃う。`MARGIN` は固定で
-          `domain` も同じものを渡すので、**同じ日が必ず同じ横位置に来る**。
-        */}
-        {settings.waistEnabled && (
-          <>
-            <p className={s.subTitle}>
-              腹囲 <small>cm</small>
-            </p>
-            <TimeSeriesChart
-              series={waistSeries}
-              domain={domain}
-              unit="cm"
-              height={150}
-              highlight={highlight}
-              ariaLabel="日平均腹囲と7日移動平均の推移"
-              legend={false}
-              emptyMessage="まだ腹囲の記録がありません"
-            />
-          </>
-        )}
-
         {note && (
           <p className={ui.note}>
             体重は水分や食事で1日のうちに1〜2kg動きます。判断は移動平均の線のほうで。
           </p>
         )}
       </section>
+
+      {/*
+        腹囲は独立したカード。**軸は重ねない**——単位が違う（kg と cm）ので
+        1 本の y 軸に乗せるとレンジの広いほうに潰される。第 2 軸も立てない。
+        2 つの軸の原点と縮尺をこちらで決めることになり、線が交わる位置に
+        意味があるように見えてしまう（実際には何も意味しない）。
+
+        カードが分かれても、同じ `domain` を渡すので x 軸は揃う。目盛りは軸の範囲を
+        等分して出す（`timeTicks`）ので、腹囲を週に 1 度しか測っていなくても、
+        体重・体脂肪率のカードと同じ日付が同じ横位置に並ぶ。
+      */}
+      {settings.waistEnabled && (
+        <section className={ui.card}>
+          <CardHeader title="腹囲の推移" hint={<>cm</>} />
+          <TimeSeriesChart
+            series={waistSeries}
+            domain={domain}
+            unit="cm"
+            highlight={highlight}
+            ariaLabel="日平均腹囲と7日移動平均の推移"
+            emptyMessage="まだ腹囲の記録がありません"
+          />
+        </section>
+      )}
 
       <section className={ui.card}>
         <CardHeader title="体脂肪率の推移" hint={<>%</>} />

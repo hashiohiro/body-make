@@ -11,6 +11,7 @@ import type { Exercise, GroupGoals, GroupTarget, MuscleGroup, SessionPoint } fro
 import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useWeightFormat } from '../../hooks/useWeightUnit';
 
 /** 最終実施からの日数の言い方。回復ダイアログと同じ語彙を使う */
 function lastDoneLabel(days: number | null): string {
@@ -56,6 +57,7 @@ export function WeeklyVolumeCard({
   sessions,
   onSetGroupGoal,
 }: Props) {
+  const { conv } = useWeightFormat();
   /** 開いている部位。押したらそのまま目標を決める面（段は増やさない） */
   const [open, setOpen] = useState<MuscleGroup | null>(null);
 
@@ -141,8 +143,17 @@ export function WeeklyVolumeCard({
               セット数の目標に挙上量を並べても、足りているかが読めない。
             */}
             <span className={s.volValue}>
-              {row.target?.type === 'volume' ? fmtVolume(row.volume) : formatSets(row.sets)} /{' '}
-              {row.target?.value ?? '—'}
+              {/*
+                挙上量は kg で積んである。実績と目標の**両方**を読む単位へ直す——
+                片方だけ直すと、行の「いま / 目標」が別の物差しの比較になる。
+                バーの割合は kg どうしの比なので、単位を変えても動かない。
+              */}
+              {row.target?.type === 'volume' ? fmtVolume(conv(row.volume)) : formatSets(row.sets)} /{' '}
+              {row.target == null
+                ? '—'
+                : row.target.type === 'volume'
+                  ? fmtVolume(conv(row.target.value))
+                  : row.target.value}
             </span>
             {/*
               最終実施からの日数。「4日空き」は余裕があるようにも読めるので、

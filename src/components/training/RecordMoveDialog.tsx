@@ -25,6 +25,7 @@ import ui from '../../styles/ui.module.scss';
 import { Tag } from '../Tag';
 import { Pill } from '../Pill';
 import s from './training.module.scss';
+import { useWeightFormat } from '../../hooks/useWeightUnit';
 
 /** 期間の切り方。既定は全期間（取り違えは最初からのことが多い） */
 const RANGES = [
@@ -100,6 +101,8 @@ function onlyOf(workouts: Workouts, exerciseId: string, dates: readonly string[]
  * マイ種目にも追加される（記録の行き先になる種目は、実体が要る）。
  */
 export function RecordMoveDialog({ body, from, onClose }: Props) {
+  // 挙上量は kg で積んである。出す直前に読む単位へ直す
+  const { label: unitLabel, conv } = useWeightFormat();
   const { data, daily, moveRecords } = body;
   const [toId, setToId] = useState<string | null>(null);
   const [source, setSource] = useState<SourceId>('mine');
@@ -367,7 +370,8 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
               <div className={s.groupSummary}>
                 <span>挙上量の通算</span>
                 <span className={s.boardValue}>
-                  {fmtVolume(totals.before)} kg → {fmtVolume(totals.after)} kg
+                  {fmtVolume(conv(totals.before))} {unitLabel} → {fmtVolume(conv(totals.after))}{' '}
+                  {unitLabel}
                 </span>
               </div>
             )}

@@ -8,7 +8,10 @@ import type { ExerciseHistoryPoint } from '../../lib/training';
 import { isCardioSet } from '../../types';
 import type { Exercise, ExercisePoint, RepUnit, SessionExercise, SessionSet } from '../../types';
 import type { SetField } from '../../hooks/useBodyData';
+import { WEIGHT_UNIT_LABEL } from '../../lib/weight';
+import type { WeightUnit } from '../../lib/weight';
 import s from './training.module.scss';
+import { useWeightUnit } from '../../hooks/useWeightUnit';
 
 interface Props {
   exercise: Exercise;
@@ -19,6 +22,15 @@ interface Props {
   best: number | null;
   /** 同じくその日より前の、記録した重量の最高値 */
   bestWeight: number | null;
+  /**
+   * 重量欄で打つ単位。**保存は常に kg。**
+   *
+   * 状態は記録画面（`TrainingView`）が持つ。種目を移っても選んだ単位のままで、
+   * 1 種目ごとに選び直さずに済む。**設定は書き換えない**ので、閉じて開き直せば
+   * 普段の単位に戻る（遠征先での、その場限りの都合）。
+   */
+  weightUnit: WeightUnit;
+  onWeightUnitChange: (unit: WeightUnit) => void;
   onValue: (index: number, field: SetField, value: number | null) => void;
   onAddSet: () => void;
   onRemoveSet: (index: number) => void;
@@ -67,11 +79,15 @@ export function ExerciseSetEditor({
   previous,
   best,
   bestWeight,
+  weightUnit,
+  onWeightUnitChange,
   onValue,
   onAddSet,
   onRemoveSet,
   onCopyPrevious,
 }: Props) {
+  // 前回の構成は「読む」場所。打つ単位（weightUnit）ではなく表示の単位で出す
+  const displayUnit = useWeightUnit();
   const cardio = isCardio(exercise.group);
   // まだ何も入っていないときにだけ複製を出す。入力済みを黙って上書きしない
   const empty = entry.sets.every((set) =>
@@ -115,7 +131,7 @@ export function ExerciseSetEditor({
         {previous ? (
           <>
             <span>
-              前回 {formatMD(previous.date)}: {summarizeSets(previous.point)}
+              前回 {formatMD(previous.date)}: {summarizeSets(previous.point, displayUnit)}
             </span>
             {empty && (
               <button type="button" className={s.prevBtn} onClick={onCopyPrevious}>
@@ -133,16 +149,39 @@ export function ExerciseSetEditor({
         連番も行の × も「何本目か」を扱うためのもので、通しで 1 回走る種目には要らない。
         残るのは入力欄 2 つだけになる（Exercise.repeated / カタログが既定を持つ）。
       */}
-      <div className={`${s.setHead} ${rowClass}`} aria-hidden="true">
-        {repeated && <span />}
-        <span>{cardio ? '時間 分' : FIELD_LABELS[exercise.repUnit]}</span>
+      {/*
+        見出しの行。**重量の単位だけは押せる。**
+        aria-hidden は欄ごとに付ける——行ごと隠すと、中の切り替えボタンまで
+        読み上げから消えてしまう（欄そのものの読み上げ名は SetRow が持つ）。
+      */}
+      <div className={`${s.setHead} ${rowClass}`}>
+        {repeated && <span aria-hidden="true" />}
+        <span aria-hidden="true">{cardio ? '時間 分' : FIELD_LABELS[exercise.repUnit]}</span>
         {showWeight && (
           <>
-            <span />
-            <span>{cardio ? '距離 m' : additional ? '追加重量 kg' : '重量 kg'}</span>
+            <span aria-hidden="true" />
+            {cardio ? (
+              <span aria-hidden="true">距離 m</span>
+            ) : (
+              /*
+                **その場で kg とポンドを切り替える。**遠征先のジムにポンド表記の
+                器具があったとき、打つ前に単位を合わせられるようにする。
+                打ち込み済みの値は換算して出し直るので、記録は 1 件も変わらない。
+              */
+              <button
+                type="button"
+                className={s.unitToggle}
+                aria-label={`重量の単位を切り替える（いま ${WEIGHT_UNIT_LABEL[weightUnit]}）`}
+                onClick={() => onWeightUnitChange(weightUnit === 'kg' ? 'lb' : 'kg')}
+              >
+                {additional ? '追加重量' : '重量'}{' '}
+                <b className={s.unitValue}>{WEIGHT_UNIT_LABEL[weightUnit]}</b>
+                <span aria-hidden="true"> ⇄</span>
+              </button>
+            )}
           </>
         )}
-        {repeated && <span />}
+        {repeated && <span aria-hidden="true" />}
       </div>
 
       {entry.sets.map((set, i) => (
@@ -154,6 +193,7 @@ export function ExerciseSetEditor({
           repUnit={exercise.repUnit}
           cardio={cardio}
           showWeight={showWeight}
+          weightUnit={weightUnit}
           fallbackWeight={
             fallbackOf(entry.sets[i - 1], cardio, 'first') ??
             (cardio ? null : (previous?.point.top?.weight ?? null))

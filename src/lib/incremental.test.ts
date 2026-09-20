@@ -23,6 +23,8 @@ const SETTINGS: Settings = {
   targetDate: null,
   theme: 'system',
   waistEnabled: true,
+  inputWeightUnit: 'kg' as const,
+  displayWeightUnit: 'kg' as const,
 };
 
 /** 決定的な擬似乱数。落ちたときに同じ並びで再現できるようにする */

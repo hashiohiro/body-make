@@ -16,11 +16,12 @@ import {
   personalBest,
   plateau,
 } from '../../lib/training';
-import { METRICS, baselineOf, lastOf } from './metrics';
+import { baselineOf, lastOf, metricsFor } from './metrics';
 import type { Exercise, MuscleGroup, SessionPoint } from '../../types';
 import { TONE_CLASS } from '../tone';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useWeightFormat } from '../../hooks/useWeightUnit';
 
 interface Props {
   open: boolean;
@@ -42,6 +43,7 @@ interface Props {
  */
 export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, date }: Props) {
   const [metricId, setMetricId] = useState<string | null>(null);
+  const { unit, label: unitLabel, conv, convOrNull } = useWeightFormat();
 
   // 開始比は期間フィルタの影響を受けない（「開始から」なので全履歴で見る）
   const allHistory = useMemo(
@@ -129,7 +131,7 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
   if (!exercise) return null;
 
   // 秒で数える種目は挙上量に計上しないので重量系を出さない。有酸素は距離・時間・速度に入れ替わる
-  const metrics = METRICS.filter((m) =>
+  const metrics = metricsFor(unit).filter((m) =>
     isCardio(exercise.group)
       ? m.cardioOnly
       : !m.cardioOnly && (!m.needsWeight || countsReps(exercise.repUnit)),
@@ -149,7 +151,7 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
     const v = metric.pick(h.point);
     if (v == null) continue;
     // 換算元のセットを添える。同じ種目でもレップ帯が変わると外挿量が変わる
-    const note = formatTopSet(h.point);
+    const note = formatTopSet(h.point, unit);
     points.push(note ? { t: h.time, v, note } : { t: h.time, v });
   }
 
@@ -172,7 +174,12 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
   // 見出しは通算の最高。直近の値は下に添える（伸びしろが一目で分かるのは最高値のほう）
   const best = personalBest(sessions, exercise.id, todayISO(), metric.pick);
 
-  const weightTarget = exercise.goal?.type === 'weight' ? exercise.goal.value : null;
+  /*
+   * 重量の目標は kg で持っている（`lib/weight.ts`）。指標の値のほうは
+   * `metricsFor` が読むときの単位へ換算済みなので、**目標も同じ単位に直してから**
+   * 並べる。片方だけ換算すると、到達率も参照線も別の物差しで出る。
+   */
+  const weightTarget = convOrNull(exercise.goal?.type === 'weight' ? exercise.goal.value : null);
   const target = metric.weightLike ? weightTarget : null;
   const progress =
     target != null && current != null && baseline != null && target !== baseline
@@ -196,7 +203,8 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
           <span>{metric.unit}</span>
           {stall && (
             <span style={{ marginLeft: 'auto' }}>
-              {fmt(stall.weight)}kg のまま {stall.weeks}週
+              {fmt(conv(stall.weight))}
+              {unitLabel} のまま {stall.weeks}週
             </span>
           )}
         </div>
@@ -216,7 +224,9 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
           <>
             <Meter value={progress} label="目標までの進捗" block />
             <div className={s.statSub}>
-              <span>目標 {weightTarget} kg まで</span>
+              <span>
+                目標 {fmt(weightTarget)} {unitLabel} まで
+              </span>
               <span style={{ marginLeft: 'auto' }}>{Math.round(progress * 100)}%</span>
             </div>
           </>
@@ -242,7 +252,7 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
           }
           reference={
             metric.weightLike && weightTarget != null
-              ? { value: weightTarget, label: `目標 ${weightTarget}kg` }
+              ? { value: weightTarget, label: `目標 ${fmt(weightTarget)}${unitLabel}` }
               : null
           }
         />
@@ -313,11 +323,11 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
           {[...history].reverse().map((h) => (
             <tr key={h.date}>
               <th scope="row">{formatMD(h.date)}</th>
-              <td>{formatTopSet(h.point) ?? '—'}</td>
+              <td>{formatTopSet(h.point, unit) ?? '—'}</td>
               <td>{h.point.workSets}</td>
               <td>
                 {h.point.volume > 0 ? (
-                  `${fmtVolume(h.point.volume)} kg`
+                  `${fmtVolume(conv(h.point.volume))} ${unitLabel}`
                 ) : (
                   <span className={ui.cellEmpty}>—</span>
                 )}
@@ -327,7 +337,7 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
                   <span className={ui.cellEmpty}>—</span>
                 ) : (
                   // 挙上量と同じく重さなので、こちらにも単位を付ける
-                  `${fmt(h.point.oneRm)} kg${h.point.measured ? ' *' : ''}`
+                  `${fmt(conv(h.point.oneRm))} ${unitLabel}${h.point.measured ? ' *' : ''}`
                 )}
               </td>
             </tr>

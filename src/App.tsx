@@ -18,6 +18,7 @@ import { GoalsView } from './views/GoalsView';
 import { HomeView } from './views/HomeView';
 import { RecordsView } from './views/RecordsView';
 import { SETTINGS_SECTIONS, SettingsView, settingsTitle } from './views/SettingsView';
+import { WeightUnitProvider } from './hooks/useWeightUnit';
 import s from './App.module.scss';
 
 const TITLES: Record<TabId, string> = {
@@ -172,91 +173,98 @@ export function App({ initial }: AppProps) {
   }, []);
 
   return (
-    <div className={s.app}>
-      <header className={s.topbar}>
-        <div className={s.topbarRow}>
-          {title ? (
-            <>
-              <button type="button" className={s.back} onClick={back} aria-label="戻る">
-                ‹ {backLabel.current}
-              </button>
-              <h1 className={s.title}>{title}</h1>
-            </>
-          ) : (
-            <>
-              <h1 className={s.title}>{TITLES[route.tab]}</h1>
-              {/* 記録タブでは日付そのものが操作対象なので、日付ナビをヘッダに出す */}
-              {route.tab === 'records' ? (
-                <DateNav date={date} today={today} onChange={setDate} />
-              ) : (
-                <span className={s.today}>{formatMDW(today)}</span>
-              )}
-            </>
-          )}
-        </div>
+    /*
+      読むときの重量の単位を、ここから下すべてに配る。
+      出す場所が 10 ファイルに散っていて、末端まで props で通すと
+      重量に関係のない中間コンポーネントにも引数が生える（`useWeightUnit`）。
+    */
+    <WeightUnitProvider unit={body.data.settings.displayWeightUnit}>
+      <div className={s.app}>
+        <header className={s.topbar}>
+          <div className={s.topbarRow}>
+            {title ? (
+              <>
+                <button type="button" className={s.back} onClick={back} aria-label="戻る">
+                  ‹ {backLabel.current}
+                </button>
+                <h1 className={s.title}>{title}</h1>
+              </>
+            ) : (
+              <>
+                <h1 className={s.title}>{TITLES[route.tab]}</h1>
+                {/* 記録タブでは日付そのものが操作対象なので、日付ナビをヘッダに出す */}
+                {route.tab === 'records' ? (
+                  <DateNav date={date} today={today} onChange={setDate} />
+                ) : (
+                  <span className={s.today}>{formatMDW(today)}</span>
+                )}
+              </>
+            )}
+          </div>
 
-        {/*
+          {/*
           体組成とトレーニングの切り替えはヘッダに置く。
           画面の中に置くと、タブを移って戻るたびに体組成へ戻ってしまい、
           トレーニングを見続けたい人が毎回押し直すことになる
         */}
-        {route.tab !== 'settings' && (
-          <Segmented
-            label="表示する記録"
-            value={domain}
-            options={[
-              { id: 'body', label: '体組成' },
-              { id: 'training', label: 'トレーニング' },
-            ]}
-            onChange={changeDomain}
+          {route.tab !== 'settings' && (
+            <Segmented
+              label="表示する記録"
+              value={domain}
+              options={[
+                { id: 'body', label: '体組成' },
+                { id: 'training', label: 'トレーニング' },
+              ]}
+              onChange={changeDomain}
+            />
+          )}
+        </header>
+
+        <main id={`panel-${route.tab}`} role="tabpanel">
+          {/* 保存できていないことだけは全画面に出す。どの画面で打っていても同じように失われる */}
+          <StorageAlert data={body.data} failed={body.saveFailed} />
+
+          {route.tab === 'home' && route.section === 'trend' && (
+            <ChartsView body={body} domain={domain} exerciseId={route.param} />
+          )}
+          {route.tab === 'home' && route.section == null && (
+            <HomeView
+              body={body}
+              domain={domain}
+              onOpenRecords={() => open('records')}
+              onOpenTrend={() => open('home', 'trend')}
+            />
+          )}
+
+          {route.tab === 'goals' && <GoalsView body={body} domain={domain} />}
+
+          {route.tab === 'records' && (
+            <RecordsView body={body} date={date} onDateChange={setDate} domain={domain} />
+          )}
+
+          {route.tab === 'settings' && (
+            <SettingsView
+              body={body}
+              section={route.section}
+              page={route.param}
+              onOpen={(section, page) => open('settings', section, page ?? null)}
+              onToast={toast.show}
+            />
+          )}
+        </main>
+
+        <TabBar active={route.tab} onChange={(tab) => open(tab)} />
+        <Toast message={toast.message} />
+        {/* IS_DEMO はビルド時に畳まれる。本番のバンドルからはこの分岐ごと落ちる */}
+        {IS_DEMO && demoNotice && (
+          <DemoNotice
+            onStart={() => {
+              body.resetToSeed();
+              setDemoNotice(false);
+            }}
           />
         )}
-      </header>
-
-      <main id={`panel-${route.tab}`} role="tabpanel">
-        {/* 保存できていないことだけは全画面に出す。どの画面で打っていても同じように失われる */}
-        <StorageAlert data={body.data} failed={body.saveFailed} />
-
-        {route.tab === 'home' && route.section === 'trend' && (
-          <ChartsView body={body} domain={domain} exerciseId={route.param} />
-        )}
-        {route.tab === 'home' && route.section == null && (
-          <HomeView
-            body={body}
-            domain={domain}
-            onOpenRecords={() => open('records')}
-            onOpenTrend={() => open('home', 'trend')}
-          />
-        )}
-
-        {route.tab === 'goals' && <GoalsView body={body} domain={domain} />}
-
-        {route.tab === 'records' && (
-          <RecordsView body={body} date={date} onDateChange={setDate} domain={domain} />
-        )}
-
-        {route.tab === 'settings' && (
-          <SettingsView
-            body={body}
-            section={route.section}
-            page={route.param}
-            onOpen={(section, page) => open('settings', section, page ?? null)}
-            onToast={toast.show}
-          />
-        )}
-      </main>
-
-      <TabBar active={route.tab} onChange={(tab) => open(tab)} />
-      <Toast message={toast.message} />
-      {/* IS_DEMO はビルド時に畳まれる。本番のバンドルからはこの分岐ごと落ちる */}
-      {IS_DEMO && demoNotice && (
-        <DemoNotice
-          onStart={() => {
-            body.resetToSeed();
-            setDemoNotice(false);
-          }}
-        />
-      )}
-    </div>
+      </div>
+    </WeightUnitProvider>
   );
 }

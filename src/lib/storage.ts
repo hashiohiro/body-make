@@ -34,6 +34,7 @@ import { IS_DEMO } from './env';
 import { SEED_DATA } from './seed';
 import { LEGACY_RECORD_KEY, deleteRecord, readAll, writeMany } from './db';
 import { isBlankDay } from './derive';
+import { isWeightUnit } from './weight';
 
 /** キー名はスキーマ版ではなく保存先のアドレス。v2 でも変えない（変えると既存データが見えなくなる） */
 const DATA_KEY = 'bodymake.data.v1';
@@ -59,6 +60,8 @@ export const DEFAULT_SETTINGS: Settings = {
   targetDate: null,
   theme: 'system',
   waistEnabled: false,
+  inputWeightUnit: 'kg',
+  displayWeightUnit: 'kg',
 };
 
 /**
@@ -210,8 +213,18 @@ export function parseWaist(value: unknown): number | null {
   return num(value, WAIST_RANGE[0], WAIST_RANGE[1]);
 }
 
+/**
+ * セットの重量。**小数第 2 位まで持つ。**
+ *
+ * ここだけ桁が 1 つ多いのは、ポンドで打った値を kg で保存するため。
+ * 第 1 位で丸めると `135 lb → 61.2349 → 61.2 kg` となり、ポンドに戻したとき
+ * **134.9 lb** と出る——打った数字と違う値が表示される。
+ * 第 2 位なら `61.23 kg → 135.0 lb` で戻る。
+ *
+ * kg での見え方は変わらない（表示は `fmt()` が第 1 位に丸める）。
+ */
 export function parseSetWeight(value: unknown): number | null {
-  return num(value, SET_WEIGHT_RANGE[0], SET_WEIGHT_RANGE[1]);
+  return num(value, SET_WEIGHT_RANGE[0], SET_WEIGHT_RANGE[1], 2);
 }
 
 export function parseReps(value: unknown, repUnit: RepUnit = 'reps'): number | null {
@@ -574,6 +587,9 @@ function sanitizeSettings(raw: unknown): Settings {
     theme: THEME_IDS.includes(theme as ThemePref) ? (theme as ThemePref) : 'system',
     // 持っていないバックアップは既定（オフ）。真偽値以外は受け取らない
     waistEnabled: o.waistEnabled === true,
+    // 知らない単位を持つバックアップは kg に落とす（保存は元から kg なので実害はない）
+    inputWeightUnit: isWeightUnit(o.inputWeightUnit) ? o.inputWeightUnit : 'kg',
+    displayWeightUnit: isWeightUnit(o.displayWeightUnit) ? o.displayWeightUnit : 'kg',
   };
 }
 

@@ -1,5 +1,7 @@
 import { BASELINE_SESSIONS, pickOneRm, pickTopWeight, pickVolume } from '../../lib/training';
 import type { ExerciseHistoryPoint } from '../../lib/training';
+import { WEIGHT_UNIT_LABEL, fromKgOrNull } from '../../lib/weight';
+import type { WeightUnit } from '../../lib/weight';
 import type { ExercisePoint } from '../../types';
 
 /** 種目の推移で切り替えられる指標。一覧とダイアログの両方が同じ定義を使う */
@@ -17,7 +19,16 @@ export interface Metric {
   pick: (point: ExercisePoint) => number | null;
 }
 
-export const METRICS: Metric[] = [
+/**
+ * 重量で数える指標かどうか。**読むときの単位で換算する対象。**
+ *
+ * 記録は kg で持っているので（`lib/weight.ts`）、ポンド表示のときは
+ * ここに挙げたものだけを換算し、単位の綴りも合わせて差し替える。
+ * セット数・回数・距離・時間・速度は重量ではないので触らない。
+ */
+const WEIGHT_METRICS = new Set(['volume', 'maxWeight', 'oneRm']);
+
+const BASE_METRICS: Metric[] = [
   {
     id: 'volume',
     label: '挙上量',
@@ -75,6 +86,26 @@ export const METRICS: Metric[] = [
     pick: (p) => p.speed,
   },
 ];
+
+/**
+ * 読むときの単位に合わせた指標の一覧。
+ *
+ * **定数ではなく関数で持つ。** 挙上量・最大重量・推定1RM は kg で出来ているので、
+ * ポンド表示のときは `pick` の出口で換算し、単位の綴りも差し替える必要がある。
+ * ここで一度にやれば、推移のグラフ・軸・ツールチップ・開始比がまとめて追従する。
+ */
+export function metricsFor(unit: WeightUnit): Metric[] {
+  if (unit === 'kg') return BASE_METRICS;
+  return BASE_METRICS.map((metric) =>
+    WEIGHT_METRICS.has(metric.id)
+      ? {
+          ...metric,
+          unit: WEIGHT_UNIT_LABEL[unit],
+          pick: (point: ExercisePoint) => fromKgOrNull(metric.pick(point), unit),
+        }
+      : metric,
+  );
+}
 
 /** 開始値は最初の 3 セッションの平均。初回 1 点だと当日の調子が以後すべての差分に乗る */
 export function baselineOf(

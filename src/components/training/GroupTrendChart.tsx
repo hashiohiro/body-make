@@ -3,10 +3,11 @@ import type { ChartSeries } from '../charts/TimeSeriesChart';
 import { GROUP_COLORS, GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
 import { addDays, isoToTime, startOfWeek, todayISO } from '../../lib/date';
 import { ChipGroup } from '../ChipGroup';
-import { GROUP_VALUES } from './groupValues';
+import { groupValuesFor } from './groupValues';
 import type { GroupValueId } from './groupValues';
 import type { WeekSetCount } from '../../lib/training';
 import ui from '../../styles/ui.module.scss';
+import { useWeightUnit } from '../../hooks/useWeightUnit';
 
 interface Props {
   weeks: readonly WeekSetCount[];
@@ -26,7 +27,8 @@ interface Props {
  * 記録の無い部位は線を出さない。0 が横に伸びるだけで場所を取る
  */
 export function GroupTrendChart({ weeks, valueId, onValueChange }: Props) {
-  const value = GROUP_VALUES.find((v) => v.id === valueId)!;
+  const values = groupValuesFor(useWeightUnit());
+  const value = values.find((v) => v.id === valueId)!;
 
   if (weeks.length === 0) {
     return <p className={ui.emptyState}>まだトレーニングの記録がありません。</p>;
@@ -48,12 +50,7 @@ export function GroupTrendChart({ weeks, valueId, onValueChange }: Props) {
 
   return (
     <div>
-      <ChipGroup
-        options={GROUP_VALUES}
-        value={valueId}
-        onChange={onValueChange}
-        label="表示する値"
-      />
+      <ChipGroup options={values} value={valueId} onChange={onValueChange} label="表示する値" />
 
       <TimeSeriesChart
         series={series}

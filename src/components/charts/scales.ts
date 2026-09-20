@@ -1,3 +1,5 @@
+import { addDays, diffDays, isoToTime, toISO } from '../../lib/date';
+
 export interface NiceScale {
   min: number;
   max: number;
@@ -148,14 +150,35 @@ export function divergingBar(
   ].join('');
 }
 
-/** x 軸の日付目盛りを、端が潰れない程度の本数だけ返す */
-export function pickTimeTicks(times: readonly number[], count: number): number[] {
-  if (times.length === 0) return [];
-  if (times.length <= count) return [...times];
+/**
+ * x 軸の日付目盛り。**軸の範囲を等分して返す。**
+ *
+ * 点の並びからは選ばない。以前は系列が実際に持っている日付から拾っていたので、
+ * 同じ期間を縦に並べた 2 枚でも、記録の密度が違うと目盛りがそろわなかった
+ * （体脂肪率は毎日・腹囲は週に 1 度、など）。読む側は同じ横位置を
+ * 別の日付として読むことになる。
+ *
+ * 記録が少ないときの寄りも同じ原因。点が一方に固まっていると、
+ * ラベルもそこに固まって、残りの軸が無目盛りのまま残っていた。
+ * 軸を等分すれば、**開始日から今日まで**が常に同じ間隔で並ぶ。
+ *
+ * 刻みは暦日で進める。等分した生の時刻をそのまま使うと、期間が短いときに
+ * 同じ日付のラベルが 2 つ出る。ミリ秒で足すと DST の日に 1 時間ずれる。
+ */
+export function timeTicks(domain: readonly [number, number], count: number): number[] {
+  const [d0, d1] = domain;
+  if (!Number.isFinite(d0) || !Number.isFinite(d1)) return [];
+
+  const from = toISO(new Date(d0));
+  const span = diffDays(toISO(new Date(d1)), from);
+  // 1 日ぶんしか無ければ目盛りも 1 本。0 除算も避ける
+  if (span <= 0 || count < 2) return [isoToTime(from)];
+
+  // 日数より多くは打てない（同じ日のラベルが並ぶ）
+  const n = Math.min(count, span + 1);
   const out: number[] = [];
-  const stride = (times.length - 1) / (count - 1);
-  for (let i = 0; i < count; i++) {
-    out.push(times[Math.round(i * stride)]!);
+  for (let i = 0; i < n; i++) {
+    out.push(isoToTime(addDays(from, Math.round((i * span) / (n - 1)))));
   }
   return [...new Set(out)];
 }

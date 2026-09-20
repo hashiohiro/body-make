@@ -3,7 +3,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useElementWidth } from '../../hooks/useElementWidth';
 import { insideRect, useDismiss } from '../../hooks/useDismiss';
 import { formatMD, formatMDW, toISO } from '../../lib/date';
-import { linePath, linearScale, niceScale, pickTimeTicks, tickDecimals } from './scales';
+import { linePath, linearScale, niceScale, tickDecimals, timeTicks } from './scales';
 import { YAxis } from './YAxis';
 import s from './charts.module.scss';
 
@@ -37,14 +37,6 @@ export interface TimeSeriesChartProps {
   emptyMessage?: string;
   /** 既定は系列が 2 本以上のとき。同じ量を点と線で描く場合は明示的に消す */
   legend?: boolean;
-  /**
-   * x 軸の日付ラベルを出すか。既定は出す。
-   *
-   * **同じ期間のグラフを縦に並べるときだけ切る**（体重の下に腹囲を添える場合）。
-   * 同じ目盛りが 2 回並ぶのを避けるためで、**余白（`MARGIN`）は変えない**——
-   * 変えるとプロットの高さの基準がずれて、上下で同じ日が同じ横位置に来なくなる。
-   */
-  xLabels?: boolean;
   /**
    * 「いま」の点。日次のグラフなら今日、週次なら今週の x 値（`isoToTime`）。
    *
@@ -81,7 +73,6 @@ export function TimeSeriesChart({
   reference = null,
   emptyMessage = 'まだ記録がありません',
   legend,
-  xLabels = true,
   highlight = null,
 }: TimeSeriesChartProps) {
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
@@ -161,7 +152,12 @@ export function TimeSeriesChart({
   }
   const decimals = tickDecimals(yScaleInfo.step);
 
-  const xTicks = useMemo(() => pickTimeTicks(times, 4), [times]);
+  /*
+   * 目盛りは**軸の範囲**から出す。系列が持っている日付からは選ばない
+   * （`timeTicks`）。同じ `domain` を渡したグラフは、記録の密度が違っても
+   * 同じ位置に同じ日付が並ぶ。
+   */
+  const xTicks = useMemo(() => timeTicks(domain, 4), [domain]);
 
   const activeTime = active != null ? times[active] : undefined;
 
@@ -251,18 +247,17 @@ export function TimeSeriesChart({
               y2={MARGIN.top + plotH}
             />
 
-            {xLabels &&
-              xTicks.map((t) => (
-                <text
-                  key={t}
-                  className={s.tickLabel}
-                  x={x(t)}
-                  y={MARGIN.top + plotH + 15}
-                  textAnchor="middle"
-                >
-                  {formatMD(toISO(new Date(t)))}
-                </text>
-              ))}
+            {xTicks.map((t) => (
+              <text
+                key={t}
+                className={s.tickLabel}
+                x={x(t)}
+                y={MARGIN.top + plotH + 15}
+                textAnchor="middle"
+              >
+                {formatMD(toISO(new Date(t)))}
+              </text>
+            ))}
 
             {reference && (
               <>

@@ -12,11 +12,16 @@ import {
   TARGET_WEIGHT_RANGE,
 } from '../../lib/storage';
 import { exerciseHistory, goalCurrent, personalBest } from '../../lib/training';
+import { useWeightFormat } from '../../hooks/useWeightUnit';
+import { rangeIn, toKg } from '../../lib/weight';
 import type { Exercise, ExercisePoint, GoalType, SessionPoint } from '../../types';
 import { Button } from '../Button';
 import { Segmented } from '../Segmented';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+
+/** 主指標が重量で数えるものかを見分けるための印。綴りそのものは表示に使わない */
+const WEIGHT = 'weight';
 
 interface Props {
   exercise: Exercise;
@@ -95,7 +100,17 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
       : '分'
     : exercise.repUnit === 'seconds'
       ? '秒'
-      : 'kg';
+      : WEIGHT;
+  /*
+   * この立て方が重量で数えるものか。**重量だけを換算の対象にする。**
+   *
+   * 目標は kg で保存する（`lib/weight.ts`）ので、出すときに読むときの単位へ直し、
+   * しまうときに kg へ戻す。回数・距離・時間・速度は重量ではないので触らない。
+   * 「維持」は主指標そのものを見る立て方なので、その主指標が重量のときだけ対象になる。
+   */
+  const { unit: weightUnit, label: weightLabel, conv } = useWeightFormat();
+  const weighty =
+    type === 'weight' || type === 'volume' || (type === 'maintain' && maintainUnit === WEIGHT);
   const unit =
     type === 'reps'
       ? REP_UNIT_LABELS[exercise.repUnit]
@@ -106,9 +121,13 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
           : type === 'speed'
             ? 'm/分'
             : type === 'maintain'
-              ? maintainUnit
-              : 'kg';
+              ? maintainUnit === WEIGHT
+                ? weightLabel
+                : maintainUnit
+              : weightLabel;
   const digits = type === 'weight' || type === 'speed' ? 1 : 0;
+  /** 読むときの単位へ。重量で数えない立て方は素通し */
+  const show = (v: number | null) => (v == null || !weighty ? v : conv(v));
 
   /*
    * 決める材料は**到達率と同じ取り方**で出す（`goalCurrent`）。
@@ -162,9 +181,9 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
           id={`goal-value-${exercise.id}`}
           className={s.goalValue}
           ariaLabel={`${exercise.name}の目標`}
-          value={exercise.goal?.value ?? null}
-          min={range[0]}
-          max={range[1]}
+          value={show(exercise.goal?.value ?? null)}
+          min={weighty ? rangeIn(range, weightUnit)[0] : range[0]}
+          max={weighty ? rangeIn(range, weightUnit)[1] : range[1]}
           step={type === 'weight' ? 0.5 : 1}
           placeholder="—"
           /*
@@ -175,9 +194,11 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
            */
           onCommit={(value) => {
             if (value == null) return;
+            // 打った値は選んでいる単位。保存は kg に戻してから
+            const kg = weighty ? toKg(value, weightUnit) : value;
             onUpdate({
               ...exercise,
-              goal: { type, value: type === 'weight' ? value : Math.round(value) },
+              goal: { type, value: type === 'weight' ? kg : Math.round(kg) },
             });
           }}
         />
@@ -191,11 +212,11 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
           <>
             いま{' '}
             <b>
-              {fmt(latest, digits)} {unit}
+              {fmt(show(latest), digits)} {unit}
             </b>{' '}
             ・ 過去最大{' '}
             <b>
-              {fmt(best, digits)} {unit}
+              {fmt(show(best), digits)} {unit}
             </b>
           </>
         )}

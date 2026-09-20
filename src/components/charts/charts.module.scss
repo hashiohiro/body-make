@@ -142,26 +142,3 @@
   text-align: center;
   line-height: 1.7;
 }
-
-/*
- * 同じカードの中で、主役のグラフの下に添えるほうの見出し。
- *
- * **カード見出し（`CardHeader`）と同じ大きさにしない。**同じ大きさで並べると
- * 対等な 2 枚に見えて、下が主役に対する補足だという関係が消える。
- */
-.subTitle {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
-  font-weight: 620;
-  color: var(--ink-2);
-
-  small {
-    font-weight: 500;
-    color: var(--ink-muted);
-  }
-}

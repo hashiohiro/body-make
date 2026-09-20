@@ -4,7 +4,7 @@ import { ExerciseDetailDialog } from './ExerciseDetailDialog';
 import { ChipGroup } from '../ChipGroup';
 import { GroupChips } from './GroupChips';
 import { FILTER_THRESHOLD, matchesGroup, matchesQuery } from '../../lib/exerciseSearch';
-import { METRICS, baselineOf, lastOf } from './metrics';
+import { baselineOf, lastOf, metricsFor } from './metrics';
 import { SearchToggle } from './SearchToggle';
 import {
   EXERCISE_GROUP_ORDER,
@@ -19,6 +19,7 @@ import { CardHeader } from '../CardHeader';
 import { TONE_CLASS } from '../tone';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useWeightUnit } from '../../hooks/useWeightUnit';
 
 interface Props {
   sessions: readonly SessionPoint[];
@@ -75,7 +76,7 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
    * 有酸素チップを選べば専用の指標に切り替わる。
    */
   const allCardio = shown.length > 0 && shown.every((e) => isCardio(e.group));
-  const metrics = METRICS.filter((m) =>
+  const metrics = metricsFor(useWeightUnit()).filter((m) =>
     allCardio
       ? m.cardioOnly
       : !m.cardioOnly && (!m.needsWeight || shown.some((e) => countsReps(e.repUnit))),

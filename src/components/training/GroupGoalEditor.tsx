@@ -6,6 +6,8 @@ import { GROUP_LABELS } from '../../lib/exerciseCatalog';
 import { GROUP_GOAL_RANGE, GROUP_VOLUME_GOAL_RANGE } from '../../lib/storage';
 import { fmtVolume } from '../../lib/format';
 import { formatSets } from '../../lib/training';
+import { useWeightFormat } from '../../hooks/useWeightUnit';
+import { rangeIn, toKg } from '../../lib/weight';
 import type { GroupGoalType, GroupTarget, MuscleGroup } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
@@ -16,7 +18,7 @@ const TYPE_LABELS: Record<GroupGoalType, string> = {
   volume: '挙上量',
 };
 
-const UNITS: Record<GroupGoalType, string> = { sets: 'セット', volume: 'kg' };
+const SETS_UNIT = 'セット';
 
 const NOTES: Record<GroupGoalType, string> = {
   // どちらも 2 行に収まる長さにそろえる（下の goalNote が高さを持つ）
@@ -52,11 +54,21 @@ interface Props {
  */
 export function GroupGoalEditor({ group, target, sets, volume, days, onChange }: Props) {
   const [type, setType] = useState<GroupGoalType>(target?.type ?? 'sets');
+  /*
+   * 挙上量の目標は kg で保存する（`lib/weight.ts`）。ここは打つ場所でもあるので、
+   * **出すときに換算し、しまうときに戻す。**値域も打つ単位のまま見る——
+   * kg に直してから見ると、上限ちょうどが丸めの向きで弾かれる。
+   * セット数は重量ではないので、どちらの単位でも素通し。
+   */
+  const { unit: weightUnit, label: weightLabel, conv } = useWeightFormat();
+  const isVolume = type === 'volume';
+  const unitLabel = isVolume ? weightLabel : SETS_UNIT;
 
   // 打ってある値は、その立て方のものだけ出す（別の軸の値を流用しない）
-  const value = target != null && target.type === type ? target.value : null;
-  const range = type === 'volume' ? GROUP_VOLUME_GOAL_RANGE : GROUP_GOAL_RANGE;
-  const current = type === 'volume' ? fmtVolume(volume) : formatSets(sets);
+  const stored = target != null && target.type === type ? target.value : null;
+  const value = stored == null ? null : isVolume ? Math.round(conv(stored)) : stored;
+  const range = isVolume ? rangeIn(GROUP_VOLUME_GOAL_RANGE, weightUnit) : GROUP_GOAL_RANGE;
+  const current = isVolume ? fmtVolume(conv(volume)) : formatSets(sets);
 
   return (
     <div className={s.goalForm}>
@@ -88,16 +100,17 @@ export function GroupGoalEditor({ group, target, sets, volume, days, onChange }:
            */
           onCommit={(next) => {
             if (next == null) return;
-            onChange({ type, value: Math.round(next) });
+            // 打った値は選んでいる単位。保存は kg に戻してから
+            onChange({ type, value: Math.round(isVolume ? toKg(next, weightUnit) : next) });
           }}
         />
-        <span className={s.goalUnit}>{UNITS[type]}</span>
+        <span className={s.goalUnit}>{unitLabel}</span>
       </div>
 
       <p className={s.goalFacts}>
         今週{' '}
         <b>
-          {current} {UNITS[type]}
+          {current} {unitLabel}
         </b>{' '}
         ・{' '}
         {days == null

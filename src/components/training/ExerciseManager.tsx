@@ -26,6 +26,9 @@ import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
 import { MiniButton } from '../MiniButton';
 import s from './training.module.scss';
+import { useWeightUnit } from '../../hooks/useWeightUnit';
+import { WEIGHT_UNIT_LABEL, fromKg } from '../../lib/weight';
+import type { WeightUnit } from '../../lib/weight';
 
 interface Props {
   exercises: readonly Exercise[];
@@ -52,11 +55,16 @@ function goalKind(exercise: Exercise): string | null {
   return exercise.goal ? goalTypeLabel(exercise.goal.type, exercise.repUnit, true) : null;
 }
 
-function goalValue(exercise: Exercise): string | null {
+/**
+ * 目標の値と単位。**重量で数える立て方だけ、読むときの単位へ直す。**
+ * 保存は kg（`lib/weight.ts`）なので、ここは出す直前の換算。
+ */
+function goalValue(exercise: Exercise, weightUnit: WeightUnit): string | null {
   const goal = exercise.goal;
   if (!goal || goal.value == null) return null;
-  const unit = goal.type === 'reps' ? REP_UNIT_LABELS[exercise.repUnit] : 'kg';
-  return `${goal.value}${unit}`;
+  if (goal.type === 'reps') return `${goal.value}${REP_UNIT_LABELS[exercise.repUnit]}`;
+  const value = fromKg(goal.value, weightUnit);
+  return `${Math.round(value * 10) / 10}${WEIGHT_UNIT_LABEL[weightUnit]}`;
 }
 
 /**
@@ -82,6 +90,8 @@ export function ExerciseManager({
   sessions,
   body,
 }: Props) {
+  // 目標の重量は kg で保存されている。一覧に出すときだけ読む単位へ直す
+  const weightUnit = useWeightUnit();
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<ExerciseGroup | 'all'>('all');
   /** 名前で探す。打ちはじめたら、部位の見出しをやめて平たい候補に差し替える */
@@ -197,7 +207,7 @@ export function ExerciseManager({
         ex.subGroups.length > 0 ? ex.subGroups.map((x) => GROUP_LABELS[x.group]).join('·') : null
       }
       kind={goalKind(ex)}
-      goal={goalValue(ex)}
+      goal={goalValue(ex, weightUnit)}
       factLeft={(usage.get(ex.id) ?? 0) > 0 ? `記録 ${usage.get(ex.id)}日` : '記録はまだありません'}
       /*
         負荷の数え方と回数の単位は出さない。**一覧で読むものではない。**

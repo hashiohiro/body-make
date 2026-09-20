@@ -23,6 +23,7 @@ import { Tag } from '../Tag';
 import { MiniButton } from '../MiniButton';
 import { Pill } from '../Pill';
 import s from './training.module.scss';
+import { useGoalUnit } from '../../hooks/useWeightUnit';
 
 interface Props {
   goals: readonly ExerciseGoal[];
@@ -47,6 +48,8 @@ interface Props {
  * 決めるのは行を押した先のダイアログで、この面は読むことに専念させる。
  */
 export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate }: Props) {
+  // 目標は kg で導出されている。出す直前に読む単位へ直す
+  const shown = useGoalUnit();
   /** 開いている種目。目標を決める面と、種目そのものの設定の面を持つ */
   const [openId, setOpenId] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
@@ -113,8 +116,10 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
             そのぶん列を広げるとバーが痩せる。伸びの中身は推移が持っている。
           */}
           <span className={s.goalRowValue}>
-            {fmt(goal.current, goal.digits)}
-            {goal.target != null && ` → ${fmt(goal.target, goal.digits)}`} {goal.unit}
+            {fmt(shown(goal.unit).conv(goal.current), goal.digits)}
+            {goal.target != null &&
+              ` → ${fmt(shown(goal.unit).conv(goal.target), goal.digits)}`}{' '}
+            {shown(goal.unit).label}
           </span>
 
           {goal.target == null ? (

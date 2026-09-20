@@ -1368,3 +1368,25 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/*
+ * セット入力の見出しに置く、重量の単位の切り替え。
+ *
+ * **見出しの見え方のまま押せるようにする。**ボタンらしく飾ると、
+ * 5 つ並ぶ見出しの中でそこだけが操作の列に見えてしまう。
+ * 指で狙える高さ（--tap-row）は確保する。
+ */
+.unitToggle {
+  min-height: var(--tap-row);
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  white-space: nowrap;
+}
+
+.unitValue {
+  font-weight: 700;
+  color: var(--accent);
+}

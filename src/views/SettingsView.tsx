@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Modal } from '../components/Modal';
 import { useConfirm } from '../components/ConfirmDialog';
 import { CheckSettingsForm } from '../components/training/CheckSettingsForm';
+import { WeightUnitForm } from '../components/training/WeightUnitForm';
 import { ExerciseManager } from '../components/training/ExerciseManager';
 import { PresetManager } from '../components/training/PresetManager';
 import { exportJson, readImportFile } from '../lib/io';
@@ -14,6 +15,7 @@ import { DEMO_TODAY, formatMD } from '../lib/date';
 import { IS_DEMO } from '../lib/env';
 import { SEED_SOURCE } from '../lib/seed';
 import { THEME_OPTIONS } from '../lib/themes';
+import { WEIGHT_UNIT_LABEL } from '../lib/weight';
 import type { BodyData } from '../hooks/useBodyData';
 import { CardHeader } from '../components/CardHeader';
 import { Button } from '../components/Button';
@@ -59,6 +61,7 @@ export const TRAINING_PAGES = [
    * ここに置くのは滅多に変えない閾値と、押した許容を戻す場所だけ。
    */
   { id: 'checks', label: 'トレーニング種目のレビュー', hint: '有効化・しきい値・許容済み' },
+  { id: 'units', label: 'ウエイトの単位', hint: '入力と表示をそれぞれ選ぶ' },
 ] as const;
 
 export type TrainingPageId = (typeof TRAINING_PAGES)[number]['id'];
@@ -235,7 +238,13 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
       presets: data.presets.length,
       // 件数として意味があるのは「押した許容」の数。閾値は数えても仕方がない
       checks: data.suppressed.length,
+      // 件数で語れるものが無い。行には選んでいる単位を出す（下の count のところ）
+      units: 0,
     };
+
+    if (page === 'units') {
+      return <WeightUnitForm settings={settings} onUpdate={updateSettings} />;
+    }
 
     if (page === 'checks') {
       return (
@@ -292,11 +301,13 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
                 <small className={s.hint}>{p.hint}</small>
               </span>
               <span className={s.count}>
-                {p.id === 'checks'
-                  ? counts[p.id] === 0
-                    ? ''
-                    : `許容 ${counts[p.id]}件`
-                  : `${counts[p.id]}件`}
+                {p.id === 'units'
+                  ? `${WEIGHT_UNIT_LABEL[settings.inputWeightUnit]} / ${WEIGHT_UNIT_LABEL[settings.displayWeightUnit]}`
+                  : p.id === 'checks'
+                    ? counts[p.id] === 0
+                      ? ''
+                      : `許容 ${counts[p.id]}件`
+                    : `${counts[p.id]}件`}
               </span>
               <span className={s.chevron} aria-hidden="true">
                 ›

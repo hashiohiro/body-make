@@ -1,3 +1,5 @@
+import type { WeightUnit } from './lib/weight';
+
 /** 1 日 2 回（朝・夜）計測というエクセル「日次記録」シートの計測設計をそのまま型にしている */
 export type SlotId = 'am' | 'pm';
 
@@ -55,6 +57,23 @@ export interface Settings {
    * オフに戻しても記録は消さない（入力欄とグラフを隠すだけ）。
    */
   waistEnabled: boolean;
+  /**
+   * セットの重量を**打つとき**の既定の単位。
+   *
+   * 記録画面のトグルはここを初期値にして、その場で切り替えられる
+   * （遠征先のジムにポンド表記の器具があったとき用）。
+   * トグルは**この設定を書き換えない**——その場限りの都合で、設定は普段の場所のもの。
+   */
+  inputWeightUnit: WeightUnit;
+  /**
+   * 重量・挙上量・目標を**出すとき**の単位。
+   *
+   * 入力と分けて持つ。「打つのはポンド（器具がそうだから）、読むのはキロ（
+   * 普段の記録と並べたいから）」が成り立つ。逆も同じ。
+   *
+   * **保存は常に kg**（`lib/weight.ts`）。これは出す直前の換算だけを決める。
+   */
+  displayWeightUnit: WeightUnit;
 }
 
 export interface AppData {

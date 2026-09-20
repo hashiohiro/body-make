@@ -2,6 +2,7 @@ import { deltaTone, fmt, fmtDelta, fmtVolume } from '../../lib/format';
 import { isCardio } from '../../lib/exerciseCatalog';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { Exercise, ExercisePoint } from '../../types';
+import { useWeightFormat } from '../../hooks/useWeightUnit';
 import { TONE_CLASS } from '../tone';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
@@ -24,8 +25,14 @@ interface Props {
  * 別々に組むと数字の出し方がずれるので、同じ部品を両方に置く。
  */
 export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: Props) {
-  const volume = point?.volume ?? 0;
-  const prevVolume = previous?.point.volume ?? null;
+  /*
+   * 記録は kg で持っている（`lib/weight.ts`）。ここは読む場所なので、
+   * 出す直前に読むときの単位へ直す。**差分も換算後どうしで取る**——
+   * 片方だけ直すと、前回比が別の物差しの引き算になる。
+   */
+  const { label: unitLabel, conv } = useWeightFormat();
+  const volume = conv(point?.volume ?? 0);
+  const prevVolume = previous?.point.volume == null ? null : conv(previous.point.volume);
   const delta = prevVolume != null && prevVolume > 0 && volume > 0 ? volume - prevVolume : null;
   // 挙上量は増えたほうが前進なので lowerIsBetter = false。方向の反転は既存の仕組みに任せる
   const tone = deltaTone(delta, false, 0.5);
@@ -66,11 +73,12 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
             */}
             {point?.oneRm != null && (
               <span>
-                推定1RM {fmt(point.oneRm)} kg{point.measured ? ' *' : ''}
+                推定1RM {fmt(conv(point.oneRm))} {unitLabel}
+                {point.measured ? ' *' : ''}
               </span>
             )}
             <b>
-              {fmtVolume(volume)} kg
+              {fmtVolume(volume)} {unitLabel}
               {delta != null && (
                 <span className={`${ui.hint} ${TONE_CLASS[tone]}`}> {fmtDelta(delta, 0)}</span>
               )}
@@ -88,8 +96,16 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
       */}
       {!cardio && (bestWeight != null || (best != null && best > 0)) && (
         <div className={s.exPrev}>
-          {bestWeight != null && <span>最高重量 {fmt(bestWeight)} kg</span>}
-          {best != null && best > 0 && <span>最高挙上量 {fmtVolume(best)} kg</span>}
+          {bestWeight != null && (
+            <span>
+              最高重量 {fmt(conv(bestWeight))} {unitLabel}
+            </span>
+          )}
+          {best != null && best > 0 && (
+            <span>
+              最高挙上量 {fmtVolume(conv(best))} {unitLabel}
+            </span>
+          )}
         </div>
       )}
     </>

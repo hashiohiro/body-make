@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CheckCard } from '../components/training/CheckCard';
 import { TrainingAside } from '../components/training/TrainingAside';
 import { ExerciseCard } from '../components/training/ExerciseCard';
@@ -7,6 +7,7 @@ import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialo
 import { ExercisePicker } from '../components/training/ExercisePicker';
 import { GoalEditor } from '../components/training/GoalEditor';
 import { Modal } from '../components/Modal';
+import type { WeightUnit } from '../lib/weight';
 import { useConfirm } from '../components/ConfirmDialog';
 import { OrderList } from '../components/training/OrderList';
 import { groupsOf, isCardio } from '../lib/exerciseCatalog';
@@ -74,6 +75,18 @@ export function TrainingView({ body, date }: Props) {
    * 打つあいだは 1 種目に集中するので、面を分けたほうが入力欄も大きく取れる。
    */
   const [editId, setEditId] = useState<string | null>(null);
+  /*
+   * 重量を打つときの単位。**この画面を開いているあいだだけ保つ。**
+   *
+   * 遠征先のジムにポンド表記の器具があったとき、その場で切り替えて打てるようにする。
+   * 種目を移っても選んだままにするので、状態は種目ごとの面ではなくここが持つ。
+   *
+   * **設定（`inputWeightUnit`）は書き換えない。**その場限りの都合なので、
+   * 閉じて開き直せば普段の単位に戻る。設定そのものを変えたときは、
+   * こちらもその値に追従する（下の effect）。
+   */
+  const [inputUnit, setInputUnit] = useState<WeightUnit>(data.settings.inputWeightUnit);
+  useEffect(() => setInputUnit(data.settings.inputWeightUnit), [data.settings.inputWeightUnit]);
   const [ask, confirmDialog] = useConfirm();
 
   const usedIds = new Set(dayEntries.map((e) => e.exerciseId));
@@ -306,6 +319,8 @@ export function TrainingView({ body, date }: Props) {
             // カードと同じ通算の最高。打ちながら「最高に届くか」を見られるようにする
             best={personalBest(sessions, editExercise.id, addDays(date, -1), pickVolume)}
             bestWeight={personalBest(sessions, editExercise.id, addDays(date, -1), pickTopWeight)}
+            weightUnit={inputUnit}
+            onWeightUnitChange={setInputUnit}
             onValue={(index, field, value) =>
               setSetValue(date, editExercise.id, index, field, value)
             }

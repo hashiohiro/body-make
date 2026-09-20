@@ -5,13 +5,14 @@ import { useState } from 'react';
 import { Modal } from '../Modal';
 import { GroupTrendChart } from './GroupTrendChart';
 import { ChipGroup } from '../ChipGroup';
-import { GROUP_VALUES } from './groupValues';
+import { groupValuesFor } from './groupValues';
 import type { GroupValueId } from './groupValues';
 import type { WeekSetCount } from '../../lib/training';
 import { CardHeader } from '../CardHeader';
 import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useWeightUnit } from '../../hooks/useWeightUnit';
 
 /**
  * 出す週の数。**画面に収まる数まで絞る。**
@@ -31,7 +32,8 @@ interface Props {
 
 export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
   const [openTrend, setOpenTrend] = useState(false);
-  const value = GROUP_VALUES.find((v) => v.id === valueId)!;
+  const values = groupValuesFor(useWeightUnit());
+  const value = values.find((v) => v.id === valueId)!;
   /*
    * **左が古い。**同じ面のグラフ（部位別の推移）と横軸の向きをそろえる。
    * 表とグラフで時間の向きが逆だと、切り替えるたびに読み方を入れ替えることになる。
@@ -52,12 +54,7 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
       <section className={ui.card}>
         <CardHeader title="部位別の配分" hint={<>週あたり / 右が今週</>} />
 
-        <ChipGroup
-          options={GROUP_VALUES}
-          value={valueId}
-          onChange={onValueChange}
-          label="表示する値"
-        />
+        <ChipGroup options={values} value={valueId} onChange={onValueChange} label="表示する値" />
 
         <div className={ui.tableScroll}>
           <table className={`${ui.table} ${s.heatmap}`}>

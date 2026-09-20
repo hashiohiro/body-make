@@ -12,6 +12,8 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { DateNav } from '../components/DateNav';
 import { ChartsView } from './ChartsView';
 import { TimeSeriesChart } from '../components/charts/TimeSeriesChart';
+import { BodyTrendCharts } from '../components/charts/BodyTrendCharts';
+import { TabBar } from '../components/TabBar';
 import { EnergyBalanceChart } from '../components/charts/EnergyBalanceChart';
 import { WeeklyCompositionChart } from '../components/charts/WeeklyCompositionChart';
 import { GoalsView } from './GoalsView';
@@ -33,7 +35,9 @@ import type { AppData, Domain, Exercise, ThemePref, WeekPoint } from '../types';
 import type { EnergyPoint } from '../lib/energy';
 import { emptyData, flushSave, loadData, resetStorageForTests, sanitizeData } from '../lib/storage';
 import { buildSessions } from '../lib/training';
+import { buildDaily } from '../lib/derive';
 import { clearAllRecords, resetDbForTests } from '../lib/db';
+import { WeightUnitProvider } from '../hooks/useWeightUnit';
 
 /**
  * 起動時に読み込んだことにする記録。
@@ -48,10 +52,19 @@ let seeded: AppData = emptyData();
  * 導出の正しさは training.test.ts が見ている。ここで見るのは結線
  * （種目を足す → セットを打つ → 集計が出る → 消える）が繋がっているか。
  */
+/*
+ * 読むときの重量の単位は、本番では App が配っている（`WeightUnitProvider`）。
+ * 部分木だけを描く器でも同じように包む——包み忘れると既定の kg に落ちて、
+ * 表示の設定を変えたのに何も起きない、というテストになる。
+ */
 function Harness() {
   const body = useBodyData(seeded);
   const [date] = useState(todayISO);
-  return <TrainingView body={body} date={date} />;
+  return (
+    <WeightUnitProvider unit={body.data.settings.displayWeightUnit}>
+      <TrainingView body={body} date={date} />
+    </WeightUnitProvider>
+  );
 }
 
 /** 種目マスタは設定タブにあるので、画面を触らず用意する */
@@ -109,7 +122,7 @@ async function remount(): Promise<void> {
 
 /** i 番目のセット行の重量・回数を入れる */
 function typeSet(row: HTMLElement, weight: string, reps: string) {
-  fireEvent.change(within(row).getByLabelText(/重量$/), { target: { value: weight } });
+  fireEvent.change(within(row).getByLabelText(/セット目の重量/), { target: { value: weight } });
   fireEvent.change(within(row).getByLabelText(/回数$/), { target: { value: reps } });
 }
 
@@ -288,7 +301,9 @@ describe('トレ画面', () => {
     // 直前のセットが複製されるので、入力は差分だけで済む
     rows = setRows();
     expect(rows).toHaveLength(2);
-    expect((within(rows[1]!).getByLabelText(/重量$/) as HTMLInputElement).value).toBe('60');
+    expect((within(rows[1]!).getByLabelText(/セット目の重量/) as HTMLInputElement).value).toBe(
+      '60',
+    );
 
     typeSet(rows[1]!, '60', '9');
 
@@ -594,7 +609,7 @@ describe('トレ画面', () => {
 
     // ベルトで足す人のために、その種目のカードから開ける
     fireEvent.click(screen.getByRole('button', { name: '＋ 加重' }));
-    expect(screen.getByLabelText('1セット目の重量')).toBeTruthy();
+    expect(screen.getByLabelText(/1セット目の重量/)).toBeTruthy();
   });
 
   it('秒で数える種目では重量を聞かない（挙上量に計上されないため）', () => {
@@ -625,7 +640,7 @@ describe('トレ画面', () => {
 
     // プレートを持って行う人はいるので、開く手段は残す
     fireEvent.click(screen.getByRole('button', { name: '＋ 加重' }));
-    expect(screen.getByLabelText('1セット目の重量')).toBeTruthy();
+    expect(screen.getByLabelText(/1セット目の重量/)).toBeTruthy();
   });
 
   it('加重の記録がある日は、重量欄を畳まない', () => {
@@ -636,7 +651,7 @@ describe('トレ画面', () => {
     render(<Harness />);
     expand('ディップス');
 
-    expect((screen.getByLabelText('1セット目の重量') as HTMLInputElement).value).toBe('20');
+    expect((screen.getByLabelText(/1セット目の重量/) as HTMLInputElement).value).toBe('20');
     expect(screen.queryByRole('button', { name: /加重/ })).toBeNull();
   });
 
@@ -1007,7 +1022,7 @@ describe('設定（カテゴリ別の画面遷移）', () => {
     render(<SettingsHarness section="training" />);
 
     // 何件あるかは開く前に見える。空の画面を開きに行かせない
-    expect(TRAINING_PAGES.map((p) => p.id)).toEqual(['exercises', 'presets', 'checks']);
+    expect(TRAINING_PAGES.map((p) => p.id)).toEqual(['exercises', 'presets', 'checks', 'units']);
     expect(screen.getByText('マイ種目')).toBeTruthy();
     expect(screen.getByText('プリセット')).toBeTruthy();
     expect(screen.getByText('トレーニング種目のレビュー')).toBeTruthy();
@@ -1434,20 +1449,16 @@ describe('体組成の推移を記録から開く', () => {
     expect(dialog.getByRole('heading', { name: '元データ' })).toBeTruthy();
   });
 
-  /*
-   * 腹囲は体重に添える補足なので、対等な 3 枚目のカードにはしない。
-   * 体重のカードの中に入っていること（＝見出しが 2 枚のままであること）で見る。
-   */
-  it('腹囲はオンのときだけ、体重のカードの中に出る', () => {
+  it('腹囲はオンのときだけ、独立したカードで出る', () => {
     seedDays({ waistEnabled: true }, true);
     render(<RecordsHarness />);
     fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
 
     const dialog = within(openDialog()!);
-    expect(dialog.getByText('腹囲')).toBeTruthy();
+    expect(dialog.getByRole('heading', { name: '腹囲の推移' })).toBeTruthy();
     expect(dialog.getByLabelText('日平均腹囲と7日移動平均の推移')).toBeTruthy();
-    // カードは「体重の推移」「体脂肪率の推移」の 2 枚のまま
-    expect(dialog.queryByRole('heading', { name: '腹囲の推移' })).toBeNull();
+    // 凡例も他のカードと同じに出る（実測の点群と 7 日移動平均の線）
+    expect(dialog.getAllByText('7日移動平均').length).toBe(3);
   });
 
   it('腹囲がオフなら、グラフごと出ない', () => {
@@ -1456,6 +1467,87 @@ describe('体組成の推移を記録から開く', () => {
     fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
 
     expect(within(openDialog()!).queryByLabelText('日平均腹囲と7日移動平均の推移')).toBeNull();
+  });
+});
+
+/**
+ * x 軸の日付目盛りは、**系列が持っている日付ではなく軸の範囲**から出す（`timeTicks`）。
+ *
+ * 点の並びから拾っていたときは、記録の密度が違うカードで目盛りがそろわなかった
+ * （体脂肪率は毎日・腹囲は週に 1 度）。記録の少ない系列ではラベルが点のある側へ寄って、
+ * 残りの軸が無目盛りのまま残る。同じ横位置を別の日付として読むことになる。
+ */
+describe('推移の横軸目盛り', () => {
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      value: 360,
+    });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
+  });
+
+  /** そのグラフの x 軸ラベルを「日付@x座標」で読む */
+  const axisOf = (ariaLabel: string) => {
+    const svg = screen.getByLabelText(ariaLabel);
+    return [...svg.querySelectorAll('text')]
+      .filter((t) => t.getAttribute('text-anchor') === 'middle')
+      .map((t) => `${t.textContent}@${Math.round(Number(t.getAttribute('x')))}`);
+  };
+
+  const SETTINGS = {
+    heightCm: null,
+    targetWeight: null,
+    targetBodyFat: null,
+    targetDate: null,
+    theme: 'system' as const,
+    waistEnabled: true,
+    inputWeightUnit: 'kg' as const,
+    displayWeightUnit: 'kg' as const,
+  };
+
+  /** 体重と体脂肪率は毎日、腹囲は最後の数日だけ */
+  const sparseWaist = (days: number) => {
+    const entries: Record<string, unknown> = {};
+    for (let i = 0; i < days; i++) {
+      entries[isoAdd(todayISO(), -i)] = {
+        am: { weight: 70 + i / 10, bodyFat: 20, waist: i < 3 ? 82 : null },
+        pm: { weight: null, bodyFat: null, waist: null },
+      };
+    }
+    return entries;
+  };
+
+  it('記録の密度が違っても、カードをまたいで目盛りがそろう', () => {
+    const data = sanitizeData({ version: 7, entries: sparseWaist(30) });
+    render(<BodyTrendCharts daily={buildDaily(data.entries)} settings={SETTINGS} />);
+
+    const weight = axisOf('日平均体重と7日移動平均の推移');
+    const waist = axisOf('日平均腹囲と7日移動平均の推移');
+    const fat = axisOf('日平均体脂肪率と7日移動平均の推移');
+
+    expect(weight).toHaveLength(4);
+    // 腹囲は 3 日ぶんしか無いが、目盛りは体重・体脂肪率と同じ
+    expect(waist).toEqual(weight);
+    expect(fat).toEqual(weight);
+  });
+
+  /*
+   * 記録が少ないときも、開始日から今日までを等間隔で並べる。
+   * 点のある位置に寄せていた頃は、ラベルが固まって出ていた。
+   */
+  it('記録が少なくても、開始日から今日まで等間隔に並ぶ', () => {
+    const data = sanitizeData({ version: 7, entries: sparseWaist(4) });
+    render(<BodyTrendCharts daily={buildDaily(data.entries)} settings={SETTINGS} />);
+
+    const xs = axisOf('日平均体重と7日移動平均の推移').map((label) => Number(label.split('@')[1]));
+    expect(xs).toHaveLength(4);
+
+    // 隣どうしの間隔がすべて等しい＝どこにも詰まっていない
+    const gaps = xs.slice(1).map((x, i) => x - xs[i]!);
+    for (const gap of gaps) expect(gap).toBeCloseTo(gaps[0]!, 0);
+    expect(gaps[0]!).toBeGreaterThan(40);
   });
 });
 
@@ -3535,7 +3627,7 @@ describe('目標画面', () => {
     const stored = await storedData();
     expect(stored.groupGoals.chest).toEqual({ type: 'volume', value: 20000 });
     // 行の数字も挙上量の軸で出る（60 × 10 = 600kg）
-    expect(screen.getByText('600 / 20000')).toBeTruthy();
+    expect(screen.getByText('600 / 20,000')).toBeTruthy();
   });
 
   it('種目の目標は目標画面で決め、その場から推移も見られる', () => {
@@ -5994,5 +6086,161 @@ describe('元データの一覧', () => {
 
     // ベンチは分母 40 なので 60 × (1 + 10/40) = 75.0
     expect(screen.getByText('75.0 kg')).toBeTruthy();
+  });
+});
+
+/**
+ * ソフトキーボードが出ているあいだ、タブバーは引っ込める。
+ *
+ * iOS はキーボードでレイアウトビューポートを変えないので、`position: fixed; bottom: 0`
+ * のままだとバーがキーボードの上——見た目には画面の真ん中——に現れる。
+ */
+describe('キーボードとタブバー', () => {
+  const setViewport = (height: number) => {
+    const listeners = new Set<() => void>();
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: {
+        height,
+        addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+        removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+      },
+    });
+    return listeners;
+  };
+
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'visualViewport');
+  });
+
+  it('キーボードが無ければ出したまま', () => {
+    setViewport(window.innerHeight);
+    render(<TabBar active="records" onChange={() => {}} />);
+    expect(document.querySelector('[data-tabbar]')!.hasAttribute('hidden')).toBe(false);
+  });
+
+  it('視覚ビューポートが縮んだら引っ込める', () => {
+    // キーボードで画面の 45% が埋まった状態
+    setViewport(Math.round(window.innerHeight * 0.55));
+    render(<TabBar active="records" onChange={() => {}} />);
+    expect(document.querySelector('[data-tabbar]')!.hasAttribute('hidden')).toBe(true);
+  });
+
+  /* アドレスバーの出入り（1 割ほど）でバーが消えては、押したいときに無いことになる */
+  it('アドレスバーぶんの縮みでは引っ込めない', () => {
+    setViewport(Math.round(window.innerHeight * 0.9));
+    render(<TabBar active="records" onChange={() => {}} />);
+    expect(document.querySelector('[data-tabbar]')!.hasAttribute('hidden')).toBe(false);
+  });
+
+  it('visualViewport が無い環境では出したまま', () => {
+    render(<TabBar active="records" onChange={() => {}} />);
+    expect(document.querySelector('[data-tabbar]')!.hasAttribute('hidden')).toBe(false);
+  });
+});
+
+/**
+ * ウエイトの単位。**保存は常にキログラム**で、換算するのは入口と出口だけ
+ * （`lib/weight.ts`）。入力と表示は別の設定で、記録画面のトグルは設定を書き換えない。
+ */
+describe('ウエイトの単位', () => {
+  const weightField = () => within(setRows()[0]!).getByLabelText(/セット目の重量/);
+  const unitToggle = () => screen.getByRole('button', { name: /重量の単位を切り替える/ });
+
+  const start = (settings: Record<string, unknown> = {}) => {
+    seedRaw({
+      version: 7,
+      settings,
+      entries: {},
+      exercises: [
+        fromCatalog(
+          CATALOG.find((c) => c.id === 'ex_bench')!,
+          0,
+        ),
+      ],
+      workouts: {},
+    });
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
+  };
+
+  it('既定は設定の入力単位。kg なら kg で打つ', () => {
+    start();
+    expect(unitToggle().textContent).toContain('kg');
+    fireEvent.change(weightField(), { target: { value: '60' } });
+    fireEvent.blur(weightField());
+    expect((weightField() as HTMLInputElement).value).toBe('60');
+  });
+
+  it('設定でポンドにすると、最初からポンドで打てる', () => {
+    start({ inputWeightUnit: 'lb' });
+    expect(unitToggle().textContent).toContain('lb');
+  });
+
+  /*
+   * 遠征先でとっさに切り替える口。**打ち込み済みの値は換算して出し直す**ので、
+   * 記録そのものは 1 件も変わらない。
+   */
+  it('その場で切り替えると、打ち込み済みの値が換算されて出る', () => {
+    start({ inputWeightUnit: 'lb' });
+    fireEvent.change(weightField(), { target: { value: '135' } });
+    fireEvent.blur(weightField());
+
+    fireEvent.click(unitToggle());
+    expect(unitToggle().textContent).toContain('kg');
+    // 135lb ＝ 61.23kg
+    expect(Number((weightField() as HTMLInputElement).value)).toBeCloseTo(61.2, 1);
+
+    // 戻せば打った数字がそのまま出る（ここが小数第 2 位で保存している理由）
+    fireEvent.click(unitToggle());
+    expect(Number((weightField() as HTMLInputElement).value)).toBeCloseTo(135, 1);
+  });
+
+  it('ポンドで打った値は、kg に直して保存される', async () => {
+    start({ inputWeightUnit: 'lb' });
+    fireEvent.change(weightField(), { target: { value: '135' } });
+    fireEvent.blur(weightField());
+
+    await flushSave();
+    const saved = await storedData();
+    const set = Object.values(saved.workouts)[0]![0]!.sets[0] as { weight: number };
+    expect(set.weight).toBeCloseTo(61.23, 2);
+  });
+
+  /* トグルはその場限りの都合。設定そのものは動かさない */
+  it('トグルは設定を書き換えない', async () => {
+    start();
+    fireEvent.click(unitToggle());
+    expect(unitToggle().textContent).toContain('lb');
+
+    await flushSave();
+    expect((await storedData()).settings.inputWeightUnit).toBe('kg');
+  });
+
+  /* 入力と表示は別の設定。打つのはポンド、読むのはキロ、が成り立つ */
+  it('入力をポンドにしても、表示の設定が kg なら合計は kg のまま', () => {
+    start({ inputWeightUnit: 'lb' });
+    fireEvent.change(weightField(), { target: { value: '135' } });
+    fireEvent.blur(weightField());
+    fireEvent.change(within(setRows()[0]!).getByLabelText(/回数$/), { target: { value: '10' } });
+    fireEvent.blur(within(setRows()[0]!).getByLabelText(/回数$/));
+
+    // 61.23kg × 10 = 612kg
+    expect(screen.getAllByText(/612 kg/).length).toBeGreaterThan(0);
+  });
+
+  it('表示をポンドにすると、合計も最高もポンドで出る', () => {
+    start({ inputWeightUnit: 'lb', displayWeightUnit: 'lb' });
+    fireEvent.change(weightField(), { target: { value: '135' } });
+    fireEvent.blur(weightField());
+    fireEvent.change(within(setRows()[0]!).getByLabelText(/回数$/), { target: { value: '10' } });
+    fireEvent.blur(within(setRows()[0]!).getByLabelText(/回数$/));
+
+    // 135lb × 10。打った数字のまま出る
+    expect(screen.getAllByText(/1,350 lb/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/612 kg/)).toBeNull();
   });
 });

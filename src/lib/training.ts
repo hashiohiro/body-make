@@ -17,6 +17,8 @@ import type {
 import { addDays, diffDays, formatMD, isoToTime, startOfWeek, todayISO } from './date';
 import { REP_UNIT_LABELS, isCardio, muscleOf } from './exerciseCatalog';
 import { isCardioSet } from '../types';
+import { WEIGHT_UNIT_LABEL, fromKg } from './weight';
+import type { WeightUnit } from './weight';
 
 /** 高レップほど外挿が大きく誤差が増えるため、12 レップを超えたセットは 1RM に採らない */
 export const E1RM_MAX_REPS = 12;
@@ -432,14 +434,21 @@ export const pickTopWeight = (p: ExercisePoint) => p.top?.weight ?? null;
  * トップセットは「最大重量のセット」なので、重量を持たない種目では決まらない。
  * そのときは null を返し、呼ぶ側が出し方を決める。
  */
-export function formatTopSet(point: ExercisePoint): string | null {
+export function formatTopSet(point: ExercisePoint, unit: WeightUnit = 'kg'): string | null {
   const top = point.top;
   if (!top || top.weight == null || top.reps == null) return null;
-  return `${top.reps} × ${top.weight}kg`;
+  // 記録は kg。読むときの単位に直してから書く（`lib/weight.ts`）
+  return `${top.reps} × ${fmtWeight(top.weight, unit)}`;
+}
+
+/** 重量 1 つぶんの書き方。**値と単位の綴りを必ず対で出す**（片方だけ直す事故を防ぐ） */
+function fmtWeight(kg: number, unit: WeightUnit): string {
+  const value = fromKg(kg, unit);
+  return `${Math.round(value * 10) / 10}${WEIGHT_UNIT_LABEL[unit]}`;
 }
 
 /** 「10,10,9 × 60kg」形式。同じ重量が続く間はまとめる。重量のない種目は「60,60秒」 */
-export function summarizeSets(point: ExercisePoint): string {
+export function summarizeSets(point: ExercisePoint, weightUnit: WeightUnit = 'kg'): string {
   /*
    * 有酸素は「その日にどれだけ動いたか」なので、セットの並びではなく合計で書く。
    * 400m×5本 を「0.4km,0.4km,…」と並べても読むものが増えるだけで、
@@ -466,7 +475,10 @@ export function summarizeSets(point: ExercisePoint): string {
   }
   // 並びは入力画面と同じ 回数 × 重量
   return groups
-    .map((g) => `${g.reps.join(',')}${unit}${g.weight == null ? '' : ` × ${g.weight}kg`}`)
+    .map(
+      (g) =>
+        `${g.reps.join(',')}${unit}${g.weight == null ? '' : ` × ${fmtWeight(g.weight, weightUnit)}`}`,
+    )
     .join(' / ');
 }
 
