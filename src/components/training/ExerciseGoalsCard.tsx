@@ -33,12 +33,13 @@ interface Props {
   stats: TrainingStats;
   onUpdate: (exercise: Exercise) => void;
   /**
-   * マイ種目の画面へ行く。**マイ種目が空のときだけ使う。**
+   * マイ種目の画面へ行く。**必須。**
    *
-   * 渡さなければ、これまでどおり案内の文章だけになる
-   * （ホームの「記録する」「推移を見る」と同じ、画面をまたぐ導線の作法）。
+   * 任意にすると「渡されなかったとき用」の分岐が要るが、画面をまたぐ移動は
+   * ルートを持つ `App` が必ず渡すので、その分岐には入らない。
+   * **入らない道を書かない**（ホームの「記録する」と同じ、導線の作法）。
    */
-  onOpenExercises?: (() => void) | undefined;
+  onOpenExercises: () => void;
 }
 
 /**
@@ -236,29 +237,21 @@ export function ExerciseGoalsCard({
           行き先が読めるリンクの姿で添える。
         */}
         {noListed ? (
-          onOpenExercises ? (
-            <div className={ui.btnRow}>
-              <Button tone="primary" onClick={onOpenExercises}>
-                ＋ マイ種目に種目を追加
-              </Button>
-            </div>
-          ) : (
-            <p className={ui.note}>
-              マイ種目がまだ空です（設定 &gt; トレーニング &gt; マイ種目）。
-            </p>
-          )
+          <div className={ui.btnRow}>
+            <Button tone="primary" onClick={onOpenExercises}>
+              ＋ マイ種目に種目を追加
+            </Button>
+          </div>
         ) : withoutGoal.length === 0 ? (
           <>
             <p className={ui.note}>
               すべてのマイ種目に目標を決めています。種目を増やすと、その目標も決められます。
             </p>
-            {onOpenExercises && (
-              <div className={ui.detailRow}>
-                <button type="button" className={ui.detailBtn} onClick={onOpenExercises}>
-                  マイ種目を開く
-                </button>
-              </div>
-            )}
+            <div className={ui.detailRow}>
+              <button type="button" className={ui.detailBtn} onClick={onOpenExercises}>
+                マイ種目を開く
+              </button>
+            </div>
           </>
         ) : (
           <div className={ui.btnRow}>

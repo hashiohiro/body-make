@@ -85,9 +85,9 @@ function PickDialog({
 
           <CatalogPicker
             exercises={items}
-            selectedIds={selected}
             onAdd={onAddExercises}
-            onToggle={onToggle}
+            // 足し終えた種目は ✓ で残す。外し方と組で渡す（片方だけでは意味を持たない）
+            selection={{ ids: selected, onToggle }}
           />
 
           {/* カタログにも無いときの逃げ道。作った種目もそのまま組み合わせに入る */}

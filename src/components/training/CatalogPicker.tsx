@@ -59,15 +59,18 @@ interface Props {
    */
   usedIds?: ReadonlySet<string> | undefined;
   /**
-   * すでに足し終えた種目。**消さずに ✓ で出す。**
+   * すでに足し終えた種目と、その外し方。**2 つで 1 つ。**
    *
    * プリセットを組みながらカタログから足すときに使う。追加した種目はマイ種目へ
    * 入るので、そのままだと候補から消えて「入ったのか」が分からない。
-   * 押し直せば外せる（呼び出し側が `onAdd` の相手を決める）。
+   * 消さずに ✓ で出し、押し直せば外せる。
+   *
+   * **別々の任意プロパティにしない。**片方だけ渡せる形にすると
+   * 「✓ なのに外せない」——押しても何も起きない札——という状態が型の上では
+   * 起こり得て、そのための分岐を書くことになる。実際には入らない道だった。
+   * 組で持てば、✓ が出るときは必ず外せる。
    */
-  selectedIds?: ReadonlySet<string> | undefined;
-  /** ✓ を押したときの呼び先。渡さなければ ✓ の行は押せない */
-  onToggle?: ((id: string) => void) | undefined;
+  selection?: { ids: ReadonlySet<string>; onToggle: (id: string) => void } | undefined;
 }
 
 /**
@@ -77,7 +80,7 @@ interface Props {
  * マイ種目の置き場所は設定のままだが、入口が設定にしか無いと、
  * 初めて記録タブを開いた人が「設定から追加してください」で行き止まる。
  */
-export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle }: Props) {
+export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
   /*
    * 器具の絞り込みだけをここで持つ。**部位と検索は `ExercisePickList` が持っている**
    * （選ぶ面はどこも同じ組みなので、そこに寄せた）。
@@ -97,7 +100,7 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
     const id = catalogId(c.entry, c.implement);
     if (usedIds?.has(id)) return false;
     // 足し終えたものは残す（消えると、入ったのかどうかが分からない）
-    if (known.has(id) && !selectedIds?.has(id)) return false;
+    if (known.has(id) && !selection?.ids.has(id)) return false;
     return matchesFilter(c, filter);
   });
   const filtered = filter !== 'all';
@@ -114,27 +117,16 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
    */
   const pill = (c: CatalogChoice, searching: boolean, alias: string | null) => {
     const id = catalogId(c.entry, c.implement);
-    const picked = selectedIds?.has(id) ?? false;
+    const picked = selection?.ids.has(id) ?? false;
     const shelf = byId.get(id)?.shelf;
     return (
       <Pill
         key={id}
         pressed={picked}
-        /*
-          追加済みで外す先が無いときは、**押せない札として出す**（ボタンにしない）。
-          無効なボタンは薄くなるだけで形は押せるものと同じなので、指が伸びる。
-          ここは操作ではなく状態（`Pill` は `onClick` が無ければ `<span>` になる）。
-
-          いまのところ `selectedIds` を渡すのは外せる呼び出し側だけなので、
-          この枝には入らない。**入らないことを形で保つ**ための書き方。
-        */
-        onClick={
-          picked && onToggle == null
-            ? undefined
-            : () =>
-                picked
-                  ? onToggle?.(id)
-                  : onAdd([fromCatalog(c.entry, exercises.length, c.implement)])
+        onClick={() =>
+          picked && selection
+            ? selection.onToggle(id)
+            : onAdd([fromCatalog(c.entry, exercises.length, c.implement)])
         }
       >
         {picked ? '✓ ' : '＋ '}

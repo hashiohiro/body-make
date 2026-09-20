@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { Meter } from '../Meter';
 import { Tag } from '../Tag';
 import s from './training.module.scss';
 
@@ -13,11 +12,8 @@ interface Props {
   kind?: string | null;
   /** 目標の値。**必ず「目標」と書いてから出す**（数字だけだと何の数字か読めない） */
   goal?: string | null;
-  /** 0〜1 の到達率。null ならメーターを出さない */
-  progress?: number | null;
-  /** その画面が持つ事実。左が主、右が従（従は無くてもよい） */
+  /** その画面が持つ事実（記録日数など） */
   factLeft: ReactNode;
-  factRight?: ReactNode;
   /** 下に並べる入口。画面ごとに違うのはここだけ */
   actions: ReactNode;
   /** 開いたときのフォーム（目標の編集・種目の詳細設定） */
@@ -39,9 +35,7 @@ export function ExerciseSummaryCard({
   tag,
   kind,
   goal,
-  progress = null,
   factLeft,
-  factRight,
   actions,
   children,
 }: Props) {
@@ -54,11 +48,8 @@ export function ExerciseSummaryCard({
         {goal && <Tag kind="chosen">目標 {goal}</Tag>}
       </div>
 
-      {progress != null && <Meter value={progress} label={`${name}の到達率`} block />}
-
       <div className={s.goalFoot}>
         <span>{factLeft}</span>
-        {factRight != null && <span>{factRight}</span>}
       </div>
 
       <div className={s.itemActions}>{actions}</div>

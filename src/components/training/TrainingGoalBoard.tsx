@@ -13,7 +13,7 @@ interface Props {
   onSetGroupGoal: (group: MuscleGroup, target: GroupTarget | null) => void;
   onUpdate: (exercise: Exercise) => void;
   /** マイ種目が空のとき、そこへ行くための導線（画面をまたぐので上から渡す） */
-  onOpenExercises?: (() => void) | undefined;
+  onOpenExercises: () => void;
 }
 
 /**
