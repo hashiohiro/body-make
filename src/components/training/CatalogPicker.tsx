@@ -120,9 +120,21 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selectedIds, onToggle
       <Pill
         key={id}
         pressed={picked}
-        disabled={picked && onToggle == null}
-        onClick={() =>
-          picked ? onToggle?.(id) : onAdd([fromCatalog(c.entry, exercises.length, c.implement)])
+        /*
+          追加済みで外す先が無いときは、**押せない札として出す**（ボタンにしない）。
+          無効なボタンは薄くなるだけで形は押せるものと同じなので、指が伸びる。
+          ここは操作ではなく状態（`Pill` は `onClick` が無ければ `<span>` になる）。
+
+          いまのところ `selectedIds` を渡すのは外せる呼び出し側だけなので、
+          この枝には入らない。**入らないことを形で保つ**ための書き方。
+        */
+        onClick={
+          picked && onToggle == null
+            ? undefined
+            : () =>
+                picked
+                  ? onToggle?.(id)
+                  : onAdd([fromCatalog(c.entry, exercises.length, c.implement)])
         }
       >
         {picked ? '✓ ' : '＋ '}

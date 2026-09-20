@@ -180,7 +180,16 @@ function empty(data: AppData): Derived {
     weeklySets: [],
     trainingStats: computeTrainingStats([]),
     checkHistory: buildCheckHistory([], data.exercises),
-    trainingGoals: exerciseGoals([], []),
+    /*
+     * **目標は記録の有無に依らない。**種目に付いている値なので、
+     * 記録が 1 件も無くても決めてある目標はそのまま出す。
+     *
+     * ここに空の配列を渡していたせいで、**記録を始める前に決めた目標が
+     * 画面から消えていた**（目標を足した直後、一覧は空のままなのに
+     * 「すべてのマイ種目に目標を決めています」と出る、という食い違いになる）。
+     * すぐ上の `buildCheckHistory` は種目を渡しているのに、ここだけ抜けていた。
+     */
+    trainingGoals: exerciseGoals([], data.exercises.filter(isListed)),
   };
 }
 

@@ -291,6 +291,12 @@ export function PresetManager({
 
       {creating && (
         <div className={s.presetBlock}>
+          {/* 押せない理由は**確定ボタンの上**。押したあとの位置に置かない */}
+          {newTaken && <p className={ui.note}>同じ名前のプリセットがあります。</p>}
+          {creating.exerciseIds.length === 0 && (
+            <p className={ui.note}>種目を 1 つ以上入れてください。</p>
+          )}
+
           <NameEntryRow
             value={creating.name}
             onChange={(name) => setCreating({ ...creating, name })}
@@ -305,13 +311,7 @@ export function PresetManager({
             onCancel={() => setCreating(null)}
           />
 
-          {newTaken && <p className={ui.note}>同じ名前のプリセットがあります。</p>}
-
           <div className={s.presetBody}>
-            {creating.exerciseIds.length === 0 && (
-              <p className={ui.note}>種目を 1 つ以上入れてください。</p>
-            )}
-
             {list(
               DRAFT,
               '新しいプリセット',
@@ -380,6 +380,10 @@ export function PresetManager({
           )
         : presets.map((preset) => (
             <div key={preset.id} className={s.presetBlock}>
+              {/* 押せない理由は**確定ボタンの上**（作成側と同じ並び） */}
+              {renaming === preset.id && taken && (
+                <p className={ui.note}>同じ名前のプリセットがあります。</p>
+              )}
               {renaming === preset.id ? (
                 <NameEntryRow
                   value={draft}
@@ -413,10 +417,6 @@ export function PresetManager({
                     ×
                   </MiniButton>
                 </div>
-              )}
-
-              {renaming === preset.id && taken && (
-                <p className={ui.note}>同じ名前のプリセットがあります。</p>
               )}
 
               {/* 中身。名前と部位だけでは、どの種目が入っているかまでは思い出せない */}

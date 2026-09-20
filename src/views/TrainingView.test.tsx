@@ -6401,14 +6401,22 @@ describe('種目の目標を追加できないとき', () => {
     expect(screen.getByText(/マイ種目がまだ空です/)).toBeTruthy();
   });
 
-  /* こちらは行き先が無いので、無効のまま理由だけ出す */
-  it('すべてに目標を決め終えたら、無効の理由を書く', () => {
+  /*
+   * 完了状態では**押せないボタンを置かない**。灰色のボタンは「薄いだけの
+   * 押せるもの」に見えて、押して初めて反応しないと分かる。
+   * 進む道（マイ種目を増やす）は、行き先が違うので同じ位置・同じ形にはしない。
+   */
+  it('すべてに目標を決め終えたら、ボタンを出さずに理由と行き先を書く', () => {
     seedExercise({ goal: { type: 'weight', value: 100 } });
-    render(<GoalsHarness />);
+    const onOpenExercises = vi.fn();
+    render(<GoalsHarness onOpenExercises={onOpenExercises} />);
 
-    const btn = screen.getByRole('button', { name: /種目の目標を追加/ }) as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: /種目の目標を追加/ })).toBeNull();
     expect(screen.getByText(/すべてのマイ種目に目標を決めています/)).toBeTruthy();
+
+    // 進む道はリンクの姿で添える（目立つボタンにはしない）
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目を開く' }));
+    expect(onOpenExercises).toHaveBeenCalled();
   });
 
   it('候補があるときは、これまでどおり押せる', () => {
@@ -6417,6 +6425,7 @@ describe('種目の目標を追加できないとき', () => {
 
     const btn = screen.getByRole('button', { name: /種目の目標を追加/ }) as HTMLButtonElement;
     expect(btn.disabled).toBe(false);
+    expect(screen.queryByRole('button', { name: 'マイ種目を開く' })).toBeNull();
     expect(screen.queryByText(/すべてのマイ種目に目標を決めています/)).toBeNull();
     expect(screen.queryByText(/マイ種目がまだ空です/)).toBeNull();
   });
@@ -6482,5 +6491,42 @@ describe('プリセットの最後の1種目', () => {
     fireEvent.click(screen.getByRole('button', { name: 'プリセットごと削除' }));
 
     expect(screen.getByText(/まだプリセットがありません/)).toBeTruthy();
+  });
+});
+
+/**
+ * 目標を足した直後に一覧へ出ること。**記録が 1 件も無くても出る。**
+ * 以前は「まだ目標がありません」と出たまま、ボタンだけが無効になっていた。
+ */
+describe('目標を足した直後', () => {
+  function GoalsHarness() {
+    const body = useBodyData(seeded);
+    return <GoalsView body={body} domain="training" onOpenExercises={() => {}} />;
+  }
+
+  it('記録が無くても、足した目標が一覧に出る', () => {
+    const ex = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
+    seedRaw({ version: 7, settings: {}, entries: {}, exercises: [ex], workouts: {} });
+    render(<GoalsHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: /種目の目標を追加/ }));
+    const dialog = () => within(document.querySelector('dialog')!);
+
+    fireEvent.click(dialog().getByText('ベンチプレス（バーベル）'));
+    fireEvent.click(dialog().getByRole('button', { name: '重量' }));
+
+    const field = dialog().getByLabelText(/の目標$/);
+    fireEvent.change(field, { target: { value: '100' } });
+    fireEvent.blur(field);
+    fireEvent.click(dialog().getByRole('button', { name: '閉じる' }));
+
+    // 一覧に出る。「まだ目標がありません」は消える
+    expect(screen.queryByText(/まだ目標がありません/)).toBeNull();
+    expect(screen.getAllByText(/100\.0 kg/).length).toBeGreaterThan(0);
+    // 候補が無くなったので、理由付きで無効になる
+    expect(screen.getByText(/すべてのマイ種目に目標を決めています/)).toBeTruthy();
   });
 });

@@ -222,33 +222,53 @@ export function ExerciseGoalsCard({
           })
         )}
 
-        <div className={ui.btnRow}>
-          {/* まだ 1 つも無いときだけ勧める。並んでからは地の姿に戻す */}
-          {noListed && onOpenExercises ? (
-            <Button tone="primary" onClick={onOpenExercises}>
-              ＋ マイ種目に種目を追加
-            </Button>
+        {/*
+          **押せないボタンは置かない。**
+
+          3 つの状態がある。**未着手**（マイ種目が空）はやることが 1 つしかないので、
+          その入口を目立たせる。**続きがある**（候補が残っている）は今までどおり。
+          **完了**（ぜんぶ決めた）は、できることが無いのだからボタンを出さない——
+          灰色のボタンは「薄いだけの押せるもの」に見えて、押して初めて反応しないと分かる。
+
+          完了でも進む道はある（マイ種目を増やす）。ただしそれは
+          「目標を追加」とは別の行き先なので、**同じ位置に同じ形では置かない。**
+          押し間違えると、目標を足すつもりで設定へ飛ばされる。文章の続きとして、
+          行き先が読めるリンクの姿で添える。
+        */}
+        {noListed ? (
+          onOpenExercises ? (
+            <div className={ui.btnRow}>
+              <Button tone="primary" onClick={onOpenExercises}>
+                ＋ マイ種目に種目を追加
+              </Button>
+            </div>
           ) : (
+            <p className={ui.note}>
+              マイ種目がまだ空です（設定 &gt; トレーニング &gt; マイ種目）。
+            </p>
+          )
+        ) : withoutGoal.length === 0 ? (
+          <>
+            <p className={ui.note}>
+              すべてのマイ種目に目標を決めています。種目を増やすと、その目標も決められます。
+            </p>
+            {onOpenExercises && (
+              <div className={ui.detailRow}>
+                <button type="button" className={ui.detailBtn} onClick={onOpenExercises}>
+                  マイ種目を開く
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className={ui.btnRow}>
             <Button
               tone={goals.length === 0 ? 'primary' : undefined}
-              disabled={withoutGoal.length === 0}
               onClick={() => setPicking(true)}
             >
               ＋ 種目の目標を追加
             </Button>
-          )}
-        </div>
-
-        {/*
-          押せない理由は必ず添える。**無言で無効にしない。**
-          マイ種目が空のときは上が入口に変わっているので、残るのは
-          「決め終えている」ほうだけ——こちらは行き先が無いので文章で足りる。
-        */}
-        {noListed && !onOpenExercises && (
-          <p className={ui.note}>マイ種目がまだ空です（設定 &gt; トレーニング &gt; マイ種目）。</p>
-        )}
-        {!noListed && withoutGoal.length === 0 && (
-          <p className={ui.note}>すべてのマイ種目に目標を決めています。</p>
+          </div>
         )}
 
         {/* 更新と停滞はどちらも種目ごとの話。目標を持たない種目も含むので、行には出せない */}

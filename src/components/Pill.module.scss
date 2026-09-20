@@ -15,14 +15,12 @@
   min-height: var(--tap-row);
 
   /* 選択中は他のトグルと同じアクセント。記号を足さなくても選択が分かる */
-  &[aria-pressed='true'] {
+  /* `data-picked` は押せない札（状態だけを出すもの）の側。見え方は揃える */
+  &[aria-pressed='true'],
+  &[data-picked='true'] {
     border-color: var(--accent);
     background: var(--accent-soft);
     color: var(--accent);
-  }
-
-  &:disabled {
-    opacity: 0.4;
   }
 
   /*

@@ -113,13 +113,14 @@ export function CustomExerciseForm({ exercises, onCreate }: Props) {
         />
       )}
 
+      {/* 押せない理由は**ボタンの上**。押したあとの位置に置くと、押してから探すことになる */}
+      {taken && <p className={ui.note}>同じ名前の種目があります（非表示のものも含みます）。</p>}
+
       <div className={ui.btnRow}>
         <Button tone="primary" size="sub" disabled={name === '' || taken} onClick={submit}>
           追加
         </Button>
       </div>
-
-      {taken && <p className={ui.note}>同じ名前の種目があります（非表示のものも含みます）。</p>}
 
       <p className={ui.note}>
         名前と部位だけで作れます。触らなければ「ウエイト1つ」「回で数える」になり、

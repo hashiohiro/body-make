@@ -69,7 +69,19 @@ function entriesOf(days: number, seed: number, gapRate = 0.2): Entries {
   return out;
 }
 
-const EXERCISES = CATALOG.slice(0, 12).map((c, i) => fromCatalog(c, i));
+/*
+ * 生成データの種目。**一部に目標を付けておく。**
+ *
+ * 目標は記録の有無に依らない値（種目に付いている）なのに、生成データの種目に
+ * 1 つも目標が無かったため、**記録が 0 件のとき目標が落ちる不具合を
+ * 一致テストが素通ししていた**。以後どの一致テストでも目標の導出を通す。
+ */
+const EXERCISES = CATALOG.slice(0, 12).map((c, i) => {
+  const exercise = fromCatalog(c, i);
+  if (i % 4 === 0) return { ...exercise, goal: { type: 'weight' as const, value: 100 + i } };
+  if (i % 4 === 1) return { ...exercise, goal: { type: 'maintain' as const, value: null } };
+  return exercise;
+});
 
 /** 週 3 回・1 回 3 種目 × 3 セット。自重種目も混ぜて体重への依存を通す */
 function workoutsOf(days: number, seed: number): Workouts {
@@ -395,6 +407,42 @@ describe('腹囲は記録として数えない', () => {
     expect(stats.waistDelta).toBeCloseTo(-2.3, 10);
     // 体重は動かしていないので、そちらの開始比は 0
     expect(stats.weightDelta).toBe(0);
+    expect(inc(data)).toEqual(full(data));
+  });
+});
+
+/**
+ * **目標は記録の有無に依らない。**種目に付いている値なので、記録が 1 件も
+ * 無くても決めてある目標はそのまま出す。
+ *
+ * 記録が 0 件のときの早道（`deriveAll` の早期リターン）に空の配列を渡していて、
+ * **記録を始める前に決めた目標が画面から消えていた**。増分と全計算の一致テストは
+ * 通っていた——生成データの種目に目標が 1 つも付いていなかったため。
+ */
+describe('記録が無くても目標は残る', () => {
+  /** この describe だけは種目を自前で組む（共有の EXERCISES は目標付きが混ざる） */
+  const only = (goal: unknown, shelf: 'listed' | 'adhoc' = 'listed') => {
+    const base = fromCatalog(CATALOG[0]!, 0);
+    return { ...dataOf({}), exercises: [{ ...base, shelf, goal }] } as AppData;
+  };
+
+  it('記録が 1 件も無くても、決めた目標が出る', () => {
+    const { trainingGoals } = inc(only({ type: 'weight', value: 100 }));
+    expect(trainingGoals).toHaveLength(1);
+    expect(trainingGoals[0]!.target).toBe(100);
+    // 記録が無いので、いまの値と到達率は出しようがない
+    expect(trainingGoals[0]!.current).toBeNull();
+  });
+
+  it('記録が無いときも、増分と全計算が一致する', () => {
+    const data = only({ type: 'weight', value: 100 });
+    expect(inc(data)).toEqual(full(data));
+  });
+
+  /** 伏せた種目・マイ種目に入れていない種目は、これまでどおり目標に出さない */
+  it('マイ種目に無い種目の目標は出さない', () => {
+    const data = only({ type: 'weight', value: 100 }, 'adhoc');
+    expect(inc(data).trainingGoals).toHaveLength(0);
     expect(inc(data)).toEqual(full(data));
   });
 });
