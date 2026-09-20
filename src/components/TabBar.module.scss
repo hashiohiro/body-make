@@ -24,6 +24,14 @@
   @include opaque-surface;
 }
 
+/*
+ * `display: flex` を持っているので、`hidden` 属性だけでは消えない
+ * （UA の `[hidden] { display: none }` に勝ってしまう）。ここで明示的に落とす。
+ */
+.tabs[hidden] {
+  display: none;
+}
+
 .tab {
   /*
    * 狭い画面では均等に広がり、広い画面では 120px で止まる。

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import s from './Modal.module.scss';
 
@@ -71,26 +71,53 @@ export function Modal({ open, title, onClose, onBack, tall, children }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
-  useEffect(() => {
+  /*
+   * **`useLayoutEffect` で持つ。**
+   *
+   * 後始末（下の戻り値）を **DOM から外れる前に** 走らせる必要がある。
+   * 通常の `useEffect` の後始末は要素が外されたあとに呼ばれるので、
+   * そのとき `close()` してもトップレイヤーからは抜けられない。
+   */
+  useLayoutEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
 
-    if (open) {
-      // showModal を持たない環境（テスト用の DOM 実装など）でも中身は出す
-      if (typeof dialog.showModal === 'function') {
-        try {
-          if (!dialog.open) dialog.showModal();
-        } catch {
-          dialog.setAttribute('open', '');
-        }
-      } else {
-        dialog.setAttribute('open', '');
-      }
-    } else if (dialog.open) {
+    const shut = () => {
+      if (!dialog.open) return;
       // 開く側と同じく、close を持たない環境でも閉じられるようにする
       if (typeof dialog.close === 'function') dialog.close();
       else dialog.removeAttribute('open');
+    };
+
+    if (!open) {
+      shut();
+      return;
     }
+
+    // showModal を持たない環境（テスト用の DOM 実装など）でも中身は出す
+    if (typeof dialog.showModal === 'function') {
+      try {
+        if (!dialog.open) dialog.showModal();
+      } catch {
+        dialog.setAttribute('open', '');
+      }
+    } else {
+      dialog.setAttribute('open', '');
+    }
+
+    /*
+     * **開いたまま外されることがある。必ず閉じてから外す。**
+     *
+     * 呼び出し側は `{条件 && <Modal open … />}` の形で置いている
+     * （消す前の確認・セット入力・種目の目標・プリセット・記録の移行）。
+     * 答えた瞬間に条件が false になるので、`open` が true のまま要素ごと消える。
+     *
+     * `showModal()` で開いた `<dialog>` はトップレイヤーに入り、背面を
+     * 操作不能（inert）にする。閉じずに外すとその後始末が走らず、
+     * **見た目はふつうなのに、どこを押しても反応しない**状態が残る。
+     * 記録中はセットを 1 本消すたびにこの経路を通る。
+     */
+    return shut;
   }, [open]);
 
   // 開いたまま外されることがある（呼び出し側が開いているときだけ置く形）ので、
@@ -111,8 +138,39 @@ export function Modal({ open, title, onClose, onBack, tall, children }: Props) {
       ref={ref}
       className={`${s.dialog} ${tall ? s.tall : ''}`}
       aria-labelledby={titleId}
-      onCancel={onBack ?? onClose}
-      onClose={onBack ?? onClose}
+      /*
+        **`close` イベントは聞かない。`cancel` だけにする。**
+
+        `close` は `dialog.close()` を呼んだときにも飛ぶ——つまり**こちらが
+        閉じたとき**にも飛ぶ。そこから `onClose` を呼び返すと輪になる:
+
+          開く → （下の後始末が）閉じる → close が飛ぶ → onClose →
+          呼び出し側が state を落とす → 開いたはずの面が消える
+
+        実際 StrictMode（開発時は effect が 作る→捨てる→作る の順で走る）では、
+        カードのボタンを押しても面が出ないところまで行った。
+        本番でも「開いたまま外す」たびに、外れていく側の state を触り続けることになる。
+
+        `cancel` は **利用者が閉じようとしたときだけ**飛ぶ（Esc）。
+        こちらからの `close()` では飛ばないので、呼び返す先はこれで足りる。
+        「閉じる」ボタンは下で直接 `onClose` を呼んでいる。
+      */
+      onCancel={(e) => {
+        /*
+          **Esc でブラウザに閉じさせない。**閉じるかどうかはこちらで決める。
+
+          既定のままだと、DOM の `<dialog>` だけが閉じて React の `open` は
+          true のまま残る経路がある——戻り先を持つ面（`onBack`）は、Esc を
+          「一段戻る」として受けるので面そのものは開いたままにしたい。
+          そこでブラウザに閉じられると、**閉じたのに開いているつもり**になり、
+          もう一度開こうとしても state が変わらないので二度と出てこない。
+
+          止めたうえでハンドラを呼べば、閉じる側は state が落ちて上の effect が
+          閉じ、戻る側は面を保ったまま中身だけが入れ替わる。
+        */
+        e.preventDefault();
+        (onBack ?? onClose)();
+      }}
     >
       <div className={s.head}>
         {onBack && (

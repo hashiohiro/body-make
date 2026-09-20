@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useKeyboardOpen } from '../hooks/useKeyboardOpen';
 import s from './TabBar.module.scss';
 
 export type TabId = 'home' | 'goals' | 'records' | 'settings';
@@ -48,11 +49,23 @@ interface Props {
   onChange: (tab: TabId) => void;
 }
 
+/**
+ * 画面下のタブバー。
+ *
+ * **キーボードが出ているあいだは引っ込める。**iOS はキーボードでレイアウトビューポートを
+ * 変えないので、`position: fixed; bottom: 0` のままだとバーがキーボードの上——
+ * 見た目には画面の真ん中——に現れる（`useKeyboardOpen`）。
+ *
+ * 位置を追従させるのではなく消すほうを採った。追従は 1 フレーム遅れてガタつくうえ、
+ * **打っている最中に画面を移りたい人はいない。**打ち終えて閉じれば戻ってくる。
+ */
 export function TabBar({ active, onChange }: Props) {
+  const typing = useKeyboardOpen();
+
   return (
     // data-tabbar は高さを測るための目印。＋ボタンをこのバーの上に留めるのに使う
     // （useFabPosition。--tab-h だけだと safe-area のぶんを見落とす）
-    <nav data-tabbar="" className={s.tabs} role="tablist" aria-label="画面切り替え">
+    <nav data-tabbar="" className={s.tabs} role="tablist" aria-label="画面切り替え" hidden={typing}>
       {ORDER.map((id) => (
         <button
           key={id}
