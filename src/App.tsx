@@ -236,7 +236,14 @@ export function App({ initial }: AppProps) {
             />
           )}
 
-          {route.tab === 'goals' && <GoalsView body={body} domain={domain} />}
+          {route.tab === 'goals' && (
+            <GoalsView
+              body={body}
+              domain={domain}
+              // マイ種目が空だと目標は 1 つも決められない。その入口だけ目標側に出す
+              onOpenExercises={() => open('settings', 'training', 'exercises')}
+            />
+          )}
 
           {route.tab === 'records' && (
             <RecordsView body={body} date={date} onDateChange={setDate} domain={domain} />

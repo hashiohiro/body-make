@@ -19,3 +19,25 @@ export function removePresetRequest(preset: Preset, onRemove: () => void): Confi
     onConfirm: onRemove,
   };
 }
+
+/**
+ * 最後の 1 種目を外そうとしたときの問い。**それはプリセットを消すのと同じこと。**
+ *
+ * 中身を並べた一覧からも、種目を選ぶ面（✓ を外す）からも同じ操作になるので、
+ * 問いもここで 1 つにする。以前は選ぶ面のほうだけ **無言で押せなくして**いて、
+ * 押しても何も起きない ✓ が残っていた（理由はコードのコメントにしか無かった）。
+ */
+export function dropLastExerciseRequest(
+  preset: Preset,
+  exerciseName: string,
+  onRemove: () => void,
+): ConfirmRequest {
+  return {
+    title: 'プリセットごと削除しますか？',
+    subject: preset.name,
+    note: `「${exerciseName}」を外すと種目が無くなります。記録は消えません。`,
+    confirmLabel: 'プリセットごと削除',
+    destructive: true,
+    onConfirm: onRemove,
+  };
+}

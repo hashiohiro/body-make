@@ -5,7 +5,7 @@ import { ExercisePickList } from './ExercisePickList';
 import { OrderList } from './OrderList';
 import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
-import { removePresetRequest } from './presetConfirm';
+import { dropLastExerciseRequest, removePresetRequest } from './presetConfirm';
 import { GROUP_LABELS, groupsOf, isListed } from '../../lib/exerciseCatalog';
 import { PRESET_NAME_MAX } from '../../lib/storage';
 import type { Exercise, Preset } from '../../types';
@@ -29,6 +29,14 @@ interface PickDialogProps {
   label: string;
   onToggle: (id: string) => void;
   /**
+   * 最後の 1 つの ✓ を外そうとしたとき。**渡されたらこちらが呼ばれる。**
+   *
+   * 既にあるプリセットでは、それはプリセットを消すのと同じことなので聞く
+   * （中身の一覧から外すときと同じ問い）。作りかけの下書きは保存前なので
+   * 渡さない——0 件になっても消えるものが無い。
+   */
+  onRemoveLast?: ((id: string) => void) | undefined;
+  /**
    * カタログ（と自作）から種目を増やす。**マイ種目とこの組み合わせの両方に入れる。**
    * マイ種目へ入れるだけだと、戻ってもう一度選び直すことになる。
    */
@@ -50,6 +58,7 @@ function PickDialog({
   selected,
   label,
   onToggle,
+  onRemoveLast,
   onAddExercises,
   onClose,
 }: PickDialogProps) {
@@ -113,9 +122,15 @@ function PickDialog({
                 <Pill
                   key={e.id}
                   pressed={used}
-                  // 最後の 1 つを外すのは削除と同じ意味になるので、ここでは受け付けない
-                  disabled={used && selected.size === 1}
-                  onClick={() => onToggle(e.id)}
+                  /*
+                    最後の 1 つを外すのは、プリセットを消すのと同じこと。
+                    **無言で押せなくしない**——中身の一覧と同じように、そう書いて聞く。
+                  */
+                  onClick={() =>
+                    used && selected.size === 1 && onRemoveLast
+                      ? onRemoveLast(e.id)
+                      : onToggle(e.id)
+                  }
                 >
                   {used ? '✓ ' : '＋ '}
                   {e.name}
@@ -207,17 +222,13 @@ export function PresetManager({
   // 聞き方は記録画面のプリセットと同じ（presetConfirm）
   const remove = (preset: Preset) => ask(removePresetRequest(preset, () => onRemove(preset.id)));
 
+  /** 最後の 1 つを外すのは削除と同じ。問いは中身の一覧と選ぶ面で共有する */
+  const askDropLast = (preset: Preset, exerciseId: string) =>
+    ask(dropLastExerciseRequest(preset, nameOf(exerciseId), () => onRemove(preset.id)));
+
   const drop = (preset: Preset, exerciseId: string) => {
-    // 最後の 1 つを外すのは、プリセットを消すのと同じこと。そう書いて聞く
     if (preset.exerciseIds.length === 1) {
-      ask({
-        title: 'プリセットごと削除しますか？',
-        subject: preset.name,
-        note: `「${nameOf(exerciseId)}」を外すと種目が無くなります。記録は消えません。`,
-        confirmLabel: 'プリセットごと削除',
-        destructive: true,
-        onConfirm: () => onRemove(preset.id),
-      });
+      askDropLast(preset, exerciseId);
       return;
     }
     onUpdate({ ...preset, exerciseIds: preset.exerciseIds.filter((id) => id !== exerciseId) });
@@ -431,6 +442,7 @@ export function PresetManager({
                           : [...preset.exerciseIds, id],
                       })
                     }
+                    onRemoveLast={(id) => askDropLast(preset, id)}
                     onAddExercises={(added) => {
                       onAddExercises(added);
                       const ids = added

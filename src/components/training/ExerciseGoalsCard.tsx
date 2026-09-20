@@ -32,6 +32,13 @@ interface Props {
   sessions: readonly SessionPoint[];
   stats: TrainingStats;
   onUpdate: (exercise: Exercise) => void;
+  /**
+   * マイ種目の画面へ行く。**マイ種目が空のときだけ使う。**
+   *
+   * 渡さなければ、これまでどおり案内の文章だけになる
+   * （ホームの「記録する」「推移を見る」と同じ、画面をまたぐ導線の作法）。
+   */
+  onOpenExercises?: (() => void) | undefined;
 }
 
 /**
@@ -47,7 +54,14 @@ interface Props {
  * 1 種目 2 行。1 行目に名前と立て方、2 行目に「いま → 目標」とバー。
  * 決めるのは行を押した先のダイアログで、この面は読むことに専念させる。
  */
-export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate }: Props) {
+export function ExerciseGoalsCard({
+  goals,
+  exercises,
+  sessions,
+  stats,
+  onUpdate,
+  onOpenExercises,
+}: Props) {
   // 目標は kg で導出されている。出す直前に読む単位へ直す
   const shown = useGoalUnit();
   /** 開いている種目。目標を決める面と、種目そのものの設定の面を持つ */
@@ -79,6 +93,16 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
       const gb = order.get(b.group) ?? 99;
       return ga === gb ? a.order - b.order : ga - gb;
     });
+
+  /*
+   * マイ種目が 1 つも無い状態。**ここでは目標を決めようがない。**
+   *
+   * 以前は「種目を選ぶと決められます」と誘っておきながらボタンは無効で、
+   * 理由（マイ種目が空）は**押したあとの位置**に小さく置いてあった。
+   * 押して初めて何かおかしいと気づき、そこから理由を探すことになる。
+   * 行き先があるのだから、死んだボタンではなく **そこへの入口** を出す。
+   */
+  const noListed = !exercises.some(isListed);
 
   const openExercise = openId ? (byId.get(openId) ?? null) : null;
   const pickedExercise = picked ? (byId.get(picked) ?? null) : null;
@@ -166,9 +190,19 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
 
         {sorted.length === 0 ? (
           <p className={ui.emptyState}>
-            まだ目標がありません。
-            <br />
-            種目を選ぶと、いまの値を見ながら決められます。
+            {noListed ? (
+              <>
+                マイ種目がまだ空です。
+                <br />
+                種目を手元に入れると、そこから目標を決められます。
+              </>
+            ) : (
+              <>
+                まだ目標がありません。
+                <br />
+                種目を選ぶと、いまの値を見ながら決められます。
+              </>
+            )}
           </p>
         ) : (
           /*
@@ -190,17 +224,31 @@ export function ExerciseGoalsCard({ goals, exercises, sessions, stats, onUpdate 
 
         <div className={ui.btnRow}>
           {/* まだ 1 つも無いときだけ勧める。並んでからは地の姿に戻す */}
-          <Button
-            tone={goals.length === 0 ? 'primary' : undefined}
-            disabled={withoutGoal.length === 0}
-            onClick={() => setPicking(true)}
-          >
-            ＋ 種目の目標を追加
-          </Button>
+          {noListed && onOpenExercises ? (
+            <Button tone="primary" onClick={onOpenExercises}>
+              ＋ マイ種目に種目を追加
+            </Button>
+          ) : (
+            <Button
+              tone={goals.length === 0 ? 'primary' : undefined}
+              disabled={withoutGoal.length === 0}
+              onClick={() => setPicking(true)}
+            >
+              ＋ 種目の目標を追加
+            </Button>
+          )}
         </div>
 
-        {withoutGoal.length === 0 && goals.length === 0 && (
+        {/*
+          押せない理由は必ず添える。**無言で無効にしない。**
+          マイ種目が空のときは上が入口に変わっているので、残るのは
+          「決め終えている」ほうだけ——こちらは行き先が無いので文章で足りる。
+        */}
+        {noListed && !onOpenExercises && (
           <p className={ui.note}>マイ種目がまだ空です（設定 &gt; トレーニング &gt; マイ種目）。</p>
+        )}
+        {!noListed && withoutGoal.length === 0 && (
+          <p className={ui.note}>すべてのマイ種目に目標を決めています。</p>
         )}
 
         {/* 更新と停滞はどちらも種目ごとの話。目標を持たない種目も含むので、行には出せない */}

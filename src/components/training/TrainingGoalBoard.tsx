@@ -12,6 +12,8 @@ interface Props {
   sessions: readonly SessionPoint[];
   onSetGroupGoal: (group: MuscleGroup, target: GroupTarget | null) => void;
   onUpdate: (exercise: Exercise) => void;
+  /** マイ種目が空のとき、そこへ行くための導線（画面をまたぐので上から渡す） */
+  onOpenExercises?: (() => void) | undefined;
 }
 
 /**
@@ -35,6 +37,7 @@ export function TrainingGoalBoard({
   sessions,
   onSetGroupGoal,
   onUpdate,
+  onOpenExercises,
 }: Props) {
   return (
     <>
@@ -52,6 +55,7 @@ export function TrainingGoalBoard({
         sessions={sessions}
         stats={stats}
         onUpdate={onUpdate}
+        onOpenExercises={onOpenExercises}
       />
     </>
   );

@@ -7,6 +7,12 @@ interface Props {
   body: BodyData;
   /** 体組成／トレーニングの切り替えはヘッダが持つ */
   domain: Domain;
+  /**
+   * マイ種目の画面へ行く。**マイ種目が空だと目標は 1 つも決められない**ので、
+   * そのときだけ目標カードが入口を出す（ホームの「記録する」と同じ作法で、
+   * 画面をまたぐ移動はルートを持つ App から渡す）。
+   */
+  onOpenExercises: () => void;
 }
 
 /**
@@ -16,7 +22,7 @@ interface Props {
  * 「あと 3.2kg」を見る場所と決め直す場所が離れたままになる。
  * 設定に残すのは、滅多に変えない定義（種目そのもの・表示・データ）だけ。
  */
-export function GoalsView({ body, domain }: Props) {
+export function GoalsView({ body, domain, onOpenExercises }: Props) {
   const {
     data,
     stats,
@@ -39,6 +45,7 @@ export function GoalsView({ body, domain }: Props) {
         sessions={sessions}
         onSetGroupGoal={setGroupGoal}
         onUpdate={upsertExercise}
+        onOpenExercises={onOpenExercises}
       />
     );
   }

@@ -3555,7 +3555,7 @@ describe('ホームの部位別の配分', () => {
 describe('目標画面', () => {
   function GoalsHarness({ domain = 'body' as Domain }) {
     const body = useBodyData(seeded);
-    return <GoalsView body={body} domain={domain} />;
+    return <GoalsView body={body} domain={domain} onOpenExercises={() => {}} />;
   }
 
   it('目標体重は目標画面の中で決められる（設定タブへ飛ばさない）', () => {
@@ -3638,7 +3638,7 @@ describe('目標画面', () => {
 
     function Harness() {
       const body = useBodyData(seeded);
-      return <GoalsView body={body} domain="training" />;
+      return <GoalsView body={body} domain="training" onOpenExercises={() => {}} />;
     }
 
     render(<Harness />);
@@ -3737,7 +3737,7 @@ describe('目標画面', () => {
 
     function Harness() {
       const body = useBodyData(seeded);
-      return <GoalsView body={body} domain="training" />;
+      return <GoalsView body={body} domain="training" onOpenExercises={() => {}} />;
     }
     render(<Harness />);
 
@@ -3787,7 +3787,7 @@ describe('目標画面', () => {
 
     function Harness() {
       const body = useBodyData(seeded);
-      return <GoalsView body={body} domain="training" />;
+      return <GoalsView body={body} domain="training" onOpenExercises={() => {}} />;
     }
     render(<Harness />);
 
@@ -4231,19 +4231,20 @@ describe('プリセット（設定から見る・編集する）', () => {
     fireEvent.click(dialog().getByText(/^＋ ベンチプレス/));
     expect(dialog().getByText(/^✓ ベンチプレス/)).toBeTruthy();
 
-    // 最後の 1 つを外すのは削除と同じ意味なので、ここでは受け付けない
-    expect(
+    /*
+     * **作りかけは 0 件になってよい。**保存前なので、最後の 1 つを外しても
+     * 消えるものが無い（足りないことは「種目を 1 つ以上入れてください」が言う）。
+     * 聞くのは、すでにあるプリセットから外すときだけ。
+     */
+    const benchPill = () =>
       dialog()
-        .getByText(/^✓ ベンチプレス/)
-        .closest('button')!.disabled,
-    ).toBe(true);
+        .getByText(/ ベンチプレス/)
+        .closest('button')!;
+    expect(benchPill().disabled).toBe(false);
 
-    fireEvent.click(dialog().getByText(/^＋ スクワット/));
-    expect(
-      dialog()
-        .getByText(/^✓ ベンチプレス/)
-        .closest('button')!.disabled,
-    ).toBe(false);
+    fireEvent.click(benchPill());
+    expect(dialog().getByText(/^＋ ベンチプレス/)).toBeTruthy();
+    expect(screen.getByText(/種目を 1 つ以上入れてください/)).toBeTruthy();
   });
 
   it('作りながら、カタログからマイ種目を増やせる', async () => {
@@ -4690,7 +4691,7 @@ describe('モーダル', () => {
 describe('種目の目標を決める', () => {
   function GoalsHarness() {
     const body = useBodyData(seeded);
-    return <GoalsView body={body} domain="training" />;
+    return <GoalsView body={body} domain="training" onOpenExercises={() => {}} />;
   }
 
   /** 種目の目標のカードから、種目を選んで目標を決める */
@@ -5019,7 +5020,7 @@ describe('種目の表示 / 非表示', () => {
 describe('有酸素', () => {
   function GoalsHarness() {
     const body = useBodyData(seeded);
-    return <GoalsView body={body} domain="training" />;
+    return <GoalsView body={body} domain="training" onOpenExercises={() => {}} />;
   }
 
   /** 有酸素の種目と、その記録を持った状態から始める */
@@ -5612,7 +5613,7 @@ describe('種目の絞り込み（部位）', () => {
 
   function GoalsHarness() {
     const body = useBodyData(seeded);
-    return <GoalsView body={body} domain="training" />;
+    return <GoalsView body={body} domain="training" onOpenExercises={() => {}} />;
   }
 
   function ChartsHarness() {
@@ -6355,5 +6356,131 @@ describe('自重種目の計算が読めること', () => {
 
     expect(screen.queryAllByText(/自重 /)).toHaveLength(0);
     expect(screen.getAllByLabelText(/1セット目の重量/).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * 目標は**マイ種目から選ぶ**ので、マイ種目が空だと 1 つも決められない。
+ * 以前は「種目を選ぶと決められます」と誘っておきながらボタンが無効で、
+ * 理由は押したあとの位置に小さく置いてあった。**無言で無効にしない。**
+ */
+describe('種目の目標を追加できないとき', () => {
+  function GoalsHarness({ onOpenExercises = () => {} }: { onOpenExercises?: () => void }) {
+    const body = useBodyData(seeded);
+    return <GoalsView body={body} domain="training" onOpenExercises={onOpenExercises} />;
+  }
+
+  const seedExercise = (opts: { shelf?: string; goal?: unknown } = {}) => {
+    const ex = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      exercises: [{ ...ex, ...opts }],
+      workouts: {},
+    });
+  };
+
+  it('マイ種目が空なら、死んだボタンではなくマイ種目への入口を出す', () => {
+    seedRaw({ version: 7, settings: {}, entries: {}, exercises: [], workouts: {} });
+    const onOpenExercises = vi.fn();
+    render(<GoalsHarness onOpenExercises={onOpenExercises} />);
+
+    // 押せない「目標を追加」は出さない
+    expect(screen.queryByRole('button', { name: /種目の目標を追加/ })).toBeNull();
+
+    const entry = screen.getByRole('button', { name: /マイ種目に種目を追加/ });
+    expect((entry as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(entry);
+    expect(onOpenExercises).toHaveBeenCalled();
+
+    // 誘い文もマイ種目のほうを指す
+    expect(screen.getByText(/マイ種目がまだ空です/)).toBeTruthy();
+  });
+
+  /* こちらは行き先が無いので、無効のまま理由だけ出す */
+  it('すべてに目標を決め終えたら、無効の理由を書く', () => {
+    seedExercise({ goal: { type: 'weight', value: 100 } });
+    render(<GoalsHarness />);
+
+    const btn = screen.getByRole('button', { name: /種目の目標を追加/ }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(screen.getByText(/すべてのマイ種目に目標を決めています/)).toBeTruthy();
+  });
+
+  it('候補があるときは、これまでどおり押せる', () => {
+    seedExercise();
+    render(<GoalsHarness />);
+
+    const btn = screen.getByRole('button', { name: /種目の目標を追加/ }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    expect(screen.queryByText(/すべてのマイ種目に目標を決めています/)).toBeNull();
+    expect(screen.queryByText(/マイ種目がまだ空です/)).toBeNull();
+  });
+});
+
+/**
+ * プリセットの最後の 1 種目を外すのは、プリセットを消すのと同じこと。
+ * **無言で押せなくしない**——中身の一覧と同じように、そう書いて聞く
+ * （以前は種目を選ぶ面だけ `disabled` で、理由はコードのコメントにしか無かった）。
+ */
+describe('プリセットの最後の1種目', () => {
+  function PresetHarness() {
+    const body = useBodyData(seeded);
+    return (
+      <PresetManager
+        presets={body.data.presets}
+        exercises={body.data.exercises}
+        onCreate={body.savePreset}
+        onUpdate={body.updatePreset}
+        onRemove={body.removePreset}
+        onAddExercises={body.addExercises}
+      />
+    );
+  }
+
+  const seedOnePreset = () => {
+    const ex = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      exercises: [ex],
+      workouts: {},
+      presets: [{ id: 'p1', name: '胸の日', exerciseIds: [ex.id] }],
+    });
+  };
+
+  it('選ぶ面で最後の ✓ を外すと、消していいか聞く', () => {
+    seedOnePreset();
+    render(<PresetHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: /種目を足す|中身を変える|編集/ }));
+    const pill = screen.getByRole('button', { name: /✓ ベンチプレス/ }) as HTMLButtonElement;
+
+    // 無言で押せなくしない
+    expect(pill.disabled).toBe(false);
+    fireEvent.click(pill);
+
+    expect(screen.getByText('プリセットごと削除しますか？')).toBeTruthy();
+    // まだ消えていない（聞いているだけ）
+    expect(screen.getAllByText('胸の日').length).toBeGreaterThan(0);
+  });
+
+  it('聞かれて進めば、プリセットごと消える', () => {
+    seedOnePreset();
+    render(<PresetHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: /種目を足す|中身を変える|編集/ }));
+    fireEvent.click(screen.getByRole('button', { name: /✓ ベンチプレス/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットごと削除' }));
+
+    expect(screen.getByText(/まだプリセットがありません/)).toBeTruthy();
   });
 });
