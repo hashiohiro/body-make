@@ -44,6 +44,21 @@ export function fromKgOrNull(value: number | null, unit: WeightUnit): number | n
 }
 
 /**
+ * **打つ欄に出す値。ポンドは小数第 1 位で丸める。**
+ *
+ * kg → lb は割り切れないので、換算したままだと欄に
+ * `134.99999999999997` が出る（`useNumericField` は `String(value)` をそのまま出す）。
+ *
+ * kg のときは丸めない。保存が小数第 2 位なので（ポンドの往復のため）、
+ * ここで 1 位に丸めると、触っていない欄からフォーカスを外しただけで桁が落ちる。
+ */
+export function fromKgForField(value: number | null, unit: WeightUnit): number | null {
+  if (value == null) return null;
+  const converted = fromKg(value, unit);
+  return unit === 'lb' ? Math.round(converted * 10) / 10 : converted;
+}
+
+/**
  * kg で決めてある値域を、打つ単位に合わせて広げる。
  *
  * 値域の判定は**打った単位のまま**で行う。kg に直してから見ると、

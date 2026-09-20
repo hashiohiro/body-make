@@ -96,7 +96,21 @@ export function effectiveWeight(
     case 'perSide':
       return set.weight == null ? null : set.weight * 2;
     case 'bodyweight': {
-      if (bodyWeight == null) return null;
+      /*
+       * **体重が分からなくても、打った追加重量は数える。**
+       *
+       * 以前は null を返していた。負荷の本体（体重 × 係数）が埋まらないので
+       * 「出せない」という意味だったが、**20kg と打った人には 0 kg と出る。**
+       * 打った値が消えたようにしか見えない。
+       *
+       * 自重ぶんを 0 として、追加重量だけで数える。本当の負荷より小さい値に
+       * なるが、その旨は画面に出す（`ExerciseTotals`）。体重を 1 件でも入れれば
+       * 遡って正しい値に計算し直される。
+       *
+       * **追加重量も打っていなければ null のまま。**そこは数える材料が
+       * 1 つも無く、0 を出しても「加重なしでやった」と区別が付かない。
+       */
+      if (bodyWeight == null) return set.weight;
       return bodyWeight * (exercise.bodyweightFactor ?? 1) + (set.weight ?? 0);
     }
   }
@@ -424,6 +438,18 @@ export const pickTopWeight = (p: ExercisePoint) => p.top?.weight ?? null;
 /* ------------------------------------------------------------------ *
  * 表示用
  * ------------------------------------------------------------------ */
+
+/**
+ * 自重種目の「自重ぶん」。**追加重量に足される側。**
+ * 体重が分からなければ 0（`effectiveWeight` がそちらに合わせて数える）。
+ */
+export function baseLoad(
+  exercise: Pick<Exercise, 'loadMode' | 'bodyweightFactor'>,
+  bodyWeight: number | null,
+): number {
+  if (exercise.loadMode !== 'bodyweight' || bodyWeight == null) return 0;
+  return bodyWeight * (exercise.bodyweightFactor ?? 1);
+}
 
 /**
  * トップセットの書き方。**入力画面と同じ 回数 × 重量。**

@@ -3,12 +3,14 @@ import { ExerciseTotals } from './ExerciseTotals';
 import { SetRow } from './SetRow';
 import { catalogEquipment, isCardio } from '../../lib/exerciseCatalog';
 import { formatMD } from '../../lib/date';
-import { summarizeSets } from '../../lib/training';
+import { baseLoad, summarizeSets } from '../../lib/training';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import { isCardioSet } from '../../types';
 import type { Exercise, ExercisePoint, RepUnit, SessionExercise, SessionSet } from '../../types';
 import type { SetField } from '../../hooks/useBodyData';
-import { WEIGHT_UNIT_LABEL } from '../../lib/weight';
+import { fmt } from '../../lib/format';
+import { WEIGHT_UNIT_LABEL, fromKg } from '../../lib/weight';
+import ui from '../../styles/ui.module.scss';
 import type { WeightUnit } from '../../lib/weight';
 import s from './training.module.scss';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
@@ -31,6 +33,8 @@ interface Props {
    */
   weightUnit: WeightUnit;
   onWeightUnitChange: (unit: WeightUnit) => void;
+  /** その日に使える体重（kg）。自重種目の「足される側」を出すのに要る。無ければ null */
+  bodyWeight: number | null;
   onValue: (index: number, field: SetField, value: number | null) => void;
   onAddSet: () => void;
   onRemoveSet: (index: number) => void;
@@ -81,6 +85,7 @@ export function ExerciseSetEditor({
   bestWeight,
   weightUnit,
   onWeightUnitChange,
+  bodyWeight,
   onValue,
   onAddSet,
   onRemoveSet,
@@ -120,8 +125,23 @@ export function ExerciseSetEditor({
    * 行の形。連番と × を置くかどうかで列の数が変わる。
    * 置かないときに空の列を残すと、入力欄が中央から寄って見える
    */
+  /*
+   * 自重種目の負荷の内訳に出す値。**打ったセットではなく種目と体重で決まる**ので、
+   * まだ何も入っていなくても出せる（打つ前に式が読めるのが狙い）。
+   * 追加ぶんだけはその日のトップセットから引く。
+   */
+  const unitLabel = WEIGHT_UNIT_LABEL[weightUnit];
+  const base = baseLoad(exercise, bodyWeight);
+  const factor = exercise.bodyweightFactor ?? 1;
+  const addedTop = point?.top?.weight ?? 0;
+
   const repeated = exercise.repeated;
-  const rowClass = [showWeight ? '' : s.setRowSolo, repeated ? '' : s.setRowBare]
+  const rowClass = [
+    showWeight ? '' : s.setRowSolo,
+    repeated ? '' : s.setRowBare,
+    // 自重種目は「自重 ＋ 欄」で 1 列ぶん広く要る
+    additional && showWeight ? s.setRowAdded : '',
+  ]
     .filter(Boolean)
     .join(' ');
 
@@ -145,6 +165,37 @@ export function ExerciseSetEditor({
       </div>
 
       {/*
+        自重種目の負荷の内訳。**打ち始める前に、何に足されるのかを出す。**
+
+        重量欄が受け取るのは追加ぶんだけなので、足される側は画面のどこにも
+        出ていなかった。体重 75kg の人に 52.5 と出る理由（この種目は体重の 70%）も、
+        数字だけでは読めない。式のまま、打つ前に目に入る位置へ置く。
+
+        割合は マイ種目 > その種目 > 設定 で種目ごとに変えられる。
+      */}
+      {additional && (
+        <div className={s.loadCalc}>
+          <span>
+            自重 {fmt(fromKg(base, displayUnit), base === 0 ? 0 : 1)}{' '}
+            {WEIGHT_UNIT_LABEL[displayUnit]}
+            {bodyWeight != null && (
+              <span className={ui.hint}>
+                （体重 {fmt(fromKg(bodyWeight, displayUnit))} × {factor}）
+              </span>
+            )}
+            {/* 加重していない日に「＋ 追加 0.0」は要らない。足していないことは欄が言っている */}
+            {addedTop > 0 && <> ＋ 追加 {fmt(fromKg(addedTop, displayUnit))}</>}
+          </span>
+          {bodyWeight == null && (
+            <span className={ui.hint}>
+              体重が未記録なので、自重ぶんを 0 として数えています。
+              体組成に体重を入れると、この種目の挙上量も遡って出ます。
+            </span>
+          )}
+        </div>
+      )}
+
+      {/*
         **1 回で完結する種目は、行の道具立てを出さない。**
         連番も行の × も「何本目か」を扱うためのもので、通しで 1 回走る種目には要らない。
         残るのは入力欄 2 つだけになる（Exercise.repeated / カタログが既定を持つ）。
@@ -160,28 +211,33 @@ export function ExerciseSetEditor({
         {showWeight && (
           <>
             <span aria-hidden="true" />
-            {cardio ? (
-              <span aria-hidden="true">距離 m</span>
-            ) : (
-              /*
-                **その場で kg とポンドを切り替える。**遠征先のジムにポンド表記の
-                器具があったとき、打つ前に単位を合わせられるようにする。
-                打ち込み済みの値は換算して出し直るので、記録は 1 件も変わらない。
-              */
+            {/*
+              **見出しは欄の真上に、そのまま読める形で置く。**
+              単位まで含めて 1 つの文字列（「追加重量 kg」）にする。
+              以前は見出しごとボタンにして単位を青の太字にしていたので、
+              いちばん読ませたい「追加重量」が行の中でもっとも薄い字になっていた。
+            */}
+            <span aria-hidden="true">
+              {cardio ? '距離 m' : `${additional ? '追加重量' : '重量'} ${unitLabel}`}
+            </span>
+            {/*
+              単位の切り替えは **× の真上**（行の操作と同じ列）。
+              見出しの文字そのものを押させない——読む場所と押す場所を分ける。
+            */}
+            {repeated && !cardio && (
               <button
                 type="button"
                 className={s.unitToggle}
-                aria-label={`重量の単位を切り替える（いま ${WEIGHT_UNIT_LABEL[weightUnit]}）`}
+                aria-label={`重量の単位を切り替える（いま ${unitLabel}）`}
                 onClick={() => onWeightUnitChange(weightUnit === 'kg' ? 'lb' : 'kg')}
               >
-                {additional ? '追加重量' : '重量'}{' '}
-                <b className={s.unitValue}>{WEIGHT_UNIT_LABEL[weightUnit]}</b>
-                <span aria-hidden="true"> ⇄</span>
+                ⇄
               </button>
             )}
           </>
         )}
-        {repeated && <span aria-hidden="true" />}
+        {/* 行を足せない種目には × の列が無いので、見出しの列も空けない */}
+        {repeated && (!showWeight || cardio) && <span aria-hidden="true" />}
       </div>
 
       {entry.sets.map((set, i) => (
@@ -194,6 +250,8 @@ export function ExerciseSetEditor({
           cardio={cardio}
           showWeight={showWeight}
           weightUnit={weightUnit}
+          // 自重種目だけ、足される側を欄の前に出して行を式にする
+          baseWeight={additional ? baseLoad(exercise, bodyWeight) : null}
           fallbackWeight={
             fallbackOf(entry.sets[i - 1], cardio, 'first') ??
             (cardio ? null : (previous?.point.top?.weight ?? null))

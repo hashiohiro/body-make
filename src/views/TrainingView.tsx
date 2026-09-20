@@ -12,7 +12,13 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { OrderList } from '../components/training/OrderList';
 import { groupsOf, isCardio } from '../lib/exerciseCatalog';
 import { addDays } from '../lib/date';
-import { personalBest, pickTopWeight, pickVolume, previousPoint } from '../lib/training';
+import {
+  buildBodyWeightLookup,
+  personalBest,
+  pickTopWeight,
+  pickVolume,
+  previousPoint,
+} from '../lib/training';
 import { isCardioSet } from '../types';
 import type { Exercise, SessionSet } from '../types';
 import type { BodyData } from '../hooks/useBodyData';
@@ -36,6 +42,7 @@ function hasValue(set: SessionSet): boolean {
 export function TrainingView({ body, date }: Props) {
   const {
     data,
+    daily,
     sessions,
     checkHistory,
     suppressWarning,
@@ -62,6 +69,12 @@ export function TrainingView({ body, date }: Props) {
   );
 
   const session = useMemo(() => sessions.find((x) => x.date === date) ?? null, [sessions, date]);
+  /*
+   * その日に使える体重。自重種目の「足される側」を出すのに要る。
+   * 集計側と**同じ引き当て**（その日 → その日の移動平均 → 直近過去）を使う。
+   * 別々に書くと、画面に出る内訳と計算された挙上量が食い違う。
+   */
+  const bodyWeightAt = useMemo(() => buildBodyWeightLookup(daily), [daily]);
 
   const [detailId, setDetailId] = useState<string | null>(null);
   /** 目標を開いている種目。記録しながらでも決め直せるように */
@@ -321,6 +334,8 @@ export function TrainingView({ body, date }: Props) {
             bestWeight={personalBest(sessions, editExercise.id, addDays(date, -1), pickTopWeight)}
             weightUnit={inputUnit}
             onWeightUnitChange={setInputUnit}
+            // 自重種目の「足される側」。その日以前の直近の体重を引く
+            bodyWeight={bodyWeightAt(date)}
             onValue={(index, field, value) =>
               setSetValue(date, editExercise.id, index, field, value)
             }

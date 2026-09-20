@@ -5,7 +5,8 @@ import {
   SET_WEIGHT_RANGE,
   repRangeOf,
 } from '../../lib/storage';
-import { WEIGHT_UNIT_LABEL, fromKgOrNull, rangeIn, toKgOrNull } from '../../lib/weight';
+import { fmt } from '../../lib/format';
+import { WEIGHT_UNIT_LABEL, fromKg, fromKgForField, rangeIn, toKgOrNull } from '../../lib/weight';
 import type { WeightUnit } from '../../lib/weight';
 import type { CardioSet, RepUnit, SessionSet, SetPoint, WorkSet } from '../../types';
 import type { SetField } from '../../hooks/useBodyData';
@@ -69,6 +70,15 @@ interface Props {
    * 換算するのはこの欄の中だけ。回数・距離・時間には効かない。
    */
   weightUnit: WeightUnit;
+  /**
+   * 自重ぶん（kg）。**null なら「追加」ではないので、式も出さない。**
+   *
+   * 自重種目の重量欄は「追加重量」で、負荷は `自重 ＋ 追加` で決まる。
+   * ところが欄には追加ぶんしか出ないので、**何に足されるのかが画面のどこにも
+   * 書かれていなかった**（20kg と打って 320kg と出る理由が読めない）。
+   * 足される側を欄の前に固定で置いて、行そのものを式にする。
+   */
+  baseWeight: number | null;
   fallbackWeight: number | null;
   fallbackReps: number | null;
   onValue: (field: SetField, value: number | null) => void;
@@ -93,6 +103,7 @@ export function SetRow({
   cardio,
   showWeight,
   weightUnit,
+  baseWeight,
   fallbackWeight,
   fallbackReps,
   onValue,
@@ -165,19 +176,33 @@ export function SetRow({
                 ×
               </span>
 
-              <NumberCell
-                /*
-                  打つのは選んだ単位、持つのは kg。
-                  **値域も打つ単位のまま見る**（`rangeIn`）——kg に直してから見ると、
-                  上限ちょうど（500kg = 1102.31lb）が丸めの向きで弾かれる。
-                */
-                value={fromKgOrNull(work.weight, weightUnit)}
-                fallback={fromKgOrNull(fallbackWeight, weightUnit)}
-                min={rangeIn(SET_WEIGHT_RANGE, weightUnit)[0]}
-                max={rangeIn(SET_WEIGHT_RANGE, weightUnit)[1]}
-                ariaLabel={`${index + 1}セット目の重量（${WEIGHT_UNIT_LABEL[weightUnit]}）`}
-                onCommit={(v) => onValue('weight', toKgOrNull(v, weightUnit))}
-              />
+              <span className={baseWeight == null ? undefined : s.addedCell}>
+                {/*
+                  足される側。**押せない固定表示**で、行を「自重 ＋ 追加」の式にする。
+                  体重が未記録のときは 0（`effectiveWeight` もそう数える）。
+                */}
+                {baseWeight != null && (
+                  <span className={s.addedBase} aria-hidden="true">
+                    {fmt(fromKg(baseWeight, weightUnit), baseWeight === 0 ? 0 : 1)}
+                    <i className={s.addedPlus}>＋</i>
+                  </span>
+                )}
+                <NumberCell
+                  /*
+                    打つのは選んだ単位、持つのは kg。
+                    **値域も打つ単位のまま見る**（`rangeIn`）——kg に直してから見ると、
+                    上限ちょうど（500kg = 1102.31lb）が丸めの向きで弾かれる。
+                  */
+                  value={fromKgForField(work.weight, weightUnit)}
+                  fallback={fromKgForField(fallbackWeight, weightUnit)}
+                  min={rangeIn(SET_WEIGHT_RANGE, weightUnit)[0]}
+                  max={rangeIn(SET_WEIGHT_RANGE, weightUnit)[1]}
+                  ariaLabel={`${index + 1}セット目の${
+                    baseWeight == null ? '重量' : '追加重量'
+                  }（${WEIGHT_UNIT_LABEL[weightUnit]}）`}
+                  onCommit={(v) => onValue('weight', toKgOrNull(v, weightUnit))}
+                />
+              </span>
             </>
           )}
         </>

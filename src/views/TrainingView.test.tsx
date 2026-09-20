@@ -609,7 +609,8 @@ describe('トレ画面', () => {
 
     // ベルトで足す人のために、その種目のカードから開ける
     fireEvent.click(screen.getByRole('button', { name: '＋ 加重' }));
-    expect(screen.getByLabelText(/1セット目の重量/)).toBeTruthy();
+    // 自重種目の欄は「追加重量」。足される側があることを読み上げにも出す
+    expect(screen.getByLabelText(/1セット目の追加重量/)).toBeTruthy();
   });
 
   it('秒で数える種目では重量を聞かない（挙上量に計上されないため）', () => {
@@ -651,7 +652,7 @@ describe('トレ画面', () => {
     render(<Harness />);
     expand('ディップス');
 
-    expect((screen.getByLabelText(/1セット目の重量/) as HTMLInputElement).value).toBe('20');
+    expect((screen.getByLabelText(/1セット目の追加重量/) as HTMLInputElement).value).toBe('20');
     expect(screen.queryByRole('button', { name: /加重/ })).toBeNull();
   });
 
@@ -6146,6 +6147,11 @@ describe('キーボードとタブバー', () => {
 describe('ウエイトの単位', () => {
   const weightField = () => within(setRows()[0]!).getByLabelText(/セット目の重量/);
   const unitToggle = () => screen.getByRole('button', { name: /重量の単位を切り替える/ });
+  /*
+   * いま何で打っているか。**見出しに出る**（欄の真上に「重量 kg」）。
+   * 押す札のほうは ⇄ だけで、単位の綴りは持たない——読む場所と押す場所を分けてある。
+   */
+  const headText = () => document.querySelector('[class*="setHead"]')?.textContent ?? '';
 
   const start = (settings: Record<string, unknown> = {}) => {
     seedRaw({
@@ -6169,7 +6175,7 @@ describe('ウエイトの単位', () => {
 
   it('既定は設定の入力単位。kg なら kg で打つ', () => {
     start();
-    expect(unitToggle().textContent).toContain('kg');
+    expect(headText()).toContain('重量 kg');
     fireEvent.change(weightField(), { target: { value: '60' } });
     fireEvent.blur(weightField());
     expect((weightField() as HTMLInputElement).value).toBe('60');
@@ -6177,7 +6183,7 @@ describe('ウエイトの単位', () => {
 
   it('設定でポンドにすると、最初からポンドで打てる', () => {
     start({ inputWeightUnit: 'lb' });
-    expect(unitToggle().textContent).toContain('lb');
+    expect(headText()).toContain('重量 lb');
   });
 
   /*
@@ -6190,13 +6196,34 @@ describe('ウエイトの単位', () => {
     fireEvent.blur(weightField());
 
     fireEvent.click(unitToggle());
-    expect(unitToggle().textContent).toContain('kg');
+    expect(headText()).toContain('重量 kg');
     // 135lb ＝ 61.23kg
     expect(Number((weightField() as HTMLInputElement).value)).toBeCloseTo(61.2, 1);
 
-    // 戻せば打った数字がそのまま出る（ここが小数第 2 位で保存している理由）
+    /*
+     * 戻せば打った数字がそのまま出る（ここが小数第 2 位で保存している理由）。
+     * **文字列で見る**——`Number()` を通すと桁の汚れを見落とす。
+     * 換算したままだと欄に `134.99999999999997` が出ていた。
+     */
     fireEvent.click(unitToggle());
-    expect(Number((weightField() as HTMLInputElement).value)).toBeCloseTo(135, 1);
+    expect((weightField() as HTMLInputElement).value).toBe('135');
+  });
+
+  /*
+   * kg → lb は割り切れない。換算したままだと欄に `134.99999999999997` が出る
+   * （`useNumericField` は `String(value)` をそのまま出す）。ポンドは第 1 位で丸める。
+   */
+  it('ポンド表示の欄は小数第 1 位まで', () => {
+    start();
+    // kg のまま、第 2 位を持つ値を入れる（ポンドで打った日の記録に相当）
+    fireEvent.change(weightField(), { target: { value: '61.2' } });
+    fireEvent.blur(weightField());
+
+    fireEvent.click(unitToggle());
+    const shown = (weightField() as HTMLInputElement).value;
+    expect(shown).toBe('134.9');
+    // 桁が伸びていないこと（小数点以下 1 桁まで）
+    expect(shown).toMatch(/^\d+(\.\d)?$/);
   });
 
   it('ポンドで打った値は、kg に直して保存される', async () => {
@@ -6214,7 +6241,7 @@ describe('ウエイトの単位', () => {
   it('トグルは設定を書き換えない', async () => {
     start();
     fireEvent.click(unitToggle());
-    expect(unitToggle().textContent).toContain('lb');
+    expect(headText()).toContain('重量 lb');
 
     await flushSave();
     expect((await storedData()).settings.inputWeightUnit).toBe('kg');
@@ -6242,5 +6269,91 @@ describe('ウエイトの単位', () => {
     // 135lb × 10。打った数字のまま出る
     expect(screen.getAllByText(/1,350 lb/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/612 kg/)).toBeNull();
+  });
+});
+
+/**
+ * 自重種目の負荷は `自重 ＋ 追加重量` で決まる。ところが欄が受け取るのは追加ぶん
+ * だけなので、**足される側が画面のどこにも出ていなかった**——20 と打ったのに
+ * 合計がそれと合わない理由も、体重 75kg の人に 48.8 と出る理由も読めなかった。
+ */
+describe('自重種目の計算が読めること', () => {
+  const start = (id: string, entries: Record<string, unknown> = {}) => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries,
+      exercises: [
+        fromCatalog(
+          CATALOG.find((c) => c.id === id)!,
+          0,
+        ),
+      ],
+      workouts: {
+        [todayISO()]: [{ exerciseId: id, sets: [{ weight: 20, reps: 8 }] }],
+      },
+    });
+    render(<Harness />);
+  };
+
+  const weighed = (kg: number) => ({
+    [todayISO()]: {
+      am: { weight: kg, bodyFat: null, waist: null },
+      pm: { weight: null, bodyFat: null, waist: null },
+    },
+  });
+
+  /* 体重 75kg の人に「自重 48.8」と出る理由（この種目は体重の 65%）を式で出す */
+  it('自重ぶんの出どころを式で出す', () => {
+    start('ex_pushup', weighed(75));
+    expand('腕立て伏せ');
+
+    expect(screen.getAllByText(/体重 75\.0 × 0\.65/).length).toBeGreaterThan(0);
+    // 足される側と、足す側の両方が式として並ぶ
+    expect(screen.getAllByText(/自重 48\.8/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/＋ 追加 20\.0/).length).toBeGreaterThan(0);
+  });
+
+  /* 入力行そのものを式にする。足される側は押せない固定表示 */
+  it('入力行に足される側を出す', () => {
+    start('ex_pushup', weighed(75));
+    expand('腕立て伏せ');
+
+    const row = setRows()[0]!;
+    expect(row.textContent).toContain('48.8');
+    // 欄そのものは追加ぶん。読み上げ名も「追加重量」になる
+    expect((within(row).getByLabelText(/追加重量/) as HTMLInputElement).value).toBe('20');
+  });
+
+  /*
+   * 体重が無くても、打った追加重量は数える。以前は null を返していたので
+   * 「20 と打ったのに 0 kg」になっていた。
+   */
+  it('体重が未記録でも、打った追加重量で数える', () => {
+    start('ex_pushup');
+    expand('腕立て伏せ');
+
+    // 20 × 8 = 160。0 kg にはしない
+    expect(screen.getAllByText(/160 kg/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/自重ぶんを 0 として/).length).toBeGreaterThan(0);
+  });
+
+  /* 体重を入れれば、同じ記録が本来の負荷で数え直される */
+  it('体重を入れると遡って本来の値になる', () => {
+    start('ex_pushup', weighed(75));
+    expand('腕立て伏せ');
+
+    // (75 × 0.65 + 20) × 8 = 550
+    expect(screen.getAllByText(/550 kg/).length).toBeGreaterThan(0);
+    expect(screen.queryAllByText(/自重ぶんを 0 として/)).toHaveLength(0);
+  });
+
+  /* 体重を必要としない種目（standard）には内訳を出さない */
+  it('自重を使わない種目には内訳を出さない', () => {
+    start('ex_bench', weighed(75));
+    expand('ベンチプレス');
+
+    expect(screen.queryAllByText(/自重 /)).toHaveLength(0);
+    expect(screen.getAllByLabelText(/1セット目の重量/).length).toBeGreaterThan(0);
   });
 });

@@ -1370,23 +1370,77 @@
 }
 
 /*
- * セット入力の見出しに置く、重量の単位の切り替え。
+ * 重量の単位の切り替え。**× の真上に、行の操作と同じ形で置く。**
  *
- * **見出しの見え方のまま押せるようにする。**ボタンらしく飾ると、
- * 5 つ並ぶ見出しの中でそこだけが操作の列に見えてしまう。
- * 指で狙える高さ（--tap-row）は確保する。
+ * 以前は見出しそのものを 1 つのボタンにして単位を青の太字にしていた。
+ * すると自重種目で **いちばん読ませたい「追加重量」が行の中でもっとも薄い字**
+ * になり、目は青い「kg ⇄」へ行く。読む場所（見出し）と押す場所（この札）を分ける。
  */
 .unitToggle {
   min-height: var(--tap-row);
-  padding: 0 4px;
-  border: 0;
-  background: none;
-  color: var(--ink-muted);
-  font: inherit;
-  white-space: nowrap;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1;
 }
 
-.unitValue {
-  font-weight: 700;
-  color: var(--accent);
+/*
+ * 自重種目の重量欄。**行そのものを「自重 ＋ 追加」の式にする。**
+ *
+ * 欄が受け取るのは追加ぶんだけなのに、足される側が画面のどこにも
+ * 出ていなかった（20 と打って合計が 320 になる理由が読めない）。
+ * 足される側を欄の前に固定で置く。
+ */
+.addedCell {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.addedBase {
+  flex: none;
+  color: var(--ink-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  @include tabular;
+}
+
+.addedPlus {
+  margin-left: 1px;
+  font-style: normal;
+}
+
+/*
+ * 自重種目の行。重量列に「自重 ＋」が入るぶん、回数列から幅を回す。
+ *
+ * 360px の端末では重量列が 97px しかなく、そのままだと入力欄が
+ * 50px 前後まで細る。回数は 3 桁も要らないので、そちらを削る。
+ */
+.setRowAdded {
+  grid-template-columns: 34px minmax(0, 0.78fr) 14px minmax(0, 1.22fr) 34px;
+}
+
+/*
+ * 自重種目の負荷の内訳。**「前回 …」のすぐ下**——打ち始める前に目に入る位置。
+ *
+ * 重量欄が受け取るのは追加ぶんだけなので、足される側が画面のどこにも
+ * 出ていなかった。体重 75kg の人に「自重 48.8」と出る理由（この種目は体重の
+ * 65% が乗る）も、数字だけでは読めない。式のまま置く。
+ */
+.loadCalc {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0 0 10px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface-sunken);
+  font-size: 11px;
+  color: var(--ink-2);
+  @include tabular;
 }

@@ -13,7 +13,7 @@ import {
 } from '../../lib/storage';
 import { exerciseHistory, goalCurrent, personalBest } from '../../lib/training';
 import { useWeightFormat } from '../../hooks/useWeightUnit';
-import { rangeIn, toKg } from '../../lib/weight';
+import { fromKgForField, rangeIn, toKg } from '../../lib/weight';
 import type { Exercise, ExercisePoint, GoalType, SessionPoint } from '../../types';
 import { Button } from '../Button';
 import { Segmented } from '../Segmented';
@@ -108,7 +108,7 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
    * しまうときに kg へ戻す。回数・距離・時間・速度は重量ではないので触らない。
    * 「維持」は主指標そのものを見る立て方なので、その主指標が重量のときだけ対象になる。
    */
-  const { unit: weightUnit, label: weightLabel, conv } = useWeightFormat();
+  const { unit: weightUnit, label: weightLabel } = useWeightFormat();
   const weighty =
     type === 'weight' || type === 'volume' || (type === 'maintain' && maintainUnit === WEIGHT);
   const unit =
@@ -126,8 +126,8 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
                 : maintainUnit
               : weightLabel;
   const digits = type === 'weight' || type === 'speed' ? 1 : 0;
-  /** 読むときの単位へ。重量で数えない立て方は素通し */
-  const show = (v: number | null) => (v == null || !weighty ? v : conv(v));
+  /** 打つ欄へ出す値。重量で数えない立て方は素通し。ポンドは第 1 位で丸める */
+  const show = (v: number | null) => (v == null || !weighty ? v : fromKgForField(v, weightUnit));
 
   /*
    * 決める材料は**到達率と同じ取り方**で出す（`goalCurrent`）。
