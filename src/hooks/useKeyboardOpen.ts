@@ -22,6 +22,17 @@ const SHRUNK = 0.75;
  * 端末に任せられないので、視覚ビューポートの高さを見てこちらで判断する。
  *
  * `visualViewport` を持たない環境では常に false（＝これまでどおり出したまま）。
+ *
+ * **画面を回したときに固まらないようにする。**縮んだ割合は
+ * `visualViewport.height ÷ window.innerHeight` で見ているが、この 2 つは
+ * **別のタイミングで更新される**。回転の途中で視覚ビューポートだけが新しい高さに
+ * なると、比が 0.5 前後まで落ちて「キーボードが出ている」と読む。
+ * そのあと視覚ビューポートの resize が来なければ**その判定のまま居座り**、
+ * タブバーが引っ込んだきり戻らない（画面を移れなくなる）。
+ *
+ * そこで `window` の resize と orientationchange も聞き、さらに
+ * **次のフレームでもう一度測る**。どちらが先に更新されても、最後には
+ * 揃った値で判定し直す。
  */
 export function useKeyboardOpen(): boolean {
   const [open, setOpen] = useState(false);
@@ -30,15 +41,29 @@ export function useKeyboardOpen(): boolean {
     const viewport = window.visualViewport;
     if (!viewport) return;
 
+    let frame = 0;
     const update = () => {
       // innerHeight はレイアウトビューポート。キーボードでは変わらないので、これを分母にする
       const layout = window.innerHeight;
       setOpen(layout > 0 && viewport.height / layout < SHRUNK);
     };
+    /** いま測って、レイアウトが落ち着いた次のフレームでもう一度測る */
+    const schedule = () => {
+      update();
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    };
     update();
 
-    viewport.addEventListener('resize', update);
-    return () => viewport.removeEventListener('resize', update);
+    viewport.addEventListener('resize', schedule);
+    window.addEventListener('resize', schedule);
+    window.addEventListener('orientationchange', schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      viewport.removeEventListener('resize', schedule);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('orientationchange', schedule);
+    };
   }, []);
 
   return open;

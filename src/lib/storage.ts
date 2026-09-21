@@ -20,6 +20,7 @@ import type {
   Shelf,
   SubGroup,
   ThemePref,
+  Weekday,
   Workouts,
 } from '../types';
 import {
@@ -464,7 +465,52 @@ export const PRESET_NAME_MAX = 40;
  * 存在しない種目を指す ID は落とす（種目を消したら、その種目だけ組み合わせから抜ける）。
  * 中身が空になった組み合わせは、名前だけが残っても呼び出せないので落とす。
  */
-export function sanitizePresets(raw: unknown, knownIds: ReadonlySet<string>): Preset[] {
+/** 曜日 1 つ。日曜 = 0 の 0〜6（`weekdayIndex` と同じ数え方）。読めなければ null */
+function parseWeekday(raw: unknown): Weekday | null {
+  const n = typeof raw === 'string' ? Number(raw) : raw;
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 0 || n > 6) return null;
+  return n as Weekday;
+}
+
+/**
+ * やる曜日。**持たないのが既定**なので、読めない値はすべて落として空にする。
+ * 重複は畳み、並びは曜日順にそろえる——札に出す順が入力順で変わらないように。
+ */
+function parseWeekdays(o: Record<string, unknown>): Weekday[] {
+  if (!Array.isArray(o.weekdays)) return [];
+  const days = o.weekdays.map(parseWeekday).filter((d): d is Weekday => d != null);
+  return [...new Set(days)].sort((a, b) => a - b);
+}
+
+/**
+ * 種目ごとの既定セット。**持たないのが既定**なので、読めない分はすべて落とす。
+ *
+ * 器は種目が決めるので、ログと同じ `shapes` を通す（有酸素に重量を書いた
+ * バックアップが、そのまま入ってこないように）。
+ * **その組み合わせに入っていない種目の分は捨てる**——参照先のない値を残さない。
+ */
+function sanitizeDefaults(
+  raw: unknown,
+  exerciseIds: readonly string[],
+  shapes: ReadonlyMap<string, SetShape>,
+): Record<string, SessionSet[]> {
+  if (!raw || typeof raw !== 'object') return {};
+  const inPreset = new Set(exerciseIds);
+  const out: Record<string, SessionSet[]> = {};
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    const shape = shapes.get(id);
+    if (!inPreset.has(id) || shape == null || !Array.isArray(value)) continue;
+    const sets = value.map((set) => sanitizeSet(set, shape));
+    if (sets.length > 0) out[id] = sets;
+  }
+  return out;
+}
+
+export function sanitizePresets(
+  raw: unknown,
+  knownIds: ReadonlySet<string>,
+  shapes: ReadonlyMap<string, SetShape>,
+): Preset[] {
   if (!Array.isArray(raw)) return [];
 
   const out: Preset[] = [];
@@ -480,10 +526,17 @@ export function sanitizePresets(raw: unknown, knownIds: ReadonlySet<string>): Pr
         o.exerciseIds.filter((x): x is string => typeof x === 'string' && knownIds.has(x)),
       ),
     ];
+    // 種目を持たないプリセットは、持つものが何も無いので落とす
     if (exerciseIds.length === 0) continue;
 
     seen.add(id);
-    out.push({ id, name, exerciseIds });
+    out.push({
+      id,
+      name,
+      exerciseIds,
+      weekdays: parseWeekdays(o),
+      defaults: sanitizeDefaults(o.defaults, exerciseIds, shapes),
+    });
   }
   return out;
 }
@@ -615,7 +668,7 @@ export function sanitizeData(raw: unknown): AppData {
     exercises,
     workouts: sanitizeWorkouts(o.workouts, shapes),
     groupGoals: sanitizeGroupGoals(o.groupGoals),
-    presets: sanitizePresets(o.presets, knownIds),
+    presets: sanitizePresets(o.presets, knownIds, shapes),
     checks: sanitizeChecks(o.checks),
     suppressed: sanitizeSuppressed(o.suppressed),
   };

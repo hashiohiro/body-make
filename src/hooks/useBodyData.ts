@@ -42,6 +42,7 @@ import type {
   SlotId,
   WorkSet,
   Workouts,
+  Weekday,
 } from '../types';
 
 export type MeasurementField = keyof Measurement;
@@ -119,12 +120,21 @@ export interface BodyData {
     value: number | null,
   ) => void;
   copySets: (date: string, exerciseId: string, sets: readonly SessionSet[]) => void;
-  /** 過去の日から種目だけをまとめて足す。すでにある種目は飛ばす */
-  addDayExercises: (date: string, exerciseIds: readonly string[]) => void;
+  /**
+   * 過去の日やプリセットから種目だけをまとめて足す。すでにある種目は飛ばす。
+   *
+   * `rows` を渡すと、その本数ぶん**空の行**を用意する（プリセットの既定セット用）。
+   * 入るのは行の数だけで、**重量もレップも空のまま**。
+   */
+  addDayExercises: (
+    date: string,
+    exerciseIds: readonly string[],
+    rows?: Readonly<Record<string, number>>,
+  ) => void;
 
   setGroupGoal: (group: MuscleGroup, target: GroupTarget | null) => void;
   /** いまの組み合わせに名前を付けて残す。同じ名前があれば中身を置き換える */
-  savePreset: (name: string, exerciseIds: readonly string[]) => void;
+  savePreset: (name: string, exerciseIds: readonly string[], weekdays?: readonly Weekday[]) => void;
   /** 名前と中身を書き換える（設定側の編集） */
   updatePreset: (preset: Preset) => void;
   removePreset: (id: string) => void;
@@ -476,17 +486,31 @@ export function useBodyData(initial: AppData): BodyData {
    *
    * すでにその日にある種目は飛ばす。同一種目は 1 日 1 エントリ。
    */
-  const addDayExercises = useCallback((date: string, exerciseIds: readonly string[]) => {
-    setData((prev) => {
-      const day = prev.workouts[date] ?? [];
-      const known = new Set(day.map((e) => e.exerciseId));
-      const added = exerciseIds
-        .filter((id) => !known.has(id))
-        .map((exerciseId) => ({ exerciseId, sets: [emptySetOf(prev.exercises, exerciseId)] }));
-      if (added.length === 0) return prev;
-      return { ...prev, workouts: { ...prev.workouts, [date]: [...day, ...added] } };
-    });
-  }, []);
+  const addDayExercises = useCallback(
+    (date: string, exerciseIds: readonly string[], rows?: Readonly<Record<string, number>>) => {
+      setData((prev) => {
+        const day = prev.workouts[date] ?? [];
+        const known = new Set(day.map((e) => e.exerciseId));
+        const added = exerciseIds
+          .filter((id) => !known.has(id))
+          .map((exerciseId) => ({
+            exerciseId,
+            /*
+             * **行数は写すが、値は写さない。**
+             * プリセットが既定のセットを持っているなら、その本数ぶんの空行を出す
+             * ——何本やる組み立てなのかは構造で、打った数字ではない。
+             * 値のほうは薄く出すだけ（`Preset.defaults`）。
+             */
+            sets: Array.from({ length: Math.max(1, rows?.[exerciseId] ?? 1) }, () =>
+              emptySetOf(prev.exercises, exerciseId),
+            ),
+          }));
+        if (added.length === 0) return prev;
+        return { ...prev, workouts: { ...prev.workouts, [date]: [...day, ...added] } };
+      });
+    },
+    [],
+  );
 
   /* ---- マイ種目・プリセット ---- */
 
@@ -497,20 +521,33 @@ export function useBodyData(initial: AppData): BodyData {
    * どちらを呼び出すのか名前から決められない（一覧で見分ける手がかりが部位と件数しかない）。
    * 上書きしてよいかを聞くのは画面側の仕事で、ここは聞かれた結果を書くだけ。
    */
-  const savePreset = useCallback((name: string, exerciseIds: readonly string[]) => {
-    const trimmed = name.trim().slice(0, PRESET_NAME_MAX);
-    const ids = [...new Set(exerciseIds)];
-    if (!trimmed || ids.length === 0) return;
-    setData((prev) => {
-      const found = prev.presets.find((p) => p.name === trimmed);
-      return {
-        ...prev,
-        presets: found
-          ? prev.presets.map((p) => (p.id === found.id ? { ...p, exerciseIds: ids } : p))
-          : [...prev.presets, { id: newId(), name: trimmed, exerciseIds: ids }],
-      };
-    });
-  }, []);
+  const savePreset = useCallback(
+    (name: string, exerciseIds: readonly string[], weekdays: readonly Weekday[] = []) => {
+      const trimmed = name.trim().slice(0, PRESET_NAME_MAX);
+      const ids = [...new Set(exerciseIds)];
+      if (!trimmed || ids.length === 0) return;
+      setData((prev) => {
+        const found = prev.presets.find((p) => p.name === trimmed);
+        return {
+          ...prev,
+          presets: found
+            ? prev.presets.map((p) => (p.id === found.id ? { ...p, exerciseIds: ids } : p))
+            : // 曜日は持たないのが既定。週の曜日から作ったときだけ、その日を持って生まれる
+              [
+                ...prev.presets,
+                {
+                  id: newId(),
+                  name: trimmed,
+                  exerciseIds: ids,
+                  weekdays: [...weekdays].sort((a, b) => a - b),
+                  defaults: {},
+                },
+              ],
+        };
+      });
+    },
+    [],
+  );
 
   /**
    * 名前と中身の編集（設定側のプリセット画面から使う）。
@@ -526,7 +563,21 @@ export function useBodyData(initial: AppData): BodyData {
       return {
         ...prev,
         presets: prev.presets.map((p) =>
-          p.id === preset.id ? { ...p, name, exerciseIds: ids } : p,
+          // 曜日は渡されたものをそのまま通す（外すときは null が来る）
+          p.id === preset.id
+            ? {
+                ...p,
+                name,
+                exerciseIds: ids,
+                weekdays: preset.weekdays,
+                // 種目から外したぶんの既定は連れて行かない（参照先のない値を残さない）
+                defaults: Object.fromEntries(
+                  Object.entries(preset.defaults).filter(([exerciseId]) =>
+                    ids.includes(exerciseId),
+                  ),
+                ),
+              }
+            : p,
         ),
       };
     });

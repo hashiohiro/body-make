@@ -389,6 +389,79 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
 
   {
+    id: 'ex_incline_pushup',
+    aliases: ['台上げプッシュアップ'],
+    equipment: 'bodyweight',
+    name: 'インクラインプッシュアップ',
+    group: 'chest',
+    subGroups: ['shoulders', 'arms'],
+    loadMode: 'bodyweight',
+    // 手を台に置くぶん、手にかかる体重が減る（デクラインの逆）
+    bodyweightFactor: 0.45,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_archer_pushup',
+    equipment: 'bodyweight',
+    name: 'アーチャープッシュアップ',
+    group: 'chest',
+    subGroups: ['shoulders', 'arms'],
+    loadMode: 'bodyweight',
+    // 片側へ寄せて下りるので、支える腕にかかる体重が通常より増える
+    bodyweightFactor: 0.8,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_one_arm_pushup',
+    aliases: ['ワンハンドプッシュアップ'],
+    equipment: 'bodyweight',
+    name: '片手腕立て伏せ',
+    group: 'chest',
+    subGroups: ['shoulders', 'arms', ['core', 0.5]],
+    loadMode: 'bodyweight',
+    // 片腕で支える。足を開いて バランスを取るぶん、全体重そのままにはならない
+    bodyweightFactor: 0.9,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_pseudo_planche_pushup',
+    equipment: 'bodyweight',
+    name: '擬似プランシェプッシュアップ',
+    group: 'chest',
+    // 手を腰の横まで下げるぶん、肩と前腕に強く乗る
+    subGroups: [
+      ['shoulders', 1],
+      ['arms', 0.5],
+      ['core', 0.5],
+    ],
+    loadMode: 'bodyweight',
+    bodyweightFactor: 0.8,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_spiderman_pushup',
+    equipment: 'bodyweight',
+    name: 'スパイダーマンプッシュアップ',
+    group: 'chest',
+    subGroups: ['shoulders', 'arms', ['core', 0.5]],
+    loadMode: 'bodyweight',
+    bodyweightFactor: 0.65,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_clap_pushup',
+    aliases: ['プライオプッシュアップ'],
+    equipment: 'bodyweight',
+    name: 'クラッププッシュアップ',
+    group: 'chest',
+    subGroups: ['shoulders', 'arms'],
+    loadMode: 'bodyweight',
+    // 跳ばすので、押し切る瞬間にかかる荷は通常の腕立てより大きい
+    bodyweightFactor: 0.75,
+    rmDivisor: RM_DEFAULT,
+  },
+
+  {
     id: 'ex_pullover',
     equipment: 'dumbbell',
     /*
@@ -1379,6 +1452,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   // 体幹
   {
     id: 'ex_hanging_leg_raise',
+    aliases: ['ぶら下がりレッグレイズ'],
     equipment: 'bodyweight',
     name: 'ハンギングレッグレイズ',
     group: 'core',
@@ -1447,6 +1521,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_crunch',
+    aliases: ['腹筋'],
     equipment: 'bodyweight',
     name: 'クランチ',
     group: 'core',
@@ -1456,6 +1531,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_russian_twist',
+    aliases: ['ツイストクランチ'],
     equipment: 'bodyweight',
     name: 'ロシアンツイスト',
     group: 'core',
@@ -1465,6 +1541,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_leg_raise',
+    aliases: ['ライイングレッグレイズ', 'レッグリフト'],
     equipment: 'bodyweight',
     name: 'レッグレイズ',
     group: 'core',
@@ -1527,6 +1604,118 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+  {
+    id: 'ex_reverse_crunch',
+    aliases: ['ヒップレイズ'],
+    equipment: 'bodyweight',
+    name: 'リバースクランチ',
+    group: 'core',
+    subGroups: [['legs', 0.25]],
+    // 床に寝て骨盤を巻き上げる。体重は挙上量に乗せない（クランチと同じ）
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_knee_raise',
+    aliases: ['キャプテンズチェア', 'ハンギングニーレイズ'],
+    equipment: 'bodyweight',
+    name: 'ニーレイズ',
+    group: 'core',
+    subGroups: [['legs', 0.25]],
+    // ぶら下がる／肘で支える。脚を畳むぶんハンギングレッグレイズより軽い
+    loadMode: 'bodyweight',
+    bodyweightFactor: 0.35,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_v_up',
+    aliases: ['Vシット', 'ジャックナイフ'],
+    equipment: 'bodyweight',
+    name: 'Vアップ',
+    group: 'core',
+    subGroups: [['legs', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_toe_touch',
+    aliases: ['タッチクランチ'],
+    equipment: 'bodyweight',
+    name: 'トータッチ',
+    group: 'core',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_flutter_kick',
+    aliases: ['バタ足'],
+    equipment: 'bodyweight',
+    name: 'フラッターキック',
+    group: 'core',
+    subGroups: [['legs', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_hollow_hold',
+    aliases: ['ホロウホールド'],
+    equipment: 'bodyweight',
+    name: 'ホローホールド',
+    group: 'core',
+    // 姿勢を保つ種目。動かさないので回数ではなく秒で数える（プランクと同じ）
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+    repUnit: 'seconds',
+  },
+  {
+    id: 'ex_bird_dog',
+    equipment: 'bodyweight',
+    name: 'バードドッグ',
+    group: 'core',
+    subGroups: [['back', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_dragon_flag',
+    equipment: 'bodyweight',
+    name: 'ドラゴンフラッグ',
+    group: 'core',
+    subGroups: [
+      ['back', 0.25],
+      ['legs', 0.25],
+    ],
+    // 肩で支えて体を一直線に保つ。腰から下をまるごと持ち上げる
+    loadMode: 'bodyweight',
+    bodyweightFactor: 0.5,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_side_bend',
+    equipment: 'dumbbell',
+    /* 片手に 1 つ持って左右を分けてやるので perSide にしない（ワンハンドロウと同じ） */
+    name: 'サイドベンド',
+    group: 'core',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_ab_machine_crunch',
+    aliases: ['アブクランチ'],
+    name: 'アブドミナルクランチ',
+    group: 'core',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+
   /*
    * 有酸素。**部位を持たない**ので `group: 'cardio'`。
    *

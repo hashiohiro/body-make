@@ -1252,9 +1252,10 @@
   white-space: nowrap;
 }
 
+/* 部位 / 状態 / 根拠 の 3 列。ゲージは上の帯が持つので置かない */
 .recoveryRow {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 56px;
+  grid-template-columns: 3.5em 4.5em minmax(0, 1fr);
   align-items: center;
   gap: 4px 8px;
   padding: 8px 0;
@@ -1289,7 +1290,6 @@
  * 1 行に収めようとして省略記号で切ると、いちばん読みたい根拠が読めなくなる。
  */
 .recoveryReason {
-  grid-column: 2 / -1;
   font-size: 11px;
   line-height: 1.5;
   color: var(--ink-muted);
@@ -1443,4 +1443,147 @@
   font-size: 11px;
   color: var(--ink-2);
   @include tabular;
+}
+
+/*
+ * 任意の設定への入口。**破線で小さく置く。**
+ *
+ * プリセットの曜日のように「既定は持たない。決めたい人だけが決める」ものに使う。
+ * 実線のボタンにすると、決めることが前提の欄に見えて、作るたびに
+ * 「どうするか」を考えさせることになる（自重種目の「＋ 加重」と同じ作法）。
+ */
+.optionalEntry {
+  min-height: var(--tap-row);
+  padding: 0 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+/* 曜日を決めている最中だけ開く面 */
+.weekdayPick {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0 2px;
+}
+
+/* 曜日の札を 7 つ並べる。どれも押していない状態がありうる */
+.weekdayChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/*
+ * 週メニューの 1 曜日ぶん。**置いていない曜日も行として残す**（休みも週の一部）。
+ * 7 行が一望できることを優先して、中身は 1 つずつ開く。
+ */
+.weekRow {
+  border-bottom: 1px solid var(--border);
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
+}
+
+.weekRowHead {
+  display: grid;
+  grid-template-columns: 2em minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--tap-sub);
+  padding: 8px 0;
+  /* 既定のボタン枠を消す。行として見せたいので、地の上に字だけを置く（.presetPick と同じ） */
+  border: 0;
+  background: none;
+  text-align: left;
+  @include tabular;
+}
+
+.weekRowDay {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.weekRowName {
+  flex: 0 1 auto;
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * 名前と部位を 1 つの欄にまとめる。**名前は出ないことがある**ので、
+ * 列に割ると空いた桁のぶん部位が右へずれる。
+ */
+.weekRowBody {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+/*
+ * 休みは**薄く**。空いていることを責める見た目にしない（§1.2）。
+ *
+ * 列をまたがせない。印の列まで覆うと `›` が次の行へ送られ、
+ * **休みの行だけが 2 行ぶんの高さ**になっていた。
+ */
+.weekRowRest {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.weekRowGroups {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+/* 週の全身図。何を示しているかは見出しと数字で書く（塗りだけでは読めない） */
+.weekFigure {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 押せる行であることの印。押すと編集の面がそのまま開く */
+.weekRowMark {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+/*
+ * 波及行。**その一打が、この種目の外に及んだぶん。**
+ *
+ * ラベルの列をそろえる——行が増えても、左端をなぞるだけで読める。
+ * 合計・最高と地続きにしないよう、上に 1 本引く（あちらは種目の中の話）。
+ */
+.ripple {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+/* dt と dd を、行ではなく上の格子へ直に並べる */
+.rippleRow {
+  display: contents;
+}
+
+.rippleLabel {
+  color: var(--ink-muted);
+}
+
+.rippleValue {
+  margin: 0;
+  color: var(--ink-2);
 }

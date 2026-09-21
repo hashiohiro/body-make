@@ -33,3 +33,111 @@
 .tight + .label {
   margin-top: 12px;
 }
+
+/*
+ * 横に流れる行の器。**端の印を重ねるためだけに居る。**
+ *
+ * 行そのものに印を置くと、いっしょに流れて端から出て行く。
+ * 余白は器が持つ（`.inScroller` で行から外す）——行に残すと、
+ * 印の上下を行に合わせるのに余白ぶんを引き算することになる。
+ */
+.scroller {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+/*
+ * **器の中に 2 クラスで書く。**`ui.chipRow` の余白を上書きするので、
+ * 同じ強さ（クラス 1 つ）だと、束ねられる順しだいで勝ち負けが変わる。
+ */
+.scroller .inScroller {
+  margin-bottom: 0;
+
+  /*
+   * チップを少しだけ詰める。**入力欄の上に常に載る行**なので、
+   * 既定の大きさのままだと、打つ場所がそのぶん下がる。
+   *
+   * `.tight`（26px・11px）までは落とさない。あちらは一覧に重ねる絞り込みで、
+   * 語も短い（胸・背中・脚）。こちらは種目名を省略せずに読ませる行なので、
+   * 字は 12px のまま、高さと左右の余白だけを削る。
+   */
+  > button {
+    min-height: var(--tap-row);
+    padding: 6px 12px;
+  }
+}
+
+/*
+ * まだ続く側を薄くする。**マスクで抜く。**
+ *
+ * 背景色を重ねて誤魔化すと、置いた面の地の色を知っている必要がある
+ * （この行はダイアログの中にも、カードの上にも出る）。
+ * マスクなら地が何色でも、行のほうが消えるだけで済む。
+ */
+.fadeStart {
+  mask-image: linear-gradient(to right, transparent 0, #000 28px);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 28px);
+}
+
+.fadeEnd {
+  mask-image: linear-gradient(to left, transparent 0, #000 28px);
+  -webkit-mask-image: linear-gradient(to left, transparent 0, #000 28px);
+}
+
+.fadeBoth {
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+}
+
+/*
+ * 続きがある印。**押せない。**
+ *
+ * 押して動かせるようにもできるが、そうすると端まで行くのに何度も押すことになり、
+ * 指で払うほうが速い場面でボタンを出すことになる。ここが答えるのは
+ * 「まだ続く」までで、動かすのは指。
+ */
+.more {
+  position: absolute;
+  top: 0;
+  /*
+   * **合わせる相手は行ではなくチップ。**
+   * 行は下に 2px の余白（`.chipRow` の `padding-bottom`）を持っているので、
+   * `bottom: 0` で伸ばすと、そのぶんだけ印が下へずれる。
+   * チップの高さを直に取って、チップの中央に合わせる。
+   * **上の `> button` と同じ値にしておく**——片方だけ変えると印が中央から外れる。
+   */
+  height: var(--tap-row);
+  display: flex;
+  align-items: center;
+  width: 28px;
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+
+/* 字ではなく図（`Chevron`）。大きさはここで決める */
+.chevron {
+  width: 8px;
+  height: 13px;
+}
+
+.moreStart {
+  left: 0;
+  justify-content: flex-start;
+}
+
+.moreEnd {
+  right: 0;
+  justify-content: flex-end;
+}

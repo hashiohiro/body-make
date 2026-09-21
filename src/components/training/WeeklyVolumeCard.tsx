@@ -5,7 +5,7 @@ import { Modal } from '../Modal';
 import { GROUP_LABELS, GROUP_ORDER, isCardio, isListed } from '../../lib/exerciseCatalog';
 import { addDays, formatMD, startOfWeek, todayISO } from '../../lib/date';
 import { fmtVolume } from '../../lib/format';
-import { formatSets } from '../../lib/training';
+import { cardioWeek, formatSets } from '../../lib/training';
 import type { TrainingStats } from '../../lib/training';
 import type { Exercise, GroupGoals, GroupTarget, MuscleGroup, SessionPoint } from '../../types';
 import { CardHeader } from '../CardHeader';
@@ -66,23 +66,10 @@ export function WeeklyVolumeCard({
   const thisWeekEnd = addDays(thisWeekStart, 6);
 
   /*
-   * 有酸素の今週。**距離は種目をまたいで足さない**（走った 10km と漕いだ 30km を
-   * 足した 40km に読み方がない／§11-18）。足せるのは回数と時間まで。
-   * 距離と速度は種目ごとの話なので、種目の詳細ダイアログが持つ。
+   * 有酸素の今週。**数え方は `lib/training.ts` が持つ**——打鍵点の波及行も
+   * 同じものを読む。2 か所に書くと、片方だけ直って数字が食い違う。
    */
-  const cardioWeek = (() => {
-    const days = new Set<string>();
-    let minutes = 0;
-    for (const session of sessions) {
-      if (session.date < thisWeekStart || session.date > thisWeekEnd) continue;
-      for (const point of session.exercises) {
-        if (!isCardio(point.group)) continue;
-        days.add(session.date);
-        minutes += point.minutes ?? 0;
-      }
-    }
-    return { days: days.size, minutes: Math.round(minutes) };
-  })();
+  const cardio = cardioWeek(sessions, thisWeekStart);
 
   const rows = GROUP_ORDER.map((group) => {
     const target = groupGoals[group];
@@ -181,7 +168,7 @@ export function WeeklyVolumeCard({
           <div className={s.volRow}>
             <span className={s.volName}>{GROUP_LABELS.cardio}</span>
             <span className={s.volWide}>
-              {cardioWeek.days}回 / {cardioWeek.minutes}分
+              {cardio.days}回 / {cardio.minutes}分
             </span>
             <span className={s.volStatus}>{lastDoneLabel(stats.daysSinceCardio)}</span>
           </div>

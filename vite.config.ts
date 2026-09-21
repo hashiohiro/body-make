@@ -54,5 +54,11 @@ export default defineConfig({
   test: {
     // 記録の保存先が IndexedDB になったので、jsdom に実装を持たせる
     setupFiles: ['./src/test-setup.ts'],
+    /*
+     * **ワーカーはスレッドで持つ。**既定のプロセス分離（forks）は 1 ファイルごとに
+     * Node を起こし直すので、ファイル数ぶんだけ起動の重さが積む。
+     * こちらは同じプロセスの中で分けるぶん、立ち上がりが速い。
+     */
+    pool: 'threads',
   },
 });

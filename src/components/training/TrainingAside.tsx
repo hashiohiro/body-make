@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Modal } from '../Modal';
 import { PresetCard } from './PresetCard';
 import type { PresetOption } from './PresetCard';
+import type { Preset } from '../../types';
 import { RecoveryDialog, recoverySummary } from './Recovery';
 import type { CheckHistory } from '../../lib/check';
 import s from './training.module.scss';
@@ -13,9 +14,10 @@ interface Props {
   presets: readonly PresetOption[];
   currentIds: readonly string[];
   currentName: string;
-  onAdd: (exerciseIds: readonly string[]) => void;
+  /** その日を作った元のプリセット。呼び出していなければ null */
+  applied: PresetOption | null;
   onSave: (name: string, exerciseIds: readonly string[]) => void;
-  onRemove: (id: string) => void;
+  onUpdate: (preset: Preset) => void;
 }
 
 /**
@@ -27,8 +29,8 @@ interface Props {
  * **帯は入口であると同時に要約。**開かなくても「どこが回復しているか」
  * 「いまの組み合わせが保存済みか」が読める。
  *
- * プリセットは中身を分けずにそのままダイアログへ入れた。呼び出しと保存を別の場所に
- * 割ると、同じものが 2 か所に出る。代わりに **未保存であることを帯に出して**、
+ * プリセットの入口が持つのは**保存だけ**。呼び出しは ＋ がやる（同じ一覧を
+ * 2 か所に置かない）。代わりに **未保存であることを帯に出して**、
  * 「保存できることに気づけない」（design-training.md §7.2）を受ける。
  */
 export function TrainingAside({
@@ -37,15 +39,19 @@ export function TrainingAside({
   presets,
   currentIds,
   currentName,
-  onAdd,
+  applied,
   onSave,
-  onRemove,
+  onUpdate,
 }: Props) {
   const [open, setOpen] = useState<'recovery' | 'presets' | null>(null);
 
   const composing = currentIds.length > 0;
+  /*
+   * **出すのは保存の状態だけ。**呼び出しは ＋ がやるので、ここに件数を出しても
+   * 押す理由にならない（押した先に一覧は無い）。
+   */
   const unsaved = composing && !presets.some((p) => sameSet(p.exerciseIds, currentIds));
-  const presetValue = unsaved ? '未保存' : `${presets.length}件`;
+  const presetValue = !composing ? '—' : unsaved ? '未保存' : '保存済み';
 
   return (
     <>
@@ -91,12 +97,15 @@ export function TrainingAside({
             presets={presets}
             currentIds={currentIds}
             currentName={currentName}
-            onAdd={(ids) => {
-              onAdd(ids);
+            applied={applied}
+            onUpdate={(preset) => {
+              onUpdate(preset);
               setOpen(null);
             }}
-            onSave={onSave}
-            onRemove={onRemove}
+            onSave={(name, ids) => {
+              onSave(name, ids);
+              setOpen(null);
+            }}
           />
         </Modal>
       )}

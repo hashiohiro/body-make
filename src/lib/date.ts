@@ -14,7 +14,8 @@ import { IS_DEMO } from './env';
  */
 export const DEMO_TODAY = '2026-08-29';
 
-const WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'] as const;
+/** 曜日の名前。日曜 = 0（`weekdayIndex` と同じ並び） */
+export const WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'] as const;
 
 export const MS_PER_DAY = 86_400_000;
 

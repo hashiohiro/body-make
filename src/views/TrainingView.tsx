@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCard } from '../components/training/CheckCard';
+import { ChipGroup } from '../components/ChipGroup';
+import { ExerciseRipple } from '../components/training/ExerciseRipple';
 import { TrainingAside } from '../components/training/TrainingAside';
 import { ExerciseCard } from '../components/training/ExerciseCard';
 import { ExerciseSetEditor } from '../components/training/ExerciseSetEditor';
@@ -8,19 +10,22 @@ import { ExercisePicker } from '../components/training/ExercisePicker';
 import { GoalEditor } from '../components/training/GoalEditor';
 import { Modal } from '../components/Modal';
 import type { WeightUnit } from '../lib/weight';
+import { defaultSetsFor } from '../lib/preset';
 import { useConfirm } from '../components/ConfirmDialog';
 import { OrderList } from '../components/training/OrderList';
 import { groupsOf, isCardio } from '../lib/exerciseCatalog';
-import { addDays } from '../lib/date';
+import { addDays, startOfWeek, weekdayIndex } from '../lib/date';
 import {
   buildBodyWeightLookup,
+  cardioWeek,
   personalBest,
   pickTopWeight,
   pickVolume,
   previousPoint,
 } from '../lib/training';
+import { emptyGroupSets } from '../lib/check';
 import { isCardioSet } from '../types';
-import type { Exercise, SessionSet } from '../types';
+import type { Exercise, Preset, SessionSet, Weekday } from '../types';
 import type { BodyData } from '../hooks/useBodyData';
 import { CardHeader } from '../components/CardHeader';
 import ui from '../styles/ui.module.scss';
@@ -31,6 +36,12 @@ interface Props {
   /** 記録する日。ヘッダの日付ナビが持つ */
   date: string;
 }
+
+/**
+ * 記録の無い週ぶん。**毎回作らない**——描くたびに新しい物になると、
+ * 中身が同じでも下の面が作り直しになる。
+ */
+const NO_WEEK = emptyGroupSets();
 
 /** その行に何か打ってあるか。器で見るものが違う */
 function hasValue(set: SessionSet): boolean {
@@ -44,6 +55,7 @@ export function TrainingView({ body, date }: Props) {
     data,
     daily,
     sessions,
+    weeklySets,
     checkHistory,
     suppressWarning,
     addDayExercise,
@@ -56,7 +68,7 @@ export function TrainingView({ body, date }: Props) {
     addDayExercises,
     addExercises,
     savePreset,
-    removePreset,
+    updatePreset,
     upsertExercise,
   } = body;
 
@@ -69,6 +81,17 @@ export function TrainingView({ body, date }: Props) {
   );
 
   const session = useMemo(() => sessions.find((x) => x.date === date) ?? null, [sessions, date]);
+  /*
+   * 波及行が読む「その週」。**今日の週ではなく、打っている日の週。**
+   *
+   * `TrainingStats.thisWeekSetsByGroup` は今週ぶんなので、先週の記録を直している
+   * あいだ、今週の数字が動いたように見える。週は日付から引く。
+   */
+  const weekOfDate = useMemo(
+    () => weeklySets.find((w) => w.start === startOfWeek(date)) ?? null,
+    [weeklySets, date],
+  );
+  const cardioOfWeek = useMemo(() => cardioWeek(sessions, startOfWeek(date)), [sessions, date]);
   /*
    * その日に使える体重。自重種目の「足される側」を出すのに要る。
    * 集計側と**同じ引き当て**（その日 → その日の移動平均 → 直近過去）を使う。
@@ -108,16 +131,52 @@ export function TrainingView({ body, date }: Props) {
   const editEntry = editId ? (dayEntries.find((e) => e.exerciseId === editId) ?? null) : null;
 
   // 名前を付けて残した組み合わせ。中身の部位は、そのつどマイ種目から引き直す
-  const presets = useMemo(
-    () =>
-      data.presets.map((preset) => ({
-        ...preset,
-        groups: groupsOf(data.exercises, preset.exerciseIds),
-      })),
-    [data.presets, data.exercises],
+  const option = useCallback(
+    (preset: Preset) => ({ ...preset, groupsLabel: groupsOf(data.exercises, preset.exerciseIds) }),
+    [data.exercises],
+  );
+
+  /**
+   * 開いている日の曜日を持つプリセット。**その日のぶんだけ、1 つ。**
+   *
+   * 別の曜日のものは先に出さない——木曜の組み立てを月曜に呼び出す場面より、
+   * 一覧が 7 日ぶん伸びる害のほうが大きい。
+   *
+   * 出すだけで、判定はしない。押さなければ何も起きず、押さなかった日に印も残らない
+   * ——予定行を並べる面は撤回してある（`docs/design-training.md` §11-3）。
+   */
+  const todayMenu = useMemo(() => {
+    const day = weekdayIndex(date) as Weekday;
+    const found = data.presets.find((p) => p.weekdays.includes(day));
+    return found ? option(found) : null;
+  }, [data.presets, date, option]);
+
+  /** 持っている組み合わせ、ぜんぶ */
+  const presets = useMemo(() => data.presets.map(option), [data.presets, option]);
+
+  /**
+   * ＋ から出す一覧ぶん。**今日のぶんは見出しの下に別に出すので、ここでは繰り返さない。**
+   * 帯のカードのほうは見出しで分けないので、あちらには全部渡す
+   * ——除いた配列を両方に渡していて、カードから今日のものが消えていた。
+   */
+  const pickerPresets = useMemo(
+    () => presets.filter((p) => p.id !== todayMenu?.id),
+    [presets, todayMenu],
   );
 
   const currentIds = dayEntries.map((e) => e.exerciseId);
+
+  /**
+   * その日を、どのプリセットから作ったか。**覚えておくのは画面のあいだだけ。**
+   *
+   * 呼び出したあとに種目を足し引きして保存するとき、**元のプリセットを
+   * 上書きする**ために要る（名前で突き合わせると、名前を変えた瞬間に
+   * 別物が増える）。記録には持たせない——どの日に何を使ったかは実績ではないし、
+   * 保存物を増やさずに済む。日を変えれば忘れる。
+   */
+  const [appliedAt, setAppliedAt] = useState<{ date: string; id: string } | null>(null);
+  const applied =
+    appliedAt?.date === date ? (presets.find((p) => p.id === appliedAt.id) ?? null) : null;
 
   /**
    * その日に入れる／外すの切り替え。
@@ -219,9 +278,9 @@ export function TrainingView({ body, date }: Props) {
           presets={presets}
           currentIds={currentIds}
           currentName={currentIds.length > 0 ? `${groupsOf(data.exercises, currentIds)}の日` : ''}
-          onAdd={(ids) => addDayExercises(date, ids)}
+          applied={applied}
           onSave={savePreset}
-          onRemove={removePreset}
+          onUpdate={updatePreset}
         />
       )}
 
@@ -312,18 +371,59 @@ export function TrainingView({ body, date }: Props) {
       <ExercisePicker
         exercises={active}
         usedIds={usedIds}
-        presets={presets}
+        presets={pickerPresets}
+        todayMenu={todayMenu}
         onToggle={toggle}
-        onAddPreset={(ids) => addDayExercises(date, ids)}
+        onAddPreset={(preset) => {
+          // どこから作った日かを覚える。あとで上書きするときの相手になる
+          setAppliedAt({ date, id: preset.id });
+          // 既定のセットを持つ種目は、その本数ぶん空行を出す（値は空のまま）
+          addDayExercises(
+            date,
+            preset.exerciseIds,
+            Object.fromEntries(
+              Object.entries(preset.defaults).map(([id, sets]) => [id, sets.length]),
+            ),
+          );
+        }}
         onAddFromCatalog={addFromCatalog}
       />
 
       {/*
         セットを打つ面。カードから開く。
         1 種目に集中して打てるようにするのと、カードの高さをそろえるため
+
+        **高さは決め打ち（`tall`）。**中身なりにすると、セットを足す・消すたび、
+        帯で別の種目へ移るたび、波及行が出入りするたびにシートの縁が上下して、
+        打っている欄が指の下から逃げる。一覧の面と同じ理由で、件数に高さを預けない。
       */}
       {editExercise && editEntry && (
-        <Modal open title={editExercise.name} onClose={() => setEditId(null)}>
+        <Modal open title={editExercise.name} tall onClose={() => setEditId(null)}>
+          {/*
+            その日の種目。**閉じずに移れるようにする**（`docs/design-ripple.md` §4）。
+            1 種目打つたびに 閉じる → スクロール → 次のカードを探す → 開く を
+            払っていた。帯はその往復だけを消すもので、順序は持たない
+            ——並びは記録そのもの（やった順）で、押さなかった種目に印も残らない。
+
+            **1 種目の日には出さない。**移る先が無い（行き止まりを作らない）。
+
+            `＋` は置かない。開くのは検索とカタログを持つ面で、この面に重なる。
+            行き来は毎セット起きるが、足すのはその日 1 回あるかどうか。
+          */}
+          {dayEntries.length > 1 && (
+            <ChipGroup
+              options={dayEntries.map((entry) => ({
+                id: entry.exerciseId,
+                label: byId.get(entry.exerciseId)?.name ?? '',
+              }))}
+              value={editExercise.id}
+              onChange={setEditId}
+              label="打つ種目"
+              // 種目が増えると端が切れる。開いている種目へ寄せ、まだ続くことを端に出す
+              scrollable
+            />
+          )}
+
           <ExerciseSetEditor
             exercise={editExercise}
             entry={editEntry}
@@ -334,6 +434,26 @@ export function TrainingView({ body, date }: Props) {
             bestWeight={personalBest(sessions, editExercise.id, addDays(date, -1), pickTopWeight)}
             weightUnit={inputUnit}
             onWeightUnitChange={setInputUnit}
+            // 既定のセット。**薄く出すだけ**で、打つまで記録には入らない
+            defaultSets={defaultSetsFor(data.presets, editExercise.id, date)}
+            /*
+              その一打が、この種目の外に動かしたもの（`docs/design-ripple.md` §2）。
+              組み立てるのはここ——週の配分も部位の回復も、入力の面は持っていない。
+            */
+            ripple={
+              <ExerciseRipple
+                exercise={editExercise}
+                date={date}
+                point={session?.exercises.find((p) => p.exerciseId === editExercise.id) ?? null}
+                previous={previousPoint(sessions, editExercise.id, date)}
+                weekSets={weekOfDate?.setsByGroup ?? NO_WEEK}
+                weekVolume={weekOfDate?.volumeByGroup ?? NO_WEEK}
+                groupGoals={data.groupGoals}
+                // 回復と同じ数え方を借りる。ここで数え直すと回復カードと食い違う
+                todayGroupSets={checkHistory.groupSets.get(date) ?? null}
+                cardio={cardioOfWeek}
+              />
+            }
             // 自重種目の「足される側」。その日以前の直近の体重を引く
             bodyWeight={bodyWeightAt(date)}
             onValue={(index, field, value) =>

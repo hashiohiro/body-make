@@ -5,6 +5,7 @@ import { CheckSettingsForm } from '../components/training/CheckSettingsForm';
 import { WeightUnitForm } from '../components/training/WeightUnitForm';
 import { ExerciseManager } from '../components/training/ExerciseManager';
 import { PresetManager } from '../components/training/PresetManager';
+import { WeekMenuManager } from '../components/training/WeekMenuManager';
 import { exportJson, readImportFile } from '../lib/io';
 import { markExported } from '../lib/device';
 import { storedBytes } from '../lib/storage';
@@ -21,6 +22,8 @@ import { CardHeader } from '../components/CardHeader';
 import { Button } from '../components/Button';
 import { Pill } from '../components/Pill';
 import { Select } from '../components/Select';
+import { NumericInput } from '../components/NumericInput';
+import { HEIGHT_RANGE } from '../lib/storage';
 import ui from '../styles/ui.module.scss';
 import s from './SettingsView.module.scss';
 
@@ -38,8 +41,8 @@ import s from './SettingsView.module.scss';
  */
 export const SETTINGS_SECTIONS = [
   { id: 'general', label: '一般', hint: '表示・データ・このアプリについて' },
-  { id: 'body', label: '体組成', hint: '腹囲' },
-  { id: 'training', label: 'トレーニング', hint: 'マイ種目・プリセット' },
+  { id: 'body', label: '体組成', hint: '身長・腹囲' },
+  { id: 'training', label: 'トレーニング', hint: 'マイ種目・プリセット・週メニュー' },
 ] as const;
 
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
@@ -54,14 +57,39 @@ export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
  * 段を 1 つ増やすぶんの往復より、目当てのものが件数で見えているほうが速い。
  */
 export const TRAINING_PAGES = [
-  { id: 'exercises', label: 'マイ種目', hint: '一覧・追加・種目ごとの設定' },
-  { id: 'presets', label: 'プリセット', hint: '組み合わせの確認・編集' },
+  { id: 'exercises', label: 'マイ種目', hint: '一覧・追加・種目ごとの設定', group: 'own' },
+  { id: 'presets', label: 'プリセット', hint: 'いつでも選べる組み合わせ', group: 'own' },
+  /*
+   * **曜日を持つプリセットだけを、7 日ぶんの並びとして読む面。**
+   * 毎週やるものと、そのとき選ぶものを 1 枚に混ぜると、どちらのつもりで
+   * 作ったものか一覧から読めなくなる。持ちものは同じで、面だけ分ける。
+   */
+  { id: 'week', label: '週メニュー', hint: '曜日ごとの組み立て', group: 'own' },
   /*
    * 判定そのもの（何が警告されているか）は記録画面とプリセット画面にある。
    * ここに置くのは滅多に変えない閾値と、押した許容を戻す場所だけ。
    */
-  { id: 'checks', label: 'トレーニング種目のレビュー', hint: '有効化・しきい値・許容済み' },
-  { id: 'units', label: 'ウエイトの単位', hint: '入力と表示をそれぞれ選ぶ' },
+  { id: 'units', label: 'ウエイトの単位', hint: '入力と表示をそれぞれ選ぶ', group: 'config' },
+  { id: 'checks', label: '種目のレビュー', hint: '有効化・しきい値・許容済み', group: 'config' },
+] as const;
+
+/**
+ * 一覧の区切り。**性質の違うものが同じ形で並ぶのをやめる。**
+ *
+ * 5 行が「名前＋件数＋›」の同じ形だったので、どれがどの種類かはラベルを
+ * 読むまで分からなかった。種目を足しに来た人は上だけ、単位を直しに来た人は
+ * 下だけを見ればよくなる。
+ *
+ * **見出しは中身の名前にする。**「持ちもの」「設定」と呼んでいた頃は、
+ * こちらの造語なうえ `設定 > トレーニング > 設定` と入れ子になっていた。
+ * 探しに来た人が使う言葉に寄せる。
+ *
+ * **段は増やさない。**畳むと、いちばんよく開く 3 つ（マイ種目・プリセット・
+ * 週メニュー）が 1 タップ遠くなる。5 行はまだ画面に収まる。
+ */
+const PAGE_GROUPS = [
+  { id: 'own', label: '種目とメニュー' },
+  { id: 'config', label: '記録のしかた' },
 ] as const;
 
 export type TrainingPageId = (typeof TRAINING_PAGES)[number]['id'];
@@ -215,6 +243,29 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
   if (section === 'body') {
     return (
       <section className={ui.card}>
+        {/*
+          **身長は目標ではなく定義。**伸びも縮みもしないので、進捗を見ながら
+          触るものではない（目標タブが持つのは「進捗で変わる値」）。
+          目標の面には BMI を読む側だけを残す。
+        */}
+        <div className={ui.formRow}>
+          <label htmlFor="height">
+            身長
+            <small>BMI の計算に使います（任意）</small>
+          </label>
+          <span className={ui.inputUnit}>
+            <NumericInput
+              id="height"
+              value={settings.heightCm}
+              min={HEIGHT_RANGE[0]}
+              max={HEIGHT_RANGE[1]}
+              placeholder="—"
+              onCommit={(heightCm) => updateSettings({ heightCm })}
+            />
+            <span>cm</span>
+          </span>
+        </div>
+
         <div className={ui.formRow}>
           <label id="waist-enabled">腹囲を記録する</label>
           <Pill
@@ -236,6 +287,8 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
     const counts: Record<TrainingPageId, number> = {
       exercises: data.exercises.length,
       presets: data.presets.length,
+      // 週メニューは「曜日を持つものを並べ直した見え方」なので、数えるのも曜日で
+      week: data.presets.filter((p) => p.weekdays.length > 0).length,
       // 件数として意味があるのは「押した許容」の数。閾値は数えても仕方がない
       checks: data.suppressed.length,
       // 件数で語れるものが無い。行には選んでいる単位を出す（下の count のところ）
@@ -271,6 +324,20 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
       );
     }
 
+    if (page === 'week') {
+      return (
+        <WeekMenuManager
+          presets={data.presets}
+          exercises={data.exercises}
+          groupGoals={data.groupGoals}
+          onCreate={savePreset}
+          onUpdate={updatePreset}
+          onRemove={removePreset}
+          onAddExercises={addExercises}
+        />
+      );
+    }
+
     if (page === 'exercises') {
       return (
         <ExerciseManager
@@ -289,31 +356,36 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
     return (
       <section className={ui.card}>
         <div className={s.menu}>
-          {TRAINING_PAGES.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              className={s.row}
-              onClick={() => onOpen('training', p.id)}
-            >
-              <span className={s.label}>
-                {p.label}
-                <small className={s.hint}>{p.hint}</small>
-              </span>
-              <span className={s.count}>
-                {p.id === 'units'
-                  ? `${WEIGHT_UNIT_LABEL[settings.inputWeightUnit]} / ${WEIGHT_UNIT_LABEL[settings.displayWeightUnit]}`
-                  : p.id === 'checks'
-                    ? counts[p.id] === 0
-                      ? ''
-                      : `許容 ${counts[p.id]}件`
-                    : `${counts[p.id]}件`}
-              </span>
-              <span className={s.chevron} aria-hidden="true">
-                ›
-              </span>
-            </button>
-          ))}
+          {PAGE_GROUPS.flatMap((g) => [
+            <p key={g.id} className={s.groupLabel}>
+              {g.label}
+            </p>,
+            ...TRAINING_PAGES.filter((p) => p.group === g.id).map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className={s.row}
+                onClick={() => onOpen('training', p.id)}
+              >
+                <span className={s.label}>
+                  {p.label}
+                  <small className={s.hint}>{p.hint}</small>
+                </span>
+                <span className={s.count}>
+                  {p.id === 'units'
+                    ? `${WEIGHT_UNIT_LABEL[settings.inputWeightUnit]} / ${WEIGHT_UNIT_LABEL[settings.displayWeightUnit]}`
+                    : p.id === 'checks'
+                      ? counts[p.id] === 0
+                        ? ''
+                        : `許容 ${counts[p.id]}件`
+                      : `${counts[p.id]}件`}
+                </span>
+                <span className={s.chevron} aria-hidden="true">
+                  ›
+                </span>
+              </button>
+            )),
+          ])}
         </div>
       </section>
     );

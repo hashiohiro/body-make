@@ -126,6 +126,14 @@
   margin-bottom: 12px;
   overflow-x: auto;
   padding-bottom: 2px;
+  /*
+   * 端まで払ったスワイプを、外へ連鎖させない。
+   *
+   * `global.scss` が塞いでいるのは縦（`overscroll-behavior-y`）だけで、横は開いている。
+   * チップ行を**打っている最中の面**（セット入力のダイアログ）にも置くので、
+   * 端で払った指がブラウザの「戻る」ジェスチャに化ける経路をここで閉じる。
+   */
+  overscroll-behavior-x: contain;
   @include hide-scrollbar;
 }
 

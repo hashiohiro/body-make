@@ -11,6 +11,14 @@ interface Props {
   onCancel: () => void;
   /** 読み上げに出す欄の名前（「新しいプリセットの名前」など） */
   label: string;
+  /**
+   * 空のときに欄の中へ薄く出す項目名（「プリセット名」など）。
+   *
+   * **読み上げ名（`label`）とは別に持つ。**あちらは文脈まで含めて長くなる
+   * （「ベンチプレスの日の新しい名前」）ので、欄の中に出すと読み切れない。
+   * 欄の中に要るのは「何を打つ欄か」だけ。
+   */
+  placeholder?: string | undefined;
   /** 確定の読み上げ名。「この名前で保存」「この名前にする」など、結果を書く */
   commitLabel: string;
   cancelLabel: string;
@@ -39,6 +47,7 @@ export function NameEntryRow({
   label,
   commitLabel,
   cancelLabel,
+  placeholder,
   disabled,
 }: Props) {
   return (
@@ -48,6 +57,7 @@ export function NameEntryRow({
         value={value}
         maxLength={PRESET_NAME_MAX}
         label={label}
+        placeholder={placeholder}
         onChange={onChange}
         onCommit={disabled ? undefined : onCommit}
         onCancel={onCancel}

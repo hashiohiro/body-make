@@ -10,8 +10,9 @@ import type { PresetOption } from './PresetCard';
 import type { Exercise } from '../../types';
 import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
-import { Tag } from '../Tag';
 import { Pill } from '../Pill';
+import { Tag } from '../Tag';
+
 import s from './training.module.scss';
 
 interface Props {
@@ -19,10 +20,18 @@ interface Props {
   usedIds: ReadonlySet<string>;
   /** 保存してある組み合わせ。ここからも入れられる */
   presets: readonly PresetOption[];
+  /**
+   * 開いている日の週メニュー。**その日のぶんだけ、1 つ。**
+   * 別の曜日のものは出さない。部位だけ決めた段階のものも渡さない（入れるものが無い）。
+   */
+  todayMenu: PresetOption | null;
   /** その日に入れる／外すの切り替え。押すたびに増えることはない */
   onToggle: (id: string) => void;
-  /** プリセットの中身をまとめてその日に入れる */
-  onAddPreset: (exerciseIds: readonly string[]) => void;
+  /**
+   * プリセットの中身をまとめてその日に入れる。
+   * **プリセットごと渡す**——既定のセットを持っていれば、その本数ぶん空行を用意する。
+   */
+  onAddPreset: (preset: PresetOption) => void;
   /**
    * カタログから 1 種目を、その日に入れる。
    * `keep` はマイ種目にも残すか（false なら、その日だけの種目として非表示で持つ）。
@@ -60,6 +69,7 @@ export function ExercisePicker({
   exercises,
   usedIds,
   presets,
+  todayMenu,
   onToggle,
   onAddPreset,
   onAddFromCatalog,
@@ -117,6 +127,24 @@ export function ExercisePicker({
       </Pill>
     );
   };
+
+  /** 組み合わせ 1 件ぶんの行。**今日のメニューも、プリセットも同じ見た目・同じ操作** */
+  const presetRow = (preset: PresetOption) => (
+    <button
+      key={preset.id}
+      type="button"
+      className={s.presetPick}
+      aria-label={`${preset.name}をこの日に入れる`}
+      onClick={() => {
+        onAddPreset(preset);
+        close();
+      }}
+    >
+      <span className={s.presetName}>{preset.name}</span>
+      <span className={s.presetGroups}>{preset.groupsLabel}</span>
+      <span className={s.presetCount}>{preset.exerciseIds.length}種目</span>
+    </button>
+  );
 
   const menuItem = (id: Panel, name: string, hint: string) => (
     <button type="button" className={s.menuItem} onClick={() => setPanel(id)}>
@@ -244,7 +272,7 @@ export function ExercisePicker({
             note="どちらでも、この日には入ります。"
           />
         ) : panel === 'presets' ? (
-          presets.length === 0 ? (
+          presets.length === 0 && todayMenu == null ? (
             <p className={ui.emptyState}>
               保存した組み合わせはまだありません。
               <br />
@@ -252,22 +280,22 @@ export function ExercisePicker({
             </p>
           ) : (
             <div>
-              {presets.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  className={s.presetPick}
-                  aria-label={`${preset.name}をこの日に入れる`}
-                  onClick={() => {
-                    onAddPreset(preset.exerciseIds);
-                    close();
-                  }}
-                >
-                  <span className={s.presetName}>{preset.name}</span>
-                  <span className={s.presetGroups}>{preset.groups}</span>
-                  <span className={s.presetCount}>{preset.exerciseIds.length}種目</span>
-                </button>
-              ))}
+              {/*
+                **今日のぶんだけを、1 つ。**出すだけで判定はしない——押さなければ
+                何も起きず、押さなかった日に印も残らない（`design-training.md` §11-3）。
+              */}
+              {todayMenu && (
+                <>
+                  <p className={ui.sectionLabel}>今日のメニュー</p>
+                  {presetRow(todayMenu)}
+                </>
+              )}
+              {presets.length > 0 && (
+                <>
+                  {todayMenu && <p className={ui.sectionLabel}>プリセット</p>}
+                  {presets.map(presetRow)}
+                </>
+              )}
             </div>
           )
         ) : choices.length === 0 ? (

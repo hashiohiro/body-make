@@ -48,7 +48,15 @@ function fullData(): AppData {
     },
     // 部位目標は全部位のキーを持つ（決めていない部位は null）
     groupGoals: { ...base.groupGoals, chest: { type: 'sets', value: 12 } },
-    presets: [{ id: 'p1', name: '押す日', exerciseIds: ['ex_bench'] }],
+    presets: [
+      {
+        id: 'p1',
+        name: '押す日',
+        exerciseIds: ['ex_bench'],
+        weekdays: [],
+        defaults: {},
+      },
+    ],
     checks: { ...base.checks, enabled: true, sessionMinutes: 90 },
     suppressed: ['axial|2026-03-10'],
   };

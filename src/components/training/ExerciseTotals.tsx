@@ -38,6 +38,15 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
   const tone = deltaTone(delta, false, 0.5);
   const cardio = isCardio(exercise.group);
 
+  /*
+   * その日が通算の最高を超えたか。**比べるのは換算前の kg**——
+   * 片方だけ換算すると、丸めの違いで超えた／超えないが変わる。
+   */
+  const topWeight = point?.top?.weight ?? null;
+  const rawVolume = point?.volume ?? 0;
+  const overWeight = bestWeight != null && topWeight != null && topWeight > bestWeight;
+  const overVolume = best != null && best > 0 && rawVolume > best;
+
   return (
     <>
       <div className={s.exFoot}>
@@ -96,14 +105,26 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
       */}
       {!cardio && (bestWeight != null || (best != null && best > 0)) && (
         <div className={s.exPrev}>
+          {/*
+            その日が通算の最高を超えたら、**この行そのものを `60.0 → 62.5` にする。**
+
+            超えた事実を別の行で足すと、すぐ上と同じことを 2 回言うことになる
+            （`bestWeight` は「その日より前」の最高なので、並べれば超えたことは
+            読めるが、読む側に引き算をさせる）。行は増やさない。
+
+            **残り（あと N kg）は出さない**のは今までどおり。出すのは跨いだ事実だけで、
+            距離ではない。
+          */}
           {bestWeight != null && (
             <span>
-              最高重量 {fmt(conv(bestWeight))} {unitLabel}
+              最高重量 {fmt(conv(bestWeight))}
+              {overWeight && <> → {fmt(conv(topWeight!))}</>} {unitLabel}
             </span>
           )}
           {best != null && best > 0 && (
             <span>
-              最高挙上量 {fmtVolume(conv(best))} {unitLabel}
+              最高挙上量 {fmtVolume(conv(best))}
+              {overVolume && <> → {fmtVolume(conv(rawVolume))}</>} {unitLabel}
             </span>
           )}
         </div>

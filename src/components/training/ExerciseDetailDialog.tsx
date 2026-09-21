@@ -5,7 +5,8 @@ import { Meter } from '../Meter';
 import { Modal } from '../Modal';
 import { TimeSeriesChart } from '../charts/TimeSeriesChart';
 import type { ChartSeries, SeriesPoint } from '../charts/TimeSeriesChart';
-import { GROUP_LABELS, countsReps, isCardio } from '../../lib/exerciseCatalog';
+import { GROUP_LABELS, countsReps, isCardio, muscleOf } from '../../lib/exerciseCatalog';
+import { BodyMap } from './weekPlan/BodyMap';
 import { addDays, formatMD, isoToTime, startOfWeek, todayISO } from '../../lib/date';
 import { deltaTone, fmt, fmtDelta, fmtVolume } from '../../lib/format';
 import {
@@ -192,6 +193,12 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
     isoToTime(history[history.length - 1]?.date ?? today),
   ];
 
+  /** 効く部位と、その濃さ。**濃さ＝数えるときの係数**そのもの */
+  const muscle = muscleOf(exercise.group);
+  const share: Partial<Record<MuscleGroup, number>> = {};
+  if (muscle) share[muscle] = 1;
+  for (const sub of exercise.subGroups) share[sub.group] = sub.weight;
+
   return (
     <Modal open={open} title={exercise.name} onClose={onClose}>
       <div>
@@ -276,6 +283,29 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
             </div>
             {/* 種目をまたいだ合計は出さない。走った距離と漕いだ距離を足しても読めない */}
             <p className={ui.note}>この種目ぶんだけの合計です。</p>
+          </>
+        )}
+
+        {/*
+          効く部位を図で出す。**濃さがそのまま係数**——主部位が 1、補助は
+          種目ごとの係数（0.25〜1）。いままで補助の重みは注記の文字
+          （`胸×1・肩×0.5`）でしか読めず、どれくらい薄いのかが伝わらなかった。
+          有酸素は部位を持たないので出さない。
+        */}
+        {muscle != null && (
+          <>
+            <div className={s.dialogHead}>
+              <span>効く部位</span>
+              <span>主部位 1 ・ 補助は係数ぶん</span>
+            </div>
+            <BodyMap tint={share} label={`${exercise.name}が効く部位`} />
+            <p className={ui.note}>
+              {[
+                `${GROUP_LABELS[exercise.group]} 1`,
+                ...exercise.subGroups.map((x) => `${GROUP_LABELS[x.group]} ${x.weight}`),
+              ].join(' / ')}
+              セットとして数えます。
+            </p>
           </>
         )}
 

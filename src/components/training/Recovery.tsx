@@ -1,12 +1,11 @@
 import { useMemo } from 'react';
-import { Meter } from '../Meter';
 import { Modal } from '../Modal';
+import { RecoveryGrid } from './weekPlan/RecoveryGrid';
 import { GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
-import { MAX_RECOVERY_DAYS, axialStatus, groupReadiness, type CheckHistory } from '../../lib/check';
-import { formatMD } from '../../lib/date';
+import { MAX_RECOVERY_DAYS, groupReadiness, type CheckHistory } from '../../lib/check';
+import { WEEKDAY_JA, addDays, startOfWeek } from '../../lib/date';
 import { formatSets } from '../../lib/training';
-import ui from '../../styles/ui.module.scss';
-import s from './training.module.scss';
+import type { MuscleGroup } from '../../types';
 
 interface Props {
   open: boolean;
@@ -95,70 +94,59 @@ export function recoverySummary(history: CheckHistory, date: string): string {
   return recovered.length === 0 ? 'なし' : recovered.map((r) => r.label).join('・');
 }
 
-export function RecoveryDialog({ open, onClose, date, history }: Props) {
-  const muscles = useMemo(() => rowsOf(history, date), [history, date]);
-  const axial = useMemo(() => axialStatus(history, date), [history, date]);
+/**
+ * 今週の実績の帯。**回復の面のいちばん上に置く。**
+ *
+ * 週メニューの帯と同じ絵で、軸と出どころだけが違う——あちらは日〜土の
+ * 組み立て（これから）、こちらは今週の記録（やったこと）。
+ *
+ * 軸は**日曜はじまりの今週**で固定する。週の集計も「日曜に 0 へ戻る」も
+ * 同じ区切りなので、ここだけ「直近 7 日」にすると数字の期間がずれる。
+ * **先へは戻さない**（`wrap: false`）——土曜の次は来週で、まだ無い日を塗ることになる。
+ *
+ * **手前の日も渡して計算する。**先週の土曜にやったぶんの回復は日曜まで続く。
+ * 助走が無いと、日曜に開いた帯が空になって「回復中」が消えていた（`skip`）。
+ */
+/** 帯の手前に足す助走の日数。回復は最長でも中2日（`MAX_RECOVERY_DAYS` − 1） */
+const LEAD = MAX_RECOVERY_DAYS - 1;
+
+function RecoveryBand({ history, date }: { history: CheckHistory; date: string }) {
+  const band = useMemo(() => {
+    const from = startOfWeek(date);
+    // 回復は最長でも中2日なので、手前 2 日ぶんあれば持ち越しは拾いきれる
+    return Array.from({ length: LEAD + WEEKDAY_JA.length }, (_, i) => {
+      const sets = history.groupSets?.get(addDays(from, i - LEAD));
+      return Object.fromEntries(GROUP_ORDER.map((g) => [g, sets?.[g] ?? 0])) as Record<
+        MuscleGroup,
+        number
+      >;
+    });
+  }, [history, date]);
 
   /*
-   * ゲージは **表示している日数だけ** から引く。
-   *
-   * 以前は「経過日数 ÷ そのセッションに要る日数」で、分母がセッションの大きさで動いていた。
-   * 胸（8セット・2日必要・1日経過＝50%）と脚（16セット・3日必要・2日経過＝67%）が
-   * どちらも「あと1日」なのにバーの長さが違い、まばらに見えていた。
-   *
-   * 目盛りは全行で共通にする。行ごとに分母が違うと、同じ「あと1日」がまた別の長さになる。
+   * **6 部位を常に出す。**組み立ての帯は置いていない部位の行を落とすが、
+   * こちらは「今週まだやっていない部位」がそのまま読む相手になる。
+   * 落とすと、記録がゼロの週には表ごと出なくなっていた。
    */
-  const scale = Math.max(...muscles.map((r) => r.max), 1);
-  const progress = (r: Row) => Math.max(0, (scale - r.left) / scale);
-
-  const row = (r: Row) => (
-    <div key={r.key} className={s.recoveryRow}>
-      <span className={s.recoveryName}>{r.label}</span>
-      <Meter value={progress(r)} label={`${r.label}の回復`} />
-      <span className={r.left > 0 ? s.recoveryWait : s.recoveryReady}>
-        {r.left > 0 ? `あと${r.left}日` : '回復済み'}
-      </span>
-      <span className={s.recoveryReason}>{r.reason}</span>
-    </div>
+  return (
+    <RecoveryGrid caption="今週" days={band} labels={WEEKDAY_JA} wrap={false} all skip={LEAD} />
   );
+}
 
+export function RecoveryDialog({ open, onClose, date, history }: Props) {
   if (!open) return null;
 
+  /*
+   * 中身は帯だけ。**軸荷重の節は置かない。**
+   *
+   * あれは回復ではなく実績（前回いつやったか・その週に何日あったか）で、
+   * 回復の面に並べると部位と同じ物差しの話に見えていた。
+   * 連日になっているかどうかはレビューが指摘する（`check.ts` の `axial`）ので、
+   * 読むだけの行をここに持つ必要がない。
+   */
   return (
-    <>
-      {
-        <Modal open title="回復" onClose={onClose}>
-          <div>
-            <div className={ui.sectionLabel}>筋肉の疲労</div>
-            {muscles.map(row)}
-            {/* 80 文字以内 */}
-            <p className={ui.note}>
-              5セットまで翌日 / 6〜10セット中1日 / 11セット以上中2日。
-              補助部位は係数ぶん（既定0.5）数えます。積み上げず、直近の1回で決めます。
-            </p>
-
-            <div className={ui.sectionLabel}>軸荷重種目</div>
-            <div className={s.recoveryRow}>
-              <span className={s.recoveryName}>前回</span>
-              <span />
-              <span className={s.recoveryReady}>
-                {axial.since == null
-                  ? '記録なし'
-                  : axial.since === 0
-                    ? '今日'
-                    : axial.since === 1
-                      ? '昨日'
-                      : `${axial.since}日前`}
-              </span>
-              <span className={s.recoveryReason}>
-                {/* どの週を数えたかを書く。「今週」だと、過去の日を開いたときに現在週と読める */}
-                {axial.names.join('・') || '—'} ／ {formatMD(axial.weekStart)}の週{' '}
-                {axial.daysInWeek}日
-              </span>
-            </div>
-          </div>
-        </Modal>
-      }
-    </>
+    <Modal open title="回復" onClose={onClose}>
+      <RecoveryBand history={history} date={date} />
+    </Modal>
   );
 }

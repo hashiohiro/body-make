@@ -1,0 +1,120 @@
+@use '../../../styles/mixins' as *;
+
+/* 前と後の 2 枚を縦に収める枠 */
+.bodyMap {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+/* 表と裏を横に並べる。狭い画面でも 2 枚が収まる幅にする */
+.figures {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.figureWrap {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  margin: 0;
+}
+
+.figure {
+  width: 112px;
+  height: auto;
+}
+
+.figureLabel {
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+/*
+ * 頭と首。**鍛える部位ではないので、押せる区画と見分けがつく形にする。**
+ *
+ * 区画と同じ「塗り＋枠線」にしていたので、押せるものと同じ顔をしていた。
+ * **枠線の有無を「押せるかどうか」の印にする**——枠のあるものだけが選べる。
+ * 塗りも地の側（--grid）へ寄せて、人の形を示すためだけの飾りにする。
+ */
+.figureBase {
+  fill: var(--grid);
+  stroke: none;
+}
+
+/*
+ * 読む専用の区画。**枠を出さない。**枠は「押せる」の印にしてあるので、
+ * 押せない図に付けると嘘になる。塗りだけで量を出す。
+ */
+.regionReading polygon {
+  fill: inherit;
+  stroke: none;
+}
+
+/*
+ * 回復の帯。曜日 × 部位で、いつ効かせていつまで回復中かを出す。
+ *
+ * **仕切り線は引かない。**見出し（「今週」「部位ごとの間隔」）が区切りを
+ * 持っているので、線を足すと段が二重になる。
+ */
+.recoveryWrap:not(:first-child) {
+  margin-top: 12px;
+}
+
+.recovery {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 10px;
+  @include tabular;
+
+  th,
+  td {
+    padding: 0;
+    text-align: center;
+    color: var(--ink-2);
+  }
+
+  /* マスは柄で読むので、塗りの面をそれなりの高さにする */
+  td {
+    height: 22px;
+    border: 1px solid var(--surface);
+    border-radius: 2px;
+  }
+
+  /* 部位名の列だけ幅を決める。残りの 7 列は曜日で等分 */
+  th:first-child {
+    width: 3.2em;
+    text-align: left;
+    color: var(--ink);
+  }
+
+  thead th {
+    color: var(--ink-muted);
+    font-weight: 400;
+  }
+}
+
+/* 凡例。実物の見本を並べる（文だけだと読み合わせることになる） */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 6px;
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.swatch {
+  width: 18px;
+  height: 12px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}

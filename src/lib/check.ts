@@ -237,6 +237,23 @@ const RECOVERY_STEPS: readonly (readonly [minSets: number, days: number])[] = [
 /** 部位が空けることになる日数の最大。回復の窓（24〜72時間）の上限 */
 export const MAX_RECOVERY_DAYS = RECOVERY_STEPS[0]![1];
 
+/**
+ * 間隔の目安を 1 行で。**閾値そのものから組み立てる。**
+ *
+ * 「胸が月→火で中0日（6セットなら中1日）」のように組み合わせごとに並べていたが、
+ * 詰まりは図（回復の帯）を見れば分かるので、文は**規則だけ**に絞る。
+ * `RECOVERY_STEPS` から作るので、閾値を変えても文が古くならない。
+ */
+export const RECOVERY_RULE = [...RECOVERY_STEPS]
+  .reverse()
+  .map(([minSets, days], i, all) => {
+    const next = all[i + 1]?.[0];
+    const range = next == null ? `${minSets}セット以上` : `${minSets}〜${next - 1}セット`;
+    // days は「空ける日数」。人が数えるのは、そのあいだに挟む日数（中◯日）
+    return `${range}は中${days - 1}日`;
+  })
+  .join('、');
+
 /** そのセッションのあと、次に同じ部位をやるまでに空ける日数 */
 export function requiredDays(sets: number): number {
   return RECOVERY_STEPS.find(([min]) => sets >= min)?.[1] ?? 0;

@@ -209,3 +209,102 @@ describe('閉じる操作', () => {
     expect(isOpen()).toBe(true);
   });
 });
+
+/**
+ * **入れ子で開く面。**確認・種目を選ぶ・既定のセットは、開いている面の上に重なる。
+ * 背面の固定は数を数えて最後の 1 枚で解くので、**数え違いがあるとページが
+ * 固まったままになる**（`position: fixed` が残り、下へスクロールできなくなる）。
+ */
+describe('重ねて開く', () => {
+  function Nested() {
+    const [outer, setOuter] = useState(false);
+    const [inner, setInner] = useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOuter(true)}>
+          外を開く
+        </button>
+        {outer && (
+          <Modal open title="外" onClose={() => setOuter(false)}>
+            <button type="button" onClick={() => setInner(true)}>
+              中を開く
+            </button>
+            {/* 答えた瞬間に外ごと消える経路（削除の確認と同じ形） */}
+            <button
+              type="button"
+              onClick={() => {
+                setInner(false);
+                setOuter(false);
+              }}
+            >
+              両方閉じる
+            </button>
+            {inner && (
+              <Modal open title="中" onClose={() => setInner(false)}>
+                <p>中身</p>
+              </Modal>
+            )}
+          </Modal>
+        )}
+      </>
+    );
+  }
+
+  const locked = () => document.body.style.position === 'fixed';
+  const openCount = () => document.querySelectorAll('dialog[open]').length;
+
+  it('重ねて開いて 1 枚ずつ閉じても、固定が残らない', () => {
+    render(<Nested />);
+    fireEvent.click(screen.getByText('外を開く'));
+    fireEvent.click(screen.getByText('中を開く'));
+    expect(openCount()).toBe(2);
+    expect(locked()).toBe(true);
+
+    // 重ねたぶんだけ「閉じる」が並ぶ。上に出ているほう（あと）から閉じる
+    const closes = () => screen.getAllByRole('button', { name: '閉じる' });
+    fireEvent.click(closes()[closes().length - 1]!);
+    // 外はまだ開いているので、固定は解かない
+    expect(openCount()).toBe(1);
+    expect(locked()).toBe(true);
+
+    fireEvent.click(closes()[0]!);
+    expect(openCount()).toBe(0);
+    expect(locked()).toBe(false);
+  });
+
+  /** 中を開いたまま外ごと消える。**どちらも閉じてから外れること** */
+  it('中を開いたまま外ごと消えても、開いたままの面が残らない', () => {
+    render(<Nested />);
+    fireEvent.click(screen.getByText('外を開く'));
+    fireEvent.click(screen.getByText('中を開く'));
+    fireEvent.click(screen.getByText('両方閉じる'));
+
+    expect(document.querySelectorAll('dialog').length).toBe(0);
+    expect(locked()).toBe(false);
+  });
+
+  /** 開け閉めを繰り返しても数がずれないこと */
+  it('開け閉めを繰り返しても固定が残らない', () => {
+    render(<Nested />);
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(screen.getByText('外を開く'));
+      fireEvent.click(screen.getByText('中を開く'));
+      fireEvent.click(screen.getByText('両方閉じる'));
+    }
+    expect(locked()).toBe(false);
+  });
+
+  /** StrictMode は effect を 作る→捨てる→作る の順で走らせる */
+  it('StrictMode でも固定が残らない', () => {
+    render(
+      <StrictMode>
+        <Nested />
+      </StrictMode>,
+    );
+    fireEvent.click(screen.getByText('外を開く'));
+    fireEvent.click(screen.getByText('中を開く'));
+    expect(locked()).toBe(true);
+    fireEvent.click(screen.getByText('両方閉じる'));
+    expect(locked()).toBe(false);
+  });
+});

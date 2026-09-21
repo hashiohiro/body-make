@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { NumericInput } from './NumericInput';
 import { formatRelativeDays, formatYMD, todayISO, diffDays } from '../lib/date';
 import { fmt, fmtDelta, fmtPercent } from '../lib/format';
-import { BODYFAT_RANGE, HEIGHT_RANGE, WEIGHT_RANGE } from '../lib/storage';
+import { BODYFAT_RANGE, WEIGHT_RANGE } from '../lib/storage';
 import type { Projection, Settings, Stats } from '../types';
 import { Meter } from './Meter';
 import ui from '../styles/ui.module.scss';
@@ -78,26 +78,14 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
       </div>
 
       {/*
-        身長そのものは目標ではないが、目標体重と BMI は同じ話題なので同じ面に置く。
-        別の画面に分けると、身長を入れる理由が画面の中で完結しない
+        身長は**目標ではなく定義**なので、設定 &gt; 体組成 が持つ
+        （伸びも縮みもしないものを、進捗を見ながら触る面に置かない）。
+        ここに欄を作らないのは、同じ値を直す場所を 2 つにしないため。
+        入れていない人には、どこにあるかだけ書く。
       */}
-      <div className={ui.formRow}>
-        <label htmlFor="height">
-          身長
-          <small>BMI の計算に使います（任意）</small>
-        </label>
-        <span className={ui.inputUnit}>
-          <NumericInput
-            id="height"
-            value={settings.heightCm}
-            min={HEIGHT_RANGE[0]}
-            max={HEIGHT_RANGE[1]}
-            placeholder="—"
-            onCommit={(v) => onUpdate({ heightCm: v })}
-          />
-          <span>cm</span>
-        </span>
-      </div>
+      {settings.heightCm == null && (
+        <p className={ui.note}>設定 &gt; 体組成 で身長を入れると、BMI が出ます。</p>
+      )}
     </div>
   );
 
@@ -188,7 +176,6 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
           </div>
         )}
 
-        {/* 身長を入れる理由をこの画面で完結させる。入れていなければ何も出さない */}
         {settings.heightCm != null && stats.bmi != null && (
           <div className={s.etaRow}>
             <span>BMI（身長 {fmt(settings.heightCm, 0)}cm）</span>

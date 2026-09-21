@@ -605,6 +605,38 @@ export function buildWeeklySets(sessions: readonly SessionPoint[], from: string)
   return weeks;
 }
 
+export interface CardioWeek {
+  /** その週に有酸素をやった日数 */
+  days: number;
+  /** その週の合計時間（分） */
+  minutes: number;
+}
+
+/**
+ * 週の有酸素。**部位を持たないので `buildWeeklySets` には入らない。**
+ *
+ * **距離は種目をまたいで足さない**（走った 10km と漕いだ 30km を足した 40km に
+ * 読み方がない）。足せるのは回数と時間まで。距離と速度は種目ごとの話なので、
+ * 種目の詳細ダイアログが持つ。
+ *
+ * 週の配分カードと、打鍵点の波及行の**両方が読む**。同じ数え方を 2 か所に
+ * 書くと、片方だけ直って数字が食い違う。
+ */
+export function cardioWeek(sessions: readonly SessionPoint[], weekStart: string): CardioWeek {
+  const end = addDays(weekStart, 6);
+  const days = new Set<string>();
+  let minutes = 0;
+  for (const session of sessions) {
+    if (session.date < weekStart || session.date > end) continue;
+    for (const point of session.exercises) {
+      if (!isCardio(point.group)) continue;
+      days.add(session.date);
+      minutes += point.minutes ?? 0;
+    }
+  }
+  return { days: days.size, minutes: Math.round(minutes) };
+}
+
 /* ------------------------------------------------------------------ *
  * 停滞の提示
  * ------------------------------------------------------------------ */
@@ -962,7 +994,7 @@ export const goalCurrent = (type: GoalType, p: ExercisePoint): number | null => 
 };
 
 /** 目標の単位。維持は主指標に合わせる */
-function goalUnitOf(type: GoalType, repUnit: RepUnit): string {
+export function goalUnitOf(type: GoalType, repUnit: RepUnit): string {
   if (type === 'distance') return 'm';
   if (type === 'duration') return '分';
   if (type === 'speed') return 'm/分';

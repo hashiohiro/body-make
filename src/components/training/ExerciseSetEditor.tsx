@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { ExerciseTotals } from './ExerciseTotals';
 import { SetRow } from './SetRow';
 import { catalogEquipment, isCardio } from '../../lib/exerciseCatalog';
@@ -35,6 +36,22 @@ interface Props {
   onWeightUnitChange: (unit: WeightUnit) => void;
   /** その日に使える体重（kg）。自重種目の「足される側」を出すのに要る。無ければ null */
   bodyWeight: number | null;
+  /**
+   * プリセットに書いてある既定のセット。**薄く出すだけ**で記録には入らない。
+   *
+   * 順は 直前の行 → **これ** → 前回のトップセット。
+   * 直前の行が先なのは、続けて打っている最中はそちらが近いから。
+   * 前回より先なのは、**こちらは本人が書いた意図**で、前回は自動で残った値だから。
+   */
+  defaultSets: SessionSet[] | null;
+  /**
+   * 波及行。**中身は外で作る。**
+   *
+   * この面が知っているのは 1 種目ぶんだけで、週の配分も部位の回復も持っていない。
+   * 値を 6 つ受け取って組み立てると、重量にも回数にも関係のない引数がここに生える。
+   * 置き場所だけをここが決めて、何を出すかは記録画面が決める。
+   */
+  ripple?: ReactNode | undefined;
   onValue: (index: number, field: SetField, value: number | null) => void;
   onAddSet: () => void;
   onRemoveSet: (index: number) => void;
@@ -86,6 +103,8 @@ export function ExerciseSetEditor({
   weightUnit,
   onWeightUnitChange,
   bodyWeight,
+  defaultSets,
+  ripple,
   onValue,
   onAddSet,
   onRemoveSet,
@@ -254,10 +273,12 @@ export function ExerciseSetEditor({
           baseWeight={additional ? baseLoad(exercise, bodyWeight) : null}
           fallbackWeight={
             fallbackOf(entry.sets[i - 1], cardio, 'first') ??
+            fallbackOf(defaultSets?.[i], cardio, 'first') ??
             (cardio ? null : (previous?.point.top?.weight ?? null))
           }
           fallbackReps={
             fallbackOf(entry.sets[i - 1], cardio, 'second') ??
+            fallbackOf(defaultSets?.[i], cardio, 'second') ??
             (cardio ? null : (previous?.point.top?.reps ?? null))
           }
           onValue={(field, value) => onValue(i, field, value)}
@@ -283,6 +304,12 @@ export function ExerciseSetEditor({
         best={best}
         bestWeight={bestWeight}
       />
+
+      {/*
+        **合計と最高のすぐ下。**セットの行 → 合計 → 最高 → 波及、と
+        内から外へ広がる順に並ぶ。打ち終わった行から目が下りていく先に置く。
+      */}
+      {ripple}
 
       <div className={s.setActions}>
         {repeated && (
