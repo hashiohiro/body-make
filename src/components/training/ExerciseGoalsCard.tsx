@@ -8,7 +8,8 @@ import { Meter } from '../Meter';
 import { Modal } from '../Modal';
 import {
   EXERCISE_GROUP_ORDER,
-  GROUP_LABELS,
+  GROUP_KEYS,
+  exerciseName,
   goalTypeLabel,
   isListed,
 } from '../../lib/exerciseCatalog';
@@ -25,6 +26,7 @@ import { ExerciseSummaryCard } from './ExerciseSummaryCard';
 import { Pill } from '../Pill';
 import s from './training.module.scss';
 import { useGoalUnit } from '../../hooks/useWeightUnit';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   goals: readonly ExerciseGoal[];
@@ -64,6 +66,7 @@ export function ExerciseGoalsCard({
   onUpdate,
   onOpenExercises,
 }: Props) {
+  const t = useT();
   // 目標は kg で導出されている。出す直前に読む単位へ直す
   const shown = useGoalUnit();
   /** 開いている種目。目標を決める面と、種目そのものの設定の面を持つ */
@@ -125,7 +128,7 @@ export function ExerciseGoalsCard({
       <ExerciseSummaryCard
         key={goal.exerciseId}
         name={goal.name}
-        kind={goalTypeLabel(goal.type, exercise?.repUnit ?? 'reps', true)}
+        kind={goalTypeLabel(t, goal.type, exercise?.repUnit ?? 'reps', true)}
         goal={
           goal.target == null ? null : `${fmt(unit.conv(goal.target), goal.digits)} ${unit.label}`
         }
@@ -133,44 +136,46 @@ export function ExerciseGoalsCard({
           いまの値。**前回からの増減はここに足さない**——1 行で動く数字は 1 つにする。
           伸びの中身は推移が持っている。
         */
-        factLeft={`いま ${fmt(unit.conv(goal.current), goal.digits)} ${unit.label}`}
+        factLeft={t('exGoal.now', {
+          value: `${fmt(unit.conv(goal.current), goal.digits)} ${unit.label}`,
+        })}
         /* 維持は数値を決めないので割合も出ない。それは立て方の札が言っている */
         factRight={
           goal.target == null
             ? '—'
             : goal.reached
-              ? '到達'
+              ? t('exGoal.reached')
               : goal.progress == null
                 ? '—'
                 : fmtPercent(goal.progress)
         }
         meter={
           goal.target == null ? null : (
-            <Meter value={goal.progress ?? 0} label={`${goal.name}の到達率`} />
+            <Meter value={goal.progress ?? 0} label={t('exGoal.rate', { name: goal.name })} />
           )
         }
         actions={
           <>
             <MiniButton
-              label={`${goal.name}の目標を変える`}
+              label={t('exGoal.changeOf', { name: goal.name })}
               onClick={() => setOpenId(goal.exerciseId)}
             >
-              目標
+              {t('common.goal')}
             </MiniButton>
             <MiniButton
-              label={`${goal.name}の推移を見る`}
+              label={t('common.trendOf', { name: goal.name })}
               onClick={() => setTrendOf(goal.exerciseId)}
             >
-              推移
+              {t('common.trend')}
             </MiniButton>
             <MiniButton
-              label={`${goal.name}の設定`}
+              label={t('exercise.settingsOf', { name: goal.name })}
               onClick={() => {
                 setOpenId(goal.exerciseId);
                 setSettings(true);
               }}
             >
-              設定
+              {t('common.settings')}
             </MiniButton>
           </>
         }
@@ -189,12 +194,10 @@ export function ExerciseGoalsCard({
     <>
       <section className={ui.card}>
         <CardHeader
-          title="種目の目標"
+          title={t('exGoal.title')}
           hint={
             goals.length > 0 ? (
-              <>
-                {reached} / {goals.length} 到達
-              </>
+              <>{t('exGoal.reachedCount', { done: reached, total: goals.length })}</>
             ) : null
           }
         />
@@ -203,15 +206,15 @@ export function ExerciseGoalsCard({
           <p className={ui.emptyState}>
             {noListed ? (
               <>
-                マイ種目がまだ空です。
+                {t('common.noExercises')}
                 <br />
-                種目を手元に入れると、そこから目標を決められます。
+                {t('exGoal.noExercisesHint')}
               </>
             ) : (
               <>
-                まだ目標がありません。
+                {t('exGoal.empty')}
                 <br />
-                種目を選ぶと、いまの値を見ながら決められます。
+                {t('exGoal.emptyHint')}
               </>
             )}
           </p>
@@ -226,7 +229,7 @@ export function ExerciseGoalsCard({
             if (items.length === 0) return null;
             return (
               <div key={g}>
-                <div className={s.manageGroup}>{GROUP_LABELS[g]}</div>
+                <div className={s.manageGroup}>{t(GROUP_KEYS[g])}</div>
                 {items.map(row)}
               </div>
             );
@@ -248,18 +251,16 @@ export function ExerciseGoalsCard({
         */}
         {noListed ? (
           <div className={ui.btnRow}>
-            <Button tone="primary" onClick={onOpenExercises}>
-              ＋ マイ種目に種目を追加
+            <Button adds tone="primary" onClick={onOpenExercises}>
+              {t('exGoal.addExercise')}
             </Button>
           </div>
         ) : withoutGoal.length === 0 ? (
           <>
-            <p className={ui.note}>
-              すべてのマイ種目に目標を決めています。種目を増やすと、その目標も決められます。
-            </p>
+            <p className={ui.note}>{t('exGoal.allSet')}</p>
             <div className={ui.detailRow}>
               <button type="button" className={ui.detailBtn} onClick={onOpenExercises}>
-                マイ種目を開く
+                {t('exGoal.openExercises')}
               </button>
             </div>
           </>
@@ -269,7 +270,7 @@ export function ExerciseGoalsCard({
               tone={goals.length === 0 ? 'primary' : undefined}
               onClick={() => setPicking(true)}
             >
-              ＋ 種目の目標を追加
+              {t('exGoal.addTitle')}
             </Button>
           </div>
         )}
@@ -277,12 +278,13 @@ export function ExerciseGoalsCard({
         {/* 更新と停滞はどちらも種目ごとの話。目標を持たない種目も含むので、行には出せない */}
         {(stats.recentBests > 0 || stats.stalled > 0) && (
           <div className={s.statRow} style={{ fontSize: 11 }}>
-            <span>直近{RECENT_DAYS}日</span>
+            <span>{t('exGoal.recentDays', { days: RECENT_DAYS })}</span>
             <span className={s.coverCount}>
-              自己最高 <b>{stats.recentBests}</b> 種目
+              {t('exGoal.bests')} <b>{stats.recentBests}</b> {t('exGoal.exerciseUnit')}
             </span>
             <span className={s.coverCount}>
-              {STALE_WEEKS}週以上動いていない <b>{stats.stalled}</b> 種目
+              {t('exGoal.stalled', { weeks: STALE_WEEKS })} <b>{stats.stalled}</b>{' '}
+              {t('exGoal.exerciseUnit')}
             </span>
           </div>
         )}
@@ -303,7 +305,11 @@ export function ExerciseGoalsCard({
       {openExercise && (
         <Modal
           open
-          title={settings ? `${openExercise.name}の設定` : `${openExercise.name}の目標`}
+          title={
+            settings
+              ? t('exercise.settingsOf', { name: exerciseName(t, openExercise) })
+              : t('exercise.goalOf', { name: exerciseName(t, openExercise) })
+          }
           onClose={close}
           onBack={settings ? () => setSettings(false) : undefined}
         >
@@ -322,7 +328,11 @@ export function ExerciseGoalsCard({
       {picking && (
         <Modal
           open
-          title={pickedExercise ? `${pickedExercise.name}の目標` : '種目の目標を追加'}
+          title={
+            pickedExercise
+              ? t('exercise.goalOf', { name: exerciseName(t, pickedExercise) })
+              : t('exGoal.addTitle')
+          }
           onClose={close}
           onBack={pickedExercise ? () => setPicked(null) : undefined}
         >
@@ -333,13 +343,13 @@ export function ExerciseGoalsCard({
               {/* 選ぶ面はどこも同じ組み（検索・部位チップ・部位ごとの見出し） */}
               <ExercisePickList
                 items={withoutGoal}
-                heading="目標を決めていない種目"
-                empty={<p className={ui.emptyState}>すべての種目に目標を決めています。</p>}
+                heading={t('exGoal.pickHeading')}
+                empty={<p className={ui.emptyState}>{t('exGoal.allSet')}</p>}
                 renderItem={(e, searching) => (
                   <Pill key={e.id} onClick={() => setPicked(e.id)}>
-                    {e.name}
+                    {exerciseName(t, e)}
                     {/* 束ねる見出しが無いので、探した結果では部位も行に添える */}
-                    {searching && <Tag>{GROUP_LABELS[e.group]}</Tag>}
+                    {searching && <Tag>{t(GROUP_KEYS[e.group])}</Tag>}
                   </Pill>
                 )}
               />

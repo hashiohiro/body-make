@@ -1,4 +1,4 @@
-import { GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
+import { GROUP_KEYS, GROUP_ORDER } from '../../lib/exerciseCatalog';
 import { fmtVolume } from '../../lib/format';
 import { formatSets } from '../../lib/training';
 import { useState } from 'react';
@@ -13,6 +13,7 @@ import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
+import { useT } from '../../lib/i18n';
 
 /**
  * 出す週の数。**画面に収まる数まで絞る。**
@@ -32,7 +33,8 @@ interface Props {
 
 export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
   const [openTrend, setOpenTrend] = useState(false);
-  const values = groupValuesFor(useWeightUnit());
+  const t = useT();
+  const values = groupValuesFor(t, useWeightUnit());
   const value = values.find((v) => v.id === valueId)!;
   /*
    * **左が古い。**同じ面のグラフ（部位別の推移）と横軸の向きをそろえる。
@@ -44,7 +46,7 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
   if (visible.length === 0) {
     return (
       <section className={ui.card}>
-        <p className={ui.emptyState}>まだトレーニングの記録がありません。</p>
+        <p className={ui.emptyState}>{t('group.noRecords')}</p>
       </section>
     );
   }
@@ -52,15 +54,20 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
   return (
     <>
       <section className={ui.card}>
-        <CardHeader title="部位別の配分" hint={<>週あたり / 右が今週</>} />
+        <CardHeader title={t('group.distribution')} hint={<>{t('group.perWeek')}</>} />
 
-        <ChipGroup options={values} value={valueId} onChange={onValueChange} label="表示する値" />
+        <ChipGroup
+          options={values}
+          value={valueId}
+          onChange={onValueChange}
+          label={t('group.valueAxis')}
+        />
 
         <div className={ui.tableScroll}>
           <table className={`${ui.table} ${s.heatmap}`}>
             <thead>
               <tr>
-                <th scope="col">部位</th>
+                <th scope="col">{t('group.label')}</th>
                 {visible.map((w) => (
                   <th key={w.start} scope="col">
                     {w.label}
@@ -76,7 +83,7 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
                 const max = Math.max(...visible.map((w) => value.pick(w, group)), 1);
                 return (
                   <tr key={group}>
-                    <th scope="row">{GROUP_LABELS[group]}</th>
+                    <th scope="row">{t(GROUP_KEYS[group])}</th>
                     {visible.map((w) => {
                       const n = value.pick(w, group);
                       return (
@@ -106,7 +113,7 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
                 );
               })}
               <tr>
-                <th scope="row">実施日数</th>
+                <th scope="row">{t('group.days')}</th>
                 {visible.map((w) => (
                   <td key={w.start}>{w.days}</td>
                 ))}
@@ -118,13 +125,13 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
         {/* 表からは増減の向きが読めない。必要なときだけ線で開く */}
         <div className={ui.btnRow}>
           <Button size="sub" onClick={() => setOpenTrend(true)}>
-            推移をグラフで見る
+            {t('group.openTrend')}
           </Button>
         </div>
       </section>
 
       {/* カードの外に出す。中に置くと、表のチップと線のチップが同じ枠の中で二重に並ぶ */}
-      <Modal open={openTrend} title="部位別の推移" onClose={() => setOpenTrend(false)}>
+      <Modal open={openTrend} title={t('group.trend')} onClose={() => setOpenTrend(false)}>
         <GroupTrendChart weeks={weeks} valueId={valueId} onValueChange={onValueChange} />
       </Modal>
     </>

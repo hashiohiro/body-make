@@ -8,7 +8,6 @@ import type {
   Workouts,
 } from '../types';
 import { todayISO } from './date';
-import { fmt, fmtDelta } from './format';
 import { sanitizeData, sanitizeEntries } from './storage';
 
 function download(filename: string, blob: Blob): void {
@@ -95,18 +94,4 @@ export async function readImportFile(file: File): Promise<ImportResult> {
     sessionCount: workouts ? Object.keys(workouts).length : 0,
     presetCount: presets?.length ?? 0,
   };
-}
-
-/** 共有シート用の 1 行サマリ。Web Share API が無い環境ではクリップボードに落とす */
-export function buildShareText(
-  weight: number | null,
-  delta: number | null,
-  bodyFat: number | null,
-  streak: number,
-): string {
-  const parts = [`体重 ${fmt(weight)}kg`];
-  if (delta != null) parts.push(`開始比 ${fmtDelta(delta)}kg`);
-  if (bodyFat != null) parts.push(`体脂肪率 ${fmt(bodyFat)}%`);
-  if (streak > 0) parts.push(`${streak}日連続記録`);
-  return `${parts.join(' / ')} #BodyMake`;
 }

@@ -1,6 +1,7 @@
 import type { CheckSettings, Exercise, MuscleGroup, SessionExercise, SessionPoint } from '../types';
-import { GROUP_LABELS, GROUP_ORDER, muscleOf } from './exerciseCatalog';
+import { GROUP_ORDER, exerciseName, muscleOf } from './exerciseCatalog';
 import { addDays, diffDays, formatMD, startOfWeek } from './date';
+import type { MessageKey, T } from './i18n';
 
 /**
  * 構成チェック。
@@ -63,9 +64,9 @@ function keyOf(rule: CheckRule, scope: Scope): string {
   return `${rule}|${SCOPE_PREFIX[scope.kind]}:${target}`;
 }
 
-const RULE_LABELS: Record<CheckRule, string> = {
-  time: 'セッションの長さ',
-  axial: '軸荷重種目の連日',
+const RULE_KEYS: Record<CheckRule, MessageKey> = {
+  time: 'checks.sessionLength',
+  axial: 'rule.axial',
 };
 
 /**
@@ -74,15 +75,19 @@ const RULE_LABELS: Record<CheckRule, string> = {
  * 解除できないサプレスは、押し間違いが永久に残る。
  * 一覧に出す以上、何を消したのかが分からなければ解除の判断ができない。
  */
-export function describeKey(key: string, exercises: readonly Exercise[]): string {
+export function describeKey(t: T, key: string, exercises: readonly Exercise[]): string {
   const [rule, scope = ''] = key.split('|');
-  const head = RULE_LABELS[rule as CheckRule] ?? rule ?? '';
+  const ruleKey = RULE_KEYS[rule as CheckRule];
+  const head = ruleKey ? t(ruleKey) : (rule ?? '');
 
   const [kind, ...rest] = scope.split(':');
   const target = rest.join(':');
-  if (kind === 'd') return `${head} — ${formatMD(target)}`;
+  if (kind === 'd') return t('rule.scope', { head, target: formatMD(target) });
   if (kind === 'e')
-    return `${head} — ${exercises.find((e) => e.id === target)?.name ?? '削除された種目'}`;
+    return t('rule.scope', {
+      head,
+      target: exercises.find((e) => e.id === target)?.name ?? t('rule.deletedExercise'),
+    });
   return head;
 }
 
@@ -244,15 +249,19 @@ export const MAX_RECOVERY_DAYS = RECOVERY_STEPS[0]![1];
  * 詰まりは図（回復の帯）を見れば分かるので、文は**規則だけ**に絞る。
  * `RECOVERY_STEPS` から作るので、閾値を変えても文が古くならない。
  */
-export const RECOVERY_RULE = [...RECOVERY_STEPS]
-  .reverse()
-  .map(([minSets, days], i, all) => {
-    const next = all[i + 1]?.[0];
-    const range = next == null ? `${minSets}セット以上` : `${minSets}〜${next - 1}セット`;
-    // days は「空ける日数」。人が数えるのは、そのあいだに挟む日数（中◯日）
-    return `${range}は中${days - 1}日`;
-  })
-  .join('、');
+export const recoveryRule = (t: T): string =>
+  [...RECOVERY_STEPS]
+    .reverse()
+    .map(([minSets, days], i, all) => {
+      const next = all[i + 1]?.[0];
+      const range =
+        next == null
+          ? t('rule.setsOver', { n: minSets })
+          : t('rule.setsRange', { from: minSets, to: next - 1 });
+      // days は「空ける日数」。人が数えるのは、そのあいだに挟む日数（中◯日）
+      return t('rule.interval', { range, days: days - 1 });
+    })
+    .join('、');
 
 /** そのセッションのあと、次に同じ部位をやるまでに空ける日数 */
 export function requiredDays(sets: number): number {
@@ -311,8 +320,6 @@ export function groupReadiness(
   return out;
 }
 
-export const groupLabel = (group: MuscleGroup) => GROUP_LABELS[group];
-
 /**
  * 残っている疲れを「何日ぶんか」に直す。
  *
@@ -361,7 +368,7 @@ export interface AxialStatus {
  * だからこそ**外形的な積み方**——いつ置いたか——を見る価値があるが、
  * それは腰の状態ではない。アプリが言えるのはここまで。
  */
-export function axialStatus(history: CheckHistory, date: string): AxialStatus {
+export function axialStatus(t: T, history: CheckHistory, date: string): AxialStatus {
   const weekStart = startOfWeek(date);
   let since: number | null = null;
   let names: string[] = [];
@@ -371,7 +378,7 @@ export function axialStatus(history: CheckHistory, date: string): AxialStatus {
     if (day >= date) continue;
     if (since == null || diffDays(date, day) < since) {
       since = diffDays(date, day);
-      names = list.map((e) => e.name);
+      names = list.map((e) => exerciseName(t, e));
     }
     if (day >= weekStart) daysInWeek++;
   }
@@ -391,6 +398,7 @@ export interface DayInput {
  * 推定した量を閾値と比べるのをやめたので、係数も減衰も出てこない。
  */
 export function checkDay(
+  t: T,
   day: DayInput,
   exercises: readonly Exercise[],
   history: CheckHistory,
@@ -417,11 +425,15 @@ export function checkDay(
     const overSets = Math.ceil((time.total - checks.sessionMinutes) / checks.minutesPerSet);
     out.push({
       rule: 'time',
-      message: 'セッションが上限より長くなります',
-      detail:
-        `${time.total}分 / 上限 ${checks.sessionMinutes}分 — ` +
-        longest.map((x) => `${x.exercise.name} ${x.minutes}分`).join(' / '),
-      fix: `セットを${overSets}つ減らすか、種目を別の日に回す`,
+      message: t('warn.timeMessage'),
+      detail: t('warn.timeDetail', {
+        total: time.total,
+        limit: checks.sessionMinutes,
+        longest: longest
+          .map((x) => t('warn.timeItem', { name: exerciseName(t, x.exercise), minutes: x.minutes }))
+          .join(' / '),
+      }),
+      fix: t('warn.timeFix', { n: overSets }),
       key: keyOf('time', { kind: 'day', date: day.date }),
     });
   }
@@ -438,11 +450,15 @@ export function checkDay(
   if (axialYesterday.length > 0 && axialToday.length > 0) {
     out.push({
       rule: 'axial',
-      message: '軸荷重種目が連日になっています',
-      detail:
-        `${formatMD(yesterday)} ${axialYesterday.map((e) => e.name).join('・')}` +
-        ` → ${axialToday.map((e) => e.name).join('・')}`,
-      fix: `${axialToday.map((e) => e.name).join('・')}を別の日に回す`,
+      message: t('warn.axialMessage'),
+      detail: t('warn.axialDetail', {
+        date: formatMD(yesterday),
+        yesterday: axialYesterday.map((e) => exerciseName(t, e)).join(t('common.listSep')),
+        today: axialToday.map((e) => exerciseName(t, e)).join(t('common.listSep')),
+      }),
+      fix: t('warn.axialFix', {
+        names: axialToday.map((e) => exerciseName(t, e)).join(t('common.listSep')),
+      }),
       key: keyOf('axial', { kind: 'day', date: day.date }),
     });
   }

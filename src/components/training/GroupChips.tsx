@@ -1,6 +1,7 @@
-import { EXERCISE_GROUP_ORDER, GROUP_LABELS } from '../../lib/exerciseCatalog';
+import { EXERCISE_GROUP_ORDER, GROUP_KEYS } from '../../lib/exerciseCatalog';
 import { ChipGroup } from '../ChipGroup';
 import type { ExerciseGroup } from '../../types';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   value: ExerciseGroup | 'all';
@@ -23,7 +24,7 @@ interface Props {
 /**
  * 部位で絞るチップの行。**部位で絞る面はすべてこれ。**
  *
- * 「`すべて` を先頭に足して、持っている部位を `GROUP_LABELS` で並べる」を
+ * 「`すべて` を先頭に足して、持っている部位を `GROUP_KEYS` で並べる」を
  * 3 か所で組み立てていた。`すべて` の値（`'all'`）も、部位の並び順も、
  * 出す・出さないの決め方も、写すたびにずれる余地がある。
  *
@@ -31,18 +32,19 @@ interface Props {
  * 読み上げで画面を渡り歩く人にとっては別の部品に見える。
  */
 export function GroupChips({ value, onChange, groups = EXERCISE_GROUP_ORDER, showLabel }: Props) {
+  const t = useT();
   // 1 種類しか無ければ、押し分ける相手がいない
   if (groups.length <= 1) return null;
 
   return (
     <ChipGroup
       options={[
-        { id: 'all' as const, label: 'すべて' },
-        ...groups.map((g) => ({ id: g, label: GROUP_LABELS[g] })),
+        { id: 'all' as const, label: t('catalog.all') },
+        ...groups.map((g) => ({ id: g, label: t(GROUP_KEYS[g]) })),
       ]}
       value={value}
       onChange={onChange}
-      label="部位"
+      label={t('group.label')}
       showLabel={showLabel}
       tight
     />

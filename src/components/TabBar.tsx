@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { useKeyboardOpen } from '../hooks/useKeyboardOpen';
 import s from './TabBar.module.scss';
+import { useT } from '../lib/i18n';
+import type { MessageKey } from '../lib/i18n';
 
 export type TabId = 'home' | 'goals' | 'records' | 'settings';
 
@@ -35,11 +37,11 @@ const ICONS: Record<TabId, ReactNode> = {
   ),
 };
 
-const LABELS: Record<TabId, string> = {
-  home: 'ホーム',
-  goals: '目標',
-  records: '記録',
-  settings: '設定',
+const LABEL_KEYS: Record<TabId, MessageKey> = {
+  home: 'nav.homeTab',
+  goals: 'nav.goals',
+  records: 'nav.records',
+  settings: 'common.settings',
 };
 
 const ORDER: TabId[] = ['home', 'goals', 'records', 'settings'];
@@ -60,12 +62,19 @@ interface Props {
  * **打っている最中に画面を移りたい人はいない。**打ち終えて閉じれば戻ってくる。
  */
 export function TabBar({ active, onChange }: Props) {
+  const t = useT();
   const typing = useKeyboardOpen();
 
   return (
     // data-tabbar は高さを測るための目印。＋ボタンをこのバーの上に留めるのに使う
     // （useFabPosition。--tab-h だけだと safe-area のぶんを見落とす）
-    <nav data-tabbar="" className={s.tabs} role="tablist" aria-label="画面切り替え" hidden={typing}>
+    <nav
+      data-tabbar=""
+      className={s.tabs}
+      role="tablist"
+      aria-label={t('nav.tabs')}
+      hidden={typing}
+    >
       {ORDER.map((id) => (
         <button
           key={id}
@@ -77,7 +86,7 @@ export function TabBar({ active, onChange }: Props) {
           onClick={() => onChange(id)}
         >
           {ICONS[id]}
-          {LABELS[id]}
+          {t(LABEL_KEYS[id])}
         </button>
       ))}
     </nav>

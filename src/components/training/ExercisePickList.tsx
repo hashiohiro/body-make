@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { EXERCISE_GROUP_ORDER, GROUP_LABELS } from '../../lib/exerciseCatalog';
+import { EXERCISE_GROUP_ORDER, GROUP_KEYS, otherLocaleNames } from '../../lib/exerciseCatalog';
 import {
   FILTER_THRESHOLD,
   matchRank,
@@ -13,6 +13,7 @@ import { SearchToggle } from './SearchToggle';
 import type { ExerciseGroup } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 /** 並べられる最小の形。マイ種目でも、カタログの行でも、移行先の候補でも同じ */
 interface Item {
@@ -89,13 +90,16 @@ export function ExercisePickList<T extends Item>({
   filters,
   groups: fixedGroups,
 }: Props<T>) {
+  const t = useT();
   const [group, setGroup] = useState<ExerciseGroup | 'all'>('all');
   const [query, setQuery] = useState('');
 
   const searching = query.trim() !== '';
   // 検索とチップは AND。「腕で絞ってからカールを探す」がそのまま通る
   const narrowed = items.filter(
-    (e) => matchesGroup(e, group) && matchesQuery(e.name, query, e.aliases),
+    (e) =>
+      matchesGroup(e, group) &&
+      matchesQuery(e.name, query, [...(e.aliases ?? []), ...otherLocaleNames(e.id)]),
   );
   /* 打っている最中の並び。前方一致を先に出し、同じ近さなら元の並びのまま */
   const hits = searching
@@ -115,9 +119,11 @@ export function ExercisePickList<T extends Item>({
     <>
       <div className={s.catalogHead}>
         <span className={s.pickerLabel}>
-          {heading}（{narrowed.length}件）
+          {heading}
+          {/* 括弧は見出しの飾り。件数そのものは一覧の見出しと同じキーから引く */}（
+          {t('settings.count', { n: narrowed.length })}）
         </span>
-        {withTools && <SearchToggle query={query} onQuery={setQuery} label="種目を検索" />}
+        {withTools && <SearchToggle query={query} onQuery={setQuery} label={t('picker.search')} />}
       </div>
 
       {(filters != null || withTools) && (
@@ -128,7 +134,7 @@ export function ExercisePickList<T extends Item>({
       )}
 
       {narrowed.length === 0 ? (
-        <p className={ui.emptyState}>このフィルターに合う種目はありません。</p>
+        <p className={ui.emptyState}>{t('catalog.noMatch')}</p>
       ) : searching ? (
         <div className={s.pickerList}>
           {hits.map((e) => renderItem(e, true, matchedAlias(e.name, query, e.aliases)))}
@@ -139,7 +145,7 @@ export function ExercisePickList<T extends Item>({
           if (list.length === 0) return null;
           return (
             <div key={g} className={s.pickerGroup}>
-              <div className={s.pickerLabel}>{GROUP_LABELS[g]}</div>
+              <div className={s.pickerLabel}>{t(GROUP_KEYS[g])}</div>
               <div className={s.pickerList}>{list.map((e) => renderItem(e, false, null))}</div>
             </div>
           );

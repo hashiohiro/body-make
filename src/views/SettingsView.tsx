@@ -16,6 +16,8 @@ import { DEMO_TODAY, formatMD } from '../lib/date';
 import { IS_DEMO } from '../lib/env';
 import { SEED_SOURCE } from '../lib/seed';
 import { THEME_OPTIONS } from '../lib/themes';
+import { useT } from '../lib/i18n';
+import type { LocalePref, MessageKey } from '../lib/i18n';
 import { WEIGHT_UNIT_LABEL } from '../lib/weight';
 import type { BodyData } from '../hooks/useBodyData';
 import { CardHeader } from '../components/CardHeader';
@@ -26,6 +28,16 @@ import { NumericInput } from '../components/NumericInput';
 import { HEIGHT_RANGE } from '../lib/storage';
 import ui from '../styles/ui.module.scss';
 import s from './SettingsView.module.scss';
+
+/**
+ * 言語の選択肢。**文言はキーで持つ**——ここで直書きすると、
+ * 言語の欄自体が言語で変わらないものになる。
+ */
+const LOCALE_OPTIONS: { id: LocalePref; key: MessageKey }[] = [
+  { id: 'system', key: 'common.followDevice' },
+  { id: 'ja', key: 'settings.language.ja' },
+  { id: 'en', key: 'settings.language.en' },
+];
 
 /**
  * 設定はカテゴリを選んでから中身を出す。
@@ -40,10 +52,10 @@ import s from './SettingsView.module.scss';
  * 頻度の違うものを同じ階層に置いたのが、画面を往復する原因だった。
  */
 export const SETTINGS_SECTIONS = [
-  { id: 'general', label: '一般', hint: '表示・データ・このアプリについて' },
-  { id: 'body', label: '体組成', hint: '身長・腹囲' },
-  { id: 'training', label: 'トレーニング', hint: 'マイ種目・プリセット・週メニュー' },
-] as const;
+  { id: 'general', key: 'settings.general', hint: 'settings.generalHint' },
+  { id: 'body', key: 'nav.body', hint: 'settings.bodyHint' },
+  { id: 'training', key: 'nav.training', hint: 'settings.trainingHint' },
+] as const satisfies readonly { id: string; key: MessageKey; hint: MessageKey }[];
 
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
 
@@ -57,21 +69,26 @@ export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
  * 段を 1 つ増やすぶんの往復より、目当てのものが件数で見えているほうが速い。
  */
 export const TRAINING_PAGES = [
-  { id: 'exercises', label: 'マイ種目', hint: '一覧・追加・種目ごとの設定', group: 'own' },
-  { id: 'presets', label: 'プリセット', hint: 'いつでも選べる組み合わせ', group: 'own' },
+  { id: 'exercises', key: 'settings.exercises', hint: 'settings.exercisesHint', group: 'own' },
+  { id: 'presets', key: 'settings.presets', hint: 'settings.presetsHint', group: 'own' },
   /*
    * **曜日を持つプリセットだけを、7 日ぶんの並びとして読む面。**
    * 毎週やるものと、そのとき選ぶものを 1 枚に混ぜると、どちらのつもりで
    * 作ったものか一覧から読めなくなる。持ちものは同じで、面だけ分ける。
    */
-  { id: 'week', label: '週メニュー', hint: '曜日ごとの組み立て', group: 'own' },
+  { id: 'week', key: 'settings.week', hint: 'settings.weekHint', group: 'own' },
   /*
    * 判定そのもの（何が警告されているか）は記録画面とプリセット画面にある。
    * ここに置くのは滅多に変えない閾値と、押した許容を戻す場所だけ。
    */
-  { id: 'units', label: 'ウエイトの単位', hint: '入力と表示をそれぞれ選ぶ', group: 'config' },
-  { id: 'checks', label: '種目のレビュー', hint: '有効化・しきい値・許容済み', group: 'config' },
-] as const;
+  { id: 'units', key: 'settings.units', hint: 'settings.unitsHint', group: 'config' },
+  { id: 'checks', key: 'settings.checks', hint: 'settings.checksHint', group: 'config' },
+] as const satisfies readonly {
+  id: string;
+  key: MessageKey;
+  hint: MessageKey;
+  group: string;
+}[];
 
 /**
  * 一覧の区切り。**性質の違うものが同じ形で並ぶのをやめる。**
@@ -88,21 +105,26 @@ export const TRAINING_PAGES = [
  * 週メニュー）が 1 タップ遠くなる。5 行はまだ画面に収まる。
  */
 const PAGE_GROUPS = [
-  { id: 'own', label: '種目とメニュー' },
-  { id: 'config', label: '記録のしかた' },
-] as const;
+  { id: 'own', key: 'settings.groupOwn' },
+  { id: 'config', key: 'settings.groupConfig' },
+] as const satisfies readonly { id: string; key: MessageKey }[];
 
 export type TrainingPageId = (typeof TRAINING_PAGES)[number]['id'];
 
-export function settingsSectionTitle(id: string): string | null {
-  return SETTINGS_SECTIONS.find((sec) => sec.id === id)?.label ?? null;
+export function settingsSectionKey(id: string): MessageKey | null {
+  return SETTINGS_SECTIONS.find((sec) => sec.id === id)?.key ?? null;
 }
 
-/** 下位画面まで含めた見出し。`#settings/training/presets` は「プリセット」 */
-export function settingsTitle(section: string | null, page: string | null): string | null {
+/**
+ * 下位画面まで含めた見出しの**キー**。`#settings/training/presets` は「プリセット」。
+ *
+ * **文言ではなくキーを返す。**ここは画面ではないので `useT` を呼べない
+ * （フックは部品の中でしか使えない）。引く場所は呼び出し側にある。
+ */
+export function settingsTitleKey(section: string | null, page: string | null): MessageKey | null {
   if (section == null) return null;
   const inner = section === 'training' ? TRAINING_PAGES.find((p) => p.id === page) : null;
-  return inner?.label ?? settingsSectionTitle(section);
+  return inner?.key ?? settingsSectionKey(section);
 }
 
 interface Props {
@@ -145,6 +167,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
 
   const fileRef = useRef<HTMLInputElement>(null);
   const { settings } = data;
+  const t = useT();
 
   /*
    * 読み込み方は 3 択（マージ / 置き換え / やめる）。
@@ -159,53 +182,57 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
     try {
       const result = await readImportFile(file);
       const found = [
-        result.count > 0 ? `体組成 ${result.count}日ぶん` : null,
-        result.exerciseCount > 0 ? `種目 ${result.exerciseCount}件` : null,
-        result.sessionCount > 0 ? `トレーニング ${result.sessionCount}日ぶん` : null,
-        result.presetCount > 0 ? `プリセット ${result.presetCount}件` : null,
+        result.count > 0 ? t('import.body', { n: result.count }) : null,
+        result.exerciseCount > 0 ? t('training.exercises', { n: result.exerciseCount }) : null,
+        result.sessionCount > 0 ? t('import.training', { n: result.sessionCount }) : null,
+        result.presetCount > 0 ? t('import.presets', { n: result.presetCount }) : null,
       ].filter(Boolean);
 
       if (found.length === 0) {
-        onToast('読み込める記録がありませんでした');
+        onToast(t('import.empty'));
         return;
       }
       setPending({ result, found: found.join(' / ') });
     } catch {
-      onToast('ファイルを読み込めませんでした');
+      onToast(t('import.failed'));
     }
   };
 
   const runImport = (mode: 'merge' | 'replace') => {
     if (!pending) return;
     importData(pending.result, mode);
-    onToast(`${pending.found}を${mode === 'replace' ? '置き換えました' : '読み込みました'}`);
+    onToast(
+      mode === 'replace'
+        ? t('import.doneReplace', { found: pending.found })
+        : t('import.doneMerge', { found: pending.found }),
+    );
     setPending(null);
   };
 
   const importModal = pending && (
-    <Modal open title="バックアップから読み込む" onClose={() => setPending(null)}>
+    <Modal open title={t('import.title')} onClose={() => setPending(null)}>
       <div>
         <p className={ui.note} style={{ marginTop: 0 }}>
-          このファイルには {pending.found} が入っています。
+          {t('import.contains', { found: pending.found })}
         </p>
 
         <div className={ui.btnRow}>
           <Button tone="primary" onClick={() => runImport('merge')}>
-            いまの記録に足す
+            {t('import.merge')}
           </Button>
         </div>
-        <p className={ui.note}>同じ日付は読み込んだファイルの値で上書きし、それ以外は残します。</p>
+        <p className={ui.note}>{t('import.mergeNote')}</p>
 
         <div className={ui.btnRow}>
           <Button tone="danger" onClick={() => runImport('replace')}>
-            いまの記録を置き換える
+            {t('import.replace')}
           </Button>
         </div>
-        <p className={ui.note}>いまの記録は消えます。元に戻せません。</p>
+        <p className={ui.note}>{t('import.replaceNote')}</p>
 
         <div className={ui.btnRow}>
           <Button tone="ghost" onClick={() => setPending(null)}>
-            やめる
+            {t('common.stop')}
           </Button>
         </div>
       </div>
@@ -221,8 +248,8 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
           {SETTINGS_SECTIONS.map((sec) => (
             <button key={sec.id} type="button" className={s.row} onClick={() => onOpen(sec.id)}>
               <span className={s.label}>
-                {sec.label}
-                <small className={s.hint}>{sec.hint}</small>
+                {t(sec.key)}
+                <small className={s.hint}>{t(sec.hint)}</small>
               </span>
               <span className={s.chevron} aria-hidden="true">
                 ›
@@ -250,8 +277,8 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
         */}
         <div className={ui.formRow}>
           <label htmlFor="height">
-            身長
-            <small>BMI の計算に使います（任意）</small>
+            {t('settings.height')}
+            <small>{t('settings.heightHint')}</small>
           </label>
           <span className={ui.inputUnit}>
             <NumericInput
@@ -267,16 +294,16 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
         </div>
 
         <div className={ui.formRow}>
-          <label id="waist-enabled">腹囲を記録する</label>
+          <label id="waist-enabled">{t('settings.waistToggle')}</label>
           <Pill
             pressed={settings.waistEnabled}
-            label="腹囲を記録する"
+            label={t('settings.waistToggle')}
             onClick={() => updateSettings({ waistEnabled: !settings.waistEnabled })}
           >
-            {settings.waistEnabled ? 'オン' : 'オフ'}
+            {settings.waistEnabled ? t('settings.on') : t('settings.off')}
           </Pill>
         </div>
-        <p className={ui.note}>オフに戻しても記録は消えません。</p>
+        <p className={ui.note}>{t('settings.waistNote')}</p>
       </section>
     );
   }
@@ -358,7 +385,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
         <div className={s.menu}>
           {PAGE_GROUPS.flatMap((g) => [
             <p key={g.id} className={s.groupLabel}>
-              {g.label}
+              {t(g.key)}
             </p>,
             ...TRAINING_PAGES.filter((p) => p.group === g.id).map((p) => (
               <button
@@ -368,8 +395,8 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
                 onClick={() => onOpen('training', p.id)}
               >
                 <span className={s.label}>
-                  {p.label}
-                  <small className={s.hint}>{p.hint}</small>
+                  {t(p.key)}
+                  <small className={s.hint}>{t(p.hint)}</small>
                 </span>
                 <span className={s.count}>
                   {p.id === 'units'
@@ -377,8 +404,8 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
                     : p.id === 'checks'
                       ? counts[p.id] === 0
                         ? ''
-                        : `許容 ${counts[p.id]}件`
-                      : `${counts[p.id]}件`}
+                        : t('settings.suppressed', { n: counts[p.id]! })
+                      : t('settings.count', { n: counts[p.id]! })}
                 </span>
                 <span className={s.chevron} aria-hidden="true">
                   ›
@@ -396,14 +423,33 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
   return (
     <>
       <section className={ui.card}>
-        <CardHeader title="表示" />
+        <CardHeader title={t('settings.display')} />
+        {/*
+          言語。**テーマの隣**——どちらも「読むときの見え方」で、記録には関わらない。
+          文言は辞書から引く（この欄自体が最初の利用者になる）。
+        */}
         <div className={ui.formRow}>
-          <label htmlFor="theme">テーマ</label>
+          <label htmlFor="locale">{t('settings.language')}</label>
+          <Select
+            id="locale"
+            value={settings.locale}
+            options={LOCALE_OPTIONS.map((o) => ({ id: o.id, label: t(o.key) }))}
+            dividerAfter="system"
+            onChange={(locale) => updateSettings({ locale })}
+          />
+        </div>
+
+        <div className={ui.formRow}>
+          <label htmlFor="theme">{t('settings.theme')}</label>
           {/* 端末に従うものと、配色を名指しで選ぶものの境目に線を引く */}
           <Select
             id="theme"
             value={settings.theme}
-            options={THEME_OPTIONS}
+            options={THEME_OPTIONS.map((o) => ({
+              id: o.id,
+              // 配色の名前は訳さない。訳すのは「システムに合わせる」だけ
+              label: o.id === 'system' ? t('common.followDevice') : o.label,
+            }))}
             dividerAfter="system"
             onChange={(theme) => updateSettings({ theme })}
           />
@@ -412,11 +458,13 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
 
       <section className={ui.card}>
         <CardHeader
-          title="データ"
+          title={t('settings.data')}
           hint={
             <>
-              体組成 {Object.keys(data.entries).length}日 / トレ {Object.keys(data.workouts).length}
-              日
+              {t('settings.dataHint', {
+                days: Object.keys(data.entries).length,
+                training: Object.keys(data.workouts).length,
+              })}
             </>
           }
         />
@@ -428,22 +476,19 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
         */}
         <div className={ui.formRow}>
           <label>
-            保存サイズ
+            {t('settings.storageSize')}
             <small>
               {quota == null
-                ? 'この端末のブラウザ内'
-                : `この端末で使える見積もりは ${fmtBytes(quota)}`}
+                ? t('settings.storageLocal')
+                : t('settings.storageQuota', { size: fmtBytes(quota) })}
             </small>
           </label>
           <span className={s.size}>{fmtBytes(storedBytes(data))}</span>
         </div>
 
-        <p className={ui.note}>
-          記録はこの端末のブラウザ内にだけ保存されます。機種変更やブラウザのデータ消去に備えて、
-          ときどき JSON を書き出しておくと安全です。
-        </p>
+        <p className={ui.note}>{t('settings.storageNote')}</p>
 
-        <div className={s.groupLabel}>バックアップ</div>
+        <div className={s.groupLabel}>{t('settings.backup')}</div>
         <div className={ui.btnRow}>
           <Button
             onClick={() => {
@@ -452,9 +497,9 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
               markExported();
             }}
           >
-            JSONで書き出し
+            {t('common.exportJson')}
           </Button>
-          <Button onClick={() => fileRef.current?.click()}>JSONから読み込み</Button>
+          <Button onClick={() => fileRef.current?.click()}>{t('settings.importJson')}</Button>
         </div>
 
         {importModal}
@@ -476,74 +521,70 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
           }}
         />
 
-        <div className={s.groupLabel}>削除</div>
+        <div className={s.groupLabel}>{t('settings.delete')}</div>
         <div className={ui.btnRow}>
           <Button
             tone="danger"
             onClick={() =>
               ask({
-                title: '実績データを削除しますか？',
-                note: '体組成とトレーニングの記録が消えます。種目・プリセット・目標は残ります。元に戻せません。',
-                confirmLabel: '記録を削除',
+                title: t('settings.clearRecords'),
+                note: t('settings.clearRecordsNote'),
+                confirmLabel: t('settings.clearRecordsConfirm'),
                 destructive: true,
                 onConfirm: () => {
                   clearRecords();
-                  onToast('実績データを削除しました');
+                  onToast(t('settings.clearRecordsDone'));
                 },
               })
             }
           >
-            実績データを削除
+            {t('settings.clearRecordsConfirm')}
           </Button>
           <Button
             tone="danger"
             onClick={() =>
               ask({
-                title: 'すべて削除しますか？',
-                note: '記録・種目・プリセット・目標を含めて全部消えます。元に戻せません。',
-                confirmLabel: 'すべて削除',
+                title: t('settings.clearAll'),
+                note: t('settings.clearAllNote'),
+                confirmLabel: t('settings.deleteAll'),
                 destructive: true,
                 onConfirm: () => {
                   clearAll();
-                  onToast('すべて削除しました');
+                  onToast(t('settings.clearAllDone'));
                 },
               })
             }
           >
-            すべて削除
+            {t('settings.deleteAll')}
           </Button>
         </div>
 
-        <p className={ui.note}>
-          自分で作った種目は、削除すると JSON バックアップからしか戻せません。
-        </p>
+        <p className={ui.note}>{t('settings.deleteNote')}</p>
       </section>
 
       <section className={ui.card}>
-        <CardHeader title="このアプリについて" hint={<>v{__APP_VERSION__}</>} />
+        <CardHeader title={t('settings.about')} hint={<>v{__APP_VERSION__}</>} />
 
         <div className={ui.formRow}>
-          <label>バージョン</label>
+          <label>{t('settings.version')}</label>
           <span>{__APP_VERSION__}</span>
         </div>
 
         <p className={ui.note}>
-          <b>記録はこの端末の中だけに保存されます。</b>
-          サーバーへ送信することはなく、作成者を含む第三者が内容を見ることはありません。
-          自動で公開・共有されることもありません。外に出るのは、あなたが自分で書き出したファイルだけです。
+          <b>{t('about.localOnly')}</b>
+          {t('about.noServer')}
           <br />
           <br />
-          通信なしで動作します。ホーム画面に追加すると、オフラインでもアプリとして起動します。
+          {t('about.offline')}
           {IS_DEMO && (
             <>
               <br />
               <br />
-              初期データは {SEED_SOURCE}{' '}
-              です。体組成も筋トレも、作成者が実際に使っている記録をそのまま入れています。
+              {t('about.demoSeed', { source: SEED_SOURCE })}
               <br />
               <br />
-              このデモは開き直すたびに初期データへ戻ります。ここで入力した内容は残りません。
-              今日は記録の最終日（{formatMD(DEMO_TODAY)}）で止めてあります。
+              {t('about.demoReset')}
+              {t('about.demoToday', { date: formatMD(DEMO_TODAY) })}
             </>
           )}
         </p>

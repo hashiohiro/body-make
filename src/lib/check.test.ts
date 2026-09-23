@@ -13,6 +13,10 @@ import { CATALOG, fromCatalog } from './exerciseCatalog';
 import { defaultChecks, sanitizeChecks, sanitizeData } from './storage';
 import { buildSessions } from './training';
 import type { CheckSettings, Exercise, SessionExercise, Workouts } from '../types';
+import { makeT } from './i18n';
+
+/** テストは日本語で読む（`src/test-setup.ts` と同じ前提） */
+const t = makeT('ja');
 
 /* ---------------- helpers ---------------- */
 
@@ -131,7 +135,7 @@ describe('軸荷重（W2）', () => {
       '2026-03-05': entries(['squat', 3]),
     });
     // 週は日曜〜土曜。2026-03-01 が日曜
-    const a = axialStatus(h, '2026-03-06');
+    const a = axialStatus(t, h, '2026-03-06');
     expect(a.since).toBe(1);
     expect(a.names).toEqual(['スクワット']);
     expect(a.daysInWeek).toBe(2);
@@ -140,12 +144,13 @@ describe('軸荷重（W2）', () => {
   });
 
   it('記録が無ければ null', () => {
-    expect(axialStatus(history({}), '2026-03-06').since).toBeNull();
+    expect(axialStatus(t, history({}), '2026-03-06').since).toBeNull();
   });
 
   it('連日になったら知らせる', () => {
     const past: Workouts = { '2026-03-09': entries(['dead', 3]) };
     const w = checkDay(
+      t,
       { date: '2026-03-10', entries: entries(['squat', 3]) },
       exercises,
       history(past),
@@ -161,6 +166,7 @@ describe('軸荷重（W2）', () => {
   it('中1日空いていれば出ない', () => {
     const past: Workouts = { '2026-03-08': entries(['dead', 3]) };
     const w = checkDay(
+      t,
       { date: '2026-03-10', entries: entries(['squat', 3]) },
       exercises,
       history(past),
@@ -172,6 +178,7 @@ describe('軸荷重（W2）', () => {
   it('軸荷重でない種目なら連日でも出ない', () => {
     const past: Workouts = { '2026-03-09': entries(['dead', 3]) };
     const w = checkDay(
+      t,
       { date: '2026-03-10', entries: entries(['bench', 3]) },
       exercises,
       history(past),
@@ -185,6 +192,7 @@ describe('軸荷重（W2）', () => {
       '2026-03-09': [{ exerciseId: 'dead', sets: [{ weight: null, reps: null }] }],
     };
     const w = checkDay(
+      t,
       { date: '2026-03-10', entries: entries(['squat', 3]) },
       exercises,
       history(laidOut),
@@ -298,20 +306,21 @@ describe('checkDay', () => {
     buildCheckHistory(buildSessions(workouts, exercises, []), exercises);
 
   it('種目が無い日は何も出さない', () => {
-    expect(checkDay({ date: '2026-03-10', entries: [] }, exercises, history({}), CHECKS)).toEqual(
-      [],
-    );
+    expect(
+      checkDay(t, { date: '2026-03-10', entries: [] }, exercises, history({}), CHECKS),
+    ).toEqual([]);
   });
 
   it('指摘には「改善するなら」を必ず添える', () => {
     // 指摘を出しておいて消し方を書かないのは、読む側に判定の再現を強いる
     const day = { date: '2026-03-10', entries: entries(['dead', 5], ['squat', 5], ['calf', 8]) };
-    const w = checkDay(day, exercises, history({}), { ...CHECKS, sessionMinutes: 60 });
+    const w = checkDay(t, day, exercises, history({}), { ...CHECKS, sessionMinutes: 60 });
     // 69分 − 60分 = 9分。既定 3 分/セットなので 3 セット相当
     expect(w.find((x) => x.rule === 'time')!.fix).toBe('セットを3つ減らすか、種目を別の日に回す');
 
     const past: Workouts = { '2026-03-09': entries(['dead', 3]) };
     const axial = checkDay(
+      t,
       { date: '2026-03-10', entries: entries(['squat', 3]) },
       exercises,
       history(past),
@@ -323,10 +332,10 @@ describe('checkDay', () => {
   it('W1: 上限を超えたら出る。上限が null なら出ない', () => {
     const day = { date: '2026-03-10', entries: entries(['dead', 5], ['squat', 5], ['calf', 8]) };
     // 5×4.5 + 5×4.5 + 8×3 = 69
-    const w = checkDay(day, exercises, history({}), { ...CHECKS, sessionMinutes: 60 });
+    const w = checkDay(t, day, exercises, history({}), { ...CHECKS, sessionMinutes: 60 });
     expect(w.filter((x) => x.rule === 'time')[0]!.detail).toContain('69分 / 上限 60分');
     expect(
-      checkDay(day, exercises, history({}), { ...CHECKS, sessionMinutes: null }).filter(
+      checkDay(t, day, exercises, history({}), { ...CHECKS, sessionMinutes: null }).filter(
         (x) => x.rule === 'time',
       ),
     ).toEqual([]);
@@ -342,7 +351,7 @@ describe('checkDay', () => {
         ],
       },
     ];
-    const w = checkDay({ date: '2026-03-10', entries: blank }, exercises, history({}), {
+    const w = checkDay(t, { date: '2026-03-10', entries: blank }, exercises, history({}), {
       ...CHECKS,
       sessionMinutes: 5,
     });
@@ -362,12 +371,12 @@ describe('許容済み', () => {
 
   it('キーから何を消したかを読み戻せる', () => {
     const exercises = [ex({ id: 'dead', name: 'デッドリフト' })];
-    expect(describeKey('axial|d:2026-03-10', exercises)).toBe('軸荷重種目の連日 — 3/10');
-    expect(describeKey('time|d:2026-03-10', exercises)).toBe('セッションの長さ — 3/10');
+    expect(describeKey(t, 'axial|d:2026-03-10', exercises)).toBe('軸荷重種目の連日 — 3/10');
+    expect(describeKey(t, 'time|d:2026-03-10', exercises)).toBe('セッションの長さ — 3/10');
   });
 
   it('消した種目を指すキーも読める（解除できなくならない）', () => {
-    expect(describeKey('axial|e:gone', [])).toContain('削除された種目');
+    expect(describeKey(t, 'axial|e:gone', [])).toContain('削除された種目');
   });
 });
 

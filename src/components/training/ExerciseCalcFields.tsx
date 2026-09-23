@@ -1,10 +1,12 @@
 import { useId } from 'react';
-import { LOAD_MODE_HINTS, LOAD_MODE_LABELS, LOAD_MODE_ORDER } from '../../lib/exerciseCatalog';
+import { LOAD_MODE_HINT_KEYS, LOAD_MODE_KEYS, LOAD_MODE_ORDER } from '../../lib/exerciseCatalog';
 import { NumericInput } from '../NumericInput';
 import { Select } from '../Select';
 import { FACTOR_RANGE, RM_DIVISOR_RANGE } from '../../lib/storage';
 import type { LoadMode, RepUnit } from '../../types';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
+import type { MessageKey } from '../../lib/i18n';
 
 /** 計算に効く 4 つ。種目の実体でも、作りかけのフォームでも同じ形で渡せるだけを持つ */
 export interface CalcValues {
@@ -18,9 +20,9 @@ export interface CalcValues {
  * 選ぶときの名前。`REP_UNIT_LABELS`（「回」「秒」）は数字に添える単位なので、
  * ここでは使わない——何を選んでいるのかは、例が付いていないと決めにくい
  */
-const REP_UNIT_OPTIONS: Record<RepUnit, string> = {
-  reps: '回（レップ）',
-  seconds: '秒（プランクなど）',
+const REP_UNIT_KEYS: Record<RepUnit, MessageKey> = {
+  reps: 'calc.reps',
+  seconds: 'calc.seconds',
 };
 
 interface Props {
@@ -40,38 +42,39 @@ interface Props {
  * 触る場面が違うので面の側が持つ。
  */
 export function ExerciseCalcFields({ value, onChange }: Props) {
+  const t = useT();
   const id = useId();
 
   return (
     <>
       {/* 器具の名前ではなく、見れば分かる持ち方を選ばせる */}
       <label className={s.newField}>
-        負荷の数え方
+        {t('calc.loadMode')}
         <Select
           value={value.loadMode}
-          options={LOAD_MODE_ORDER.map((m) => ({ id: m, label: LOAD_MODE_LABELS[m] }))}
+          options={LOAD_MODE_ORDER.map((m) => ({ id: m, label: t(LOAD_MODE_KEYS[m]) }))}
           onChange={(loadMode) => onChange({ loadMode })}
         />
-        <small>{LOAD_MODE_HINTS[value.loadMode]}</small>
+        <small>{t(LOAD_MODE_HINT_KEYS[value.loadMode])}</small>
       </label>
 
       <label className={s.newField}>
-        回数の単位
+        {t('calc.repUnit')}
         <Select
           value={value.repUnit}
-          options={(Object.keys(REP_UNIT_OPTIONS) as RepUnit[]).map((u) => ({
+          options={(Object.keys(REP_UNIT_KEYS) as RepUnit[]).map((u) => ({
             id: u,
-            label: REP_UNIT_OPTIONS[u],
+            label: t(REP_UNIT_KEYS[u]),
           }))}
           onChange={(repUnit) => onChange({ repUnit })}
         />
-        <small>秒で数える種目は挙上量に計上しません（挙上量＝重量×レップ数のため）</small>
+        <small>{t('calc.secondsNote')}</small>
       </label>
 
       {/* 体重が乗る割合が要るのは自重種目だけ。ほかで出すと効かない値を見せることになる */}
       {value.loadMode === 'bodyweight' && (
         <label className={s.newField} htmlFor={`${id}-factor`}>
-          体重が乗る割合（懸垂 1.0 / 腕立て 0.65 など）
+          {t('calc.bodyweightFactor')}
           {/* 係数なので小数第 2 位まで残す。1 位で丸めると 0.65 が 0.7 になる */}
           <NumericInput
             id={`${id}-factor`}
@@ -89,7 +92,7 @@ export function ExerciseCalcFields({ value, onChange }: Props) {
       {/* 秒で数える種目は挙上量を持たないので、1RM 換算もしない */}
       {value.repUnit === 'reps' && (
         <label className={s.newField} htmlFor={`${id}-divisor`}>
-          1RM換算の分母（ベンチ 40 / スクワット・デッド 33.3 / 既定 30）
+          {t('calc.rmDivisor')}
           {/* 空にはできない項目。消した状態から離れたら、もとの値の表示に戻る */}
           <NumericInput
             id={`${id}-divisor`}

@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
 import { insideNode, useDismiss } from '../hooks/useDismiss';
+import { badgeDetail, badgeName } from '../lib/badges';
 import type { Badge } from '../lib/badges';
 import { CardHeader } from './CardHeader';
 import ui from '../styles/ui.module.scss';
 import s from './BadgeGrid.module.scss';
+import { useT } from '../lib/i18n';
 
 /** 押したバッジの位置。吹き出しを出す高さと、しっぽの横位置を決める */
 interface Anchor {
@@ -26,6 +28,7 @@ interface Anchor {
  * どのバッジの話かは、そのバッジの真下に出ていれば言わずに済む。
  */
 export function BadgeGrid({ badges }: { badges: readonly Badge[] }) {
+  const t = useT();
   const earned = badges.filter((b) => b.earned).length;
   const [openId, setOpenId] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
@@ -69,7 +72,7 @@ export function BadgeGrid({ badges }: { badges: readonly Badge[] }) {
   return (
     <section className={ui.card}>
       <CardHeader
-        title="実績"
+        title={t('badge.section')}
         hint={
           <>
             {earned} / {badges.length}
@@ -85,13 +88,13 @@ export function BadgeGrid({ badges }: { badges: readonly Badge[] }) {
               type="button"
               className={`${s.badge} ${badge.earned ? s.earned : ''}`}
               aria-pressed={openId === badge.id}
-              aria-label={`${badge.name}の条件`}
+              aria-label={t('badge.condition', { name: badgeName(t, badge) })}
               onClick={(e) => toggle(badge, e.currentTarget)}
             >
               <div className={s.icon} aria-hidden="true">
                 {badge.icon}
               </div>
-              <div className={s.name}>{badge.name}</div>
+              <div className={s.name}>{badgeName(t, badge)}</div>
               {!badge.earned && badge.progress > 0 && (
                 <div className={s.progress} aria-hidden="true">
                   <i style={{ width: `${Math.round(badge.progress * 100)}%` }} />
@@ -105,13 +108,13 @@ export function BadgeGrid({ badges }: { badges: readonly Badge[] }) {
           <div className={s.tip} role="status" style={{ top: anchor.top }}>
             <i className={s.tipArrow} style={{ left: anchor.centerX }} aria-hidden="true" />
             <div className={s.detailName}>
-              {open.icon} {open.name}
-              {open.earned && <span className={s.detailEarned}>獲得</span>}
+              {open.icon} {badgeName(t, open)}
+              {open.earned && <span className={s.detailEarned}>{t('badge.earned')}</span>}
             </div>
-            <p className={s.detailText}>{open.detail}</p>
+            <p className={s.detailText}>{badgeDetail(t, open)}</p>
             {open.value != null && open.goal != null && (
               <p className={s.detailValue}>
-                いま {open.value} / {open.goal}
+                {t('badge.progress', { value: open.value, goal: open.goal })}
               </p>
             )}
           </div>
@@ -119,7 +122,7 @@ export function BadgeGrid({ badges }: { badges: readonly Badge[] }) {
       </div>
 
       {/* 押せることは形から読めないので、1 行だけ置く（開いているあいだは要らない） */}
-      {open == null && <p className={ui.note}>バッジを押すと、獲得の条件が出ます。</p>}
+      {open == null && <p className={ui.note}>{t('badge.hint')}</p>}
     </section>
   );
 }

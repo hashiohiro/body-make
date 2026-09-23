@@ -8,6 +8,7 @@ import type { AppData } from '../types';
 import { Button } from './Button';
 import ui from '../styles/ui.module.scss';
 import s from './SafetyNotices.module.scss';
+import { useT } from '../lib/i18n';
 
 /**
  * 書き出しを促しはじめる、**未書き出しの**記録日数。
@@ -59,6 +60,7 @@ function unsavedDays(dates: readonly string[], exportedAt: string | null): numbe
  * 30 日前に閉じた案内と、90 日ぶんの記録を抱えたいまとでは、失うものの量が違うため。
  */
 export function SafetyNotices({ data }: Props) {
+  const t = useT();
   const [device, setDevice] = useState(loadDevice);
   const install = useInstallPrompt();
   // デモは開き直すたびに初期データへ戻る。守るものが無い場所で、守り方の話をしない
@@ -80,9 +82,9 @@ export function SafetyNotices({ data }: Props) {
       <section className={`${ui.card} ${s.urgent}`}>
         <p className={s.body}>
           {device.exportedAt == null
-            ? `${unsaved}日ぶんの記録が、この端末のブラウザの中だけにあります。まだ一度も書き出していません。`
-            : `前に書き出した ${device.exportedAt} から、${unsaved}日ぶん記録しています。この端末のブラウザの中だけにあります。`}
-          ブラウザのデータを消すか機種を変えると、戻せません。
+            ? t('notice.neverExported', { days: unsaved })
+            : t('notice.sinceExport', { date: device.exportedAt, days: unsaved })}
+          {t('notice.lossWarning')}
         </p>
         <div className={ui.btnRow}>
           <Button
@@ -92,10 +94,10 @@ export function SafetyNotices({ data }: Props) {
               setDevice(markExported());
             }}
           >
-            JSONで書き出す
+            {t('common.exportJson')}
           </Button>
           <Button tone="ghost" onClick={() => setDevice(patchDevice({ backupClosedAt: today }))}>
-            閉じる
+            {t('common.close')}
           </Button>
         </div>
       </section>
@@ -106,23 +108,22 @@ export function SafetyNotices({ data }: Props) {
     return (
       <section className={ui.card}>
         <p className={s.body}>
-          ホーム画面に追加すると、オフラインでも開けて、ブラウザのデータ整理で記録が消えにくくなります。
+          {t('notice.install')}
           {install.prompt == null && (
             <>
               <br />
-              iPhone は共有ボタンから「ホーム画面に追加」、Android
-              はメニューから「アプリをインストール」。
+              {t('notice.installManual')}
             </>
           )}
         </p>
         <div className={ui.btnRow}>
           {install.prompt && (
             <Button tone="primary" onClick={install.prompt}>
-              ホーム画面に追加
+              {t('notice.installAction')}
             </Button>
           )}
           <Button tone="ghost" onClick={() => setDevice(patchDevice({ installClosedAt: today }))}>
-            閉じる
+            {t('common.close')}
           </Button>
         </div>
       </section>

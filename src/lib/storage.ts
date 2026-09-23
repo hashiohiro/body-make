@@ -30,6 +30,7 @@ import {
   isCardio,
 } from './exerciseCatalog';
 import { THEME_IDS } from './themes';
+import { isLocalePref } from './i18n';
 import { startOfWeek } from './date';
 import { IS_DEMO } from './env';
 import { SEED_DATA } from './seed';
@@ -60,6 +61,7 @@ export const DEFAULT_SETTINGS: Settings = {
   targetBodyFat: null,
   targetDate: null,
   theme: 'system',
+  locale: 'system',
   waistEnabled: false,
   inputWeightUnit: 'kg',
   displayWeightUnit: 'kg',
@@ -640,6 +642,8 @@ function sanitizeSettings(raw: unknown): Settings {
     targetDate: typeof o.targetDate === 'string' && ISO_RE.test(o.targetDate) ? o.targetDate : null,
     // 知らない配色を持つバックアップは 'system' に落とす
     theme: THEME_IDS.includes(theme as ThemePref) ? (theme as ThemePref) : 'system',
+    // 言語も同じ。持っていないバックアップは端末に合わせる
+    locale: isLocalePref(o.locale) ? o.locale : 'system',
     // 持っていないバックアップは既定（オフ）。真偽値以外は受け取らない
     waistEnabled: o.waistEnabled === true,
     // 知らない単位を持つバックアップは kg に落とす（保存は元から kg なので実害はない）

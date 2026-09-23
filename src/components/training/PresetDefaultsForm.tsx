@@ -1,11 +1,13 @@
 import { SetRow } from './SetRow';
-import { isCardio } from '../../lib/exerciseCatalog';
+import { Strong } from '../Strong';
+import { exerciseName, isCardio } from '../../lib/exerciseCatalog';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
 import type { Exercise, Preset, SessionSet } from '../../types';
 import type { SetField } from '../../hooks/useBodyData';
 import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   preset: Preset;
@@ -29,6 +31,7 @@ function emptySet(exercise: Exercise): SessionSet {
  * **持たないのが既定。**この面は破線の入口から開いたときだけ出る。
  */
 export function PresetDefaultsForm({ preset, exercises, onUpdate }: Props) {
+  const t = useT();
   /*
    * 単位は「読むときの単位」を使う。ここは打つ場所だが**定義を書く面**で、
    * 記録画面のような、その場で切り替えるトグルは置かない
@@ -48,7 +51,7 @@ export function PresetDefaultsForm({ preset, exercises, onUpdate }: Props) {
   return (
     <div>
       <p className={ui.note}>
-        書いた値は<b>記録に入りません</b>。入れたときに欄へ薄く出るだけで、打つまでは空のままです。
+        <Strong text={t('defaults.note')} values={[t('defaults.noteStrong')]} />
       </p>
 
       {preset.exerciseIds.map((id) => {
@@ -62,10 +65,10 @@ export function PresetDefaultsForm({ preset, exercises, onUpdate }: Props) {
         return (
           <div key={id} className={s.presetBlock}>
             <div className={s.prev}>
-              <span>{exercise.name}</span>
+              <span>{exerciseName(t, exercise)}</span>
               {sets.length > 0 && (
                 <Button tone="ghost" size="sub" onClick={() => drop(id)}>
-                  既定を外す
+                  {t('defaults.remove')}
                 </Button>
               )}
             </div>
@@ -77,18 +80,25 @@ export function PresetDefaultsForm({ preset, exercises, onUpdate }: Props) {
                   className={s.optionalEntry}
                   onClick={() => setSets(id, [emptySet(exercise)])}
                 >
-                  ＋ この種目の既定を決める
+                  <span aria-hidden="true">＋ </span>
+                  {t('defaults.add')}
                 </button>
               </div>
             ) : (
               <>
                 <div className={s.setHead} aria-hidden="true">
                   <span />
-                  <span>{cardio ? '時間 分' : exercise.repUnit === 'reps' ? '回数' : '秒数'}</span>
+                  <span>
+                    {cardio
+                      ? t('set.duration')
+                      : exercise.repUnit === 'reps'
+                        ? t('set.reps')
+                        : t('set.seconds')}
+                  </span>
                   {showWeight && (
                     <>
                       <span />
-                      <span>{cardio ? '距離 m' : '重量'}</span>
+                      <span>{cardio ? t('set.distance') : t('metric.maxWeight')}</span>
                     </>
                   )}
                   <span />
@@ -130,7 +140,8 @@ export function PresetDefaultsForm({ preset, exercises, onUpdate }: Props) {
                   className={s.addSet}
                   onClick={() => setSets(id, [...sets, { ...sets[sets.length - 1]! }])}
                 >
-                  ＋ セットを追加
+                  <span aria-hidden="true">＋ </span>
+                  {t('set.addSet')}
                 </button>
               </>
             )}

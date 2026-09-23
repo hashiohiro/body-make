@@ -9,6 +9,8 @@ import type { ExerciseHistoryPoint } from '../../lib/training';
 import { isCardioSet } from '../../types';
 import type { Exercise, ExercisePoint, RepUnit, SessionExercise, SessionSet } from '../../types';
 import type { SetField } from '../../hooks/useBodyData';
+import { useT } from '../../lib/i18n';
+import type { MessageKey } from '../../lib/i18n';
 import { fmt } from '../../lib/format';
 import { WEIGHT_UNIT_LABEL, fromKg } from '../../lib/weight';
 import ui from '../../styles/ui.module.scss';
@@ -59,9 +61,9 @@ interface Props {
 }
 
 /** 1 つ目の欄の見出し。単位で決まる（有酸素はここを使わない） */
-const FIELD_LABELS: Record<RepUnit, string> = {
-  reps: '回数',
-  seconds: '秒数',
+const FIELD_KEYS: Record<RepUnit, MessageKey> = {
+  reps: 'set.reps',
+  seconds: 'set.seconds',
 };
 
 /**
@@ -111,6 +113,7 @@ export function ExerciseSetEditor({
   onCopyPrevious,
 }: Props) {
   // 前回の構成は「読む」場所。打つ単位（weightUnit）ではなく表示の単位で出す
+  const t = useT();
   const displayUnit = useWeightUnit();
   const cardio = isCardio(exercise.group);
   // まだ何も入っていないときにだけ複製を出す。入力済みを黙って上書きしない
@@ -170,16 +173,19 @@ export function ExerciseSetEditor({
         {previous ? (
           <>
             <span>
-              前回 {formatMD(previous.date)}: {summarizeSets(previous.point, displayUnit)}
+              {t('set.previous', {
+                date: formatMD(previous.date),
+                sets: summarizeSets(t, previous.point, displayUnit),
+              })}
             </span>
             {empty && (
               <button type="button" className={s.prevBtn} onClick={onCopyPrevious}>
-                前回の構成で始める
+                {t('set.copyPrevious')}
               </button>
             )}
           </>
         ) : (
-          <span>この種目の記録は初めてです</span>
+          <span>{t('set.firstTime')}</span>
         )}
       </div>
 
@@ -195,22 +201,24 @@ export function ExerciseSetEditor({
       {additional && (
         <div className={s.loadCalc}>
           <span>
-            自重 {fmt(fromKg(base, displayUnit), base === 0 ? 0 : 1)}{' '}
-            {WEIGHT_UNIT_LABEL[displayUnit]}
+            {t('set.bodyweight', {
+              value: fmt(fromKg(base, displayUnit), base === 0 ? 0 : 1),
+              unit: WEIGHT_UNIT_LABEL[displayUnit],
+            })}
             {bodyWeight != null && (
               <span className={ui.hint}>
-                （体重 {fmt(fromKg(bodyWeight, displayUnit))} × {factor}）
+                {t('set.bodyweightCalc', {
+                  weight: fmt(fromKg(bodyWeight, displayUnit)),
+                  factor,
+                })}
               </span>
             )}
             {/* 加重していない日に「＋ 追加 0.0」は要らない。足していないことは欄が言っている */}
-            {addedTop > 0 && <> ＋ 追加 {fmt(fromKg(addedTop, displayUnit))}</>}
+            {addedTop > 0 && (
+              <>{t('set.addedTop', { value: fmt(fromKg(addedTop, displayUnit)) })}</>
+            )}
           </span>
-          {bodyWeight == null && (
-            <span className={ui.hint}>
-              体重が未記録なので、自重ぶんを 0 として数えています。
-              体組成に体重を入れると、この種目の挙上量も遡って出ます。
-            </span>
-          )}
+          {bodyWeight == null && <span className={ui.hint}>{t('set.noBodyWeight')}</span>}
         </div>
       )}
 
@@ -226,7 +234,9 @@ export function ExerciseSetEditor({
       */}
       <div className={`${s.setHead} ${rowClass}`}>
         {repeated && <span aria-hidden="true" />}
-        <span aria-hidden="true">{cardio ? '時間 分' : FIELD_LABELS[exercise.repUnit]}</span>
+        <span aria-hidden="true">
+          {cardio ? t('set.duration') : t(FIELD_KEYS[exercise.repUnit])}
+        </span>
         {showWeight && (
           <>
             <span aria-hidden="true" />
@@ -237,7 +247,11 @@ export function ExerciseSetEditor({
               いちばん読ませたい「追加重量」が行の中でもっとも薄い字になっていた。
             */}
             <span aria-hidden="true">
-              {cardio ? '距離 m' : `${additional ? '追加重量' : '重量'} ${unitLabel}`}
+              {cardio
+                ? t('set.distance')
+                : additional
+                  ? t('set.addedWeight', { unit: unitLabel })
+                  : t('set.weight', { unit: unitLabel })}
             </span>
             {/*
               単位の切り替えは **× の真上**（行の操作と同じ列）。
@@ -247,7 +261,7 @@ export function ExerciseSetEditor({
               <button
                 type="button"
                 className={s.unitToggle}
-                aria-label={`重量の単位を切り替える（いま ${unitLabel}）`}
+                aria-label={t('set.unitToggle', { unit: unitLabel })}
                 onClick={() => onWeightUnitChange(weightUnit === 'kg' ? 'lb' : 'kg')}
               >
                 ⇄
@@ -314,7 +328,8 @@ export function ExerciseSetEditor({
       <div className={s.setActions}>
         {repeated && (
           <button type="button" className={s.addSet} onClick={onAddSet}>
-            ＋ {cardio ? '本' : 'セット'}を追加
+            <span aria-hidden="true">＋ </span>
+            {cardio ? t('set.addBout') : t('set.addSet')}
           </button>
         )}
 
@@ -326,7 +341,8 @@ export function ExerciseSetEditor({
             aria-pressed={addWeight}
             onClick={() => setAddWeight((v) => !v)}
           >
-            {addWeight ? '加重をやめる' : '＋ 加重'}
+            {!addWeight && <span aria-hidden="true">＋ </span>}
+            {addWeight ? t('set.stopWeighted') : t('set.addWeighted')}
           </button>
         )}
       </div>

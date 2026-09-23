@@ -7,6 +7,9 @@ import { buildSessions, buildWeeklySets, computeTrainingStats, exerciseGoals } f
 import { emptyData } from './storage';
 import { addDays, todayISO } from './date';
 import type { AppData, Entries, Settings, Workouts } from '../types';
+import { makeT } from './i18n';
+
+const t = makeT('ja');
 
 /**
  * 増分の経路と、定義である純関数の経路が、同じ答えを返すことを固定する。
@@ -22,6 +25,7 @@ const SETTINGS: Settings = {
   targetBodyFat: 15,
   targetDate: null,
   theme: 'system',
+  locale: 'system',
   waistEnabled: true,
   inputWeightUnit: 'kg' as const,
   displayWeightUnit: 'kg' as const,
@@ -126,6 +130,7 @@ function full(data: AppData) {
     trainingStats: computeTrainingStats(sessions, weeklySets),
     checkHistory: buildCheckHistory(sessions, data.exercises),
     trainingGoals: exerciseGoals(
+      t,
       sessions,
       data.exercises.filter((e) => e.shelf === 'listed'),
     ),
@@ -134,7 +139,7 @@ function full(data: AppData) {
 
 /** 増分の答え。キャッシュを渡さなければ毎回まっさらから */
 function inc(data: AppData, cache = createDeriveCache()) {
-  return deriveAll(data, cache);
+  return deriveAll(t, data, cache);
 }
 
 describe('増分と全計算の一致', () => {
@@ -181,7 +186,9 @@ describe('編集を重ねても一致し続ける', () => {
         am: { weight: 70 + n / 10, bodyFat: 20, waist: null },
         pm: { weight: null, bodyFat: null, waist: null },
       };
-      expect(deriveAll(dataOf(entries, workouts), cache)).toEqual(full(dataOf(entries, workouts)));
+      expect(deriveAll(t, dataOf(entries, workouts), cache)).toEqual(
+        full(dataOf(entries, workouts)),
+      );
     }
   });
 
@@ -189,7 +196,7 @@ describe('編集を重ねても一致し続ける', () => {
     const cache = createDeriveCache();
     const entries = entriesOf(400, 5, 0.15);
     const workouts = workoutsOf(400, 5);
-    deriveAll(dataOf(entries, workouts), cache);
+    deriveAll(t, dataOf(entries, workouts), cache);
 
     // 週をまたいで散らばった日を直す。移動平均は跨ぐので後ろの週も変わる
     for (const back of [3, 40, 111, 250, 399, 8]) {
@@ -198,7 +205,9 @@ describe('編集を重ねても一致し続ける', () => {
         am: { weight: 65, bodyFat: 18, waist: null },
         pm: { weight: 66, bodyFat: 19, waist: null },
       };
-      expect(deriveAll(dataOf(entries, workouts), cache)).toEqual(full(dataOf(entries, workouts)));
+      expect(deriveAll(t, dataOf(entries, workouts), cache)).toEqual(
+        full(dataOf(entries, workouts)),
+      );
     }
   });
 
@@ -206,11 +215,13 @@ describe('編集を重ねても一致し続ける', () => {
     const cache = createDeriveCache();
     const entries = entriesOf(300, 11, 0.1);
     const workouts = workoutsOf(300, 11);
-    deriveAll(dataOf(entries, workouts), cache);
+    deriveAll(t, dataOf(entries, workouts), cache);
 
     for (const back of [0, 1, 2, 150, 299]) {
       delete entries[addDays(todayISO(), -back)];
-      expect(deriveAll(dataOf(entries, workouts), cache)).toEqual(full(dataOf(entries, workouts)));
+      expect(deriveAll(t, dataOf(entries, workouts), cache)).toEqual(
+        full(dataOf(entries, workouts)),
+      );
     }
   });
 
@@ -218,14 +229,14 @@ describe('編集を重ねても一致し続ける', () => {
     const cache = createDeriveCache();
     const entries = entriesOf(200, 13, 0.1);
     const workouts = workoutsOf(200, 13);
-    deriveAll(dataOf(entries, workouts), cache);
+    deriveAll(t, dataOf(entries, workouts), cache);
 
     for (const key of Object.keys(entries)) delete entries[key];
-    expect(deriveAll(dataOf(entries, workouts), cache)).toEqual(full(dataOf(entries, workouts)));
+    expect(deriveAll(t, dataOf(entries, workouts), cache)).toEqual(full(dataOf(entries, workouts)));
 
     const fresh = entriesOf(30, 17, 0.1);
     for (const [k, v] of Object.entries(fresh)) entries[k] = v;
-    expect(deriveAll(dataOf(entries, workouts), cache)).toEqual(full(dataOf(entries, workouts)));
+    expect(deriveAll(t, dataOf(entries, workouts), cache)).toEqual(full(dataOf(entries, workouts)));
   });
 });
 
@@ -240,7 +251,7 @@ describe('作り直す範囲', () => {
     const cache = createDeriveCache();
     const entries = entriesOf(300, 19, 0.1);
     const workouts = workoutsOf(300, 19);
-    deriveAll(dataOf(entries, workouts), cache);
+    deriveAll(t, dataOf(entries, workouts), cache);
 
     const before = [...cache.bodyWeeks.values()];
     const kept = before.slice(0, -1);
@@ -249,7 +260,7 @@ describe('作り直す範囲', () => {
       am: { weight: 71.2, bodyFat: 21, waist: null },
       pm: { weight: null, bodyFat: null, waist: null },
     };
-    deriveAll(dataOf(entries, workouts), cache);
+    deriveAll(t, dataOf(entries, workouts), cache);
 
     const after = [...cache.bodyWeeks.values()];
     for (let i = 0; i < kept.length; i++) expect(after[i]).toBe(kept[i]);
@@ -261,7 +272,7 @@ describe('作り直す範囲', () => {
     const cache = createDeriveCache();
     const entries = entriesOf(300, 23, 0.1);
     const workouts = workoutsOf(300, 23);
-    deriveAll(dataOf(entries, workouts), cache);
+    deriveAll(t, dataOf(entries, workouts), cache);
     const before = [...cache.bodyWeeks.values()];
 
     // 真ん中あたりの日を直す
@@ -269,7 +280,7 @@ describe('作り直す範囲', () => {
       am: { weight: 60, bodyFat: 15, waist: null },
       pm: { weight: null, bodyFat: null, waist: null },
     };
-    deriveAll(dataOf(entries, workouts), cache);
+    deriveAll(t, dataOf(entries, workouts), cache);
     const after = [...cache.bodyWeeks.values()];
 
     const changed = after.findIndex((w, i) => w !== before[i]);
@@ -284,11 +295,11 @@ describe('トレの作り直す範囲', () => {
     const cache = createDeriveCache();
     const entries = entriesOf(300, 31, 0.1);
     const workouts = workoutsOf(300, 31);
-    deriveAll(dataOf(entries, workouts), cache);
+    deriveAll(t, dataOf(entries, workouts), cache);
     const before = [...cache.trainingWeeks.values()];
 
     workouts[todayISO()] = [{ exerciseId: EXERCISES[0]!.id, sets: [{ weight: 80, reps: 5 }] }];
-    const after = deriveAll(dataOf(entries, workouts), cache);
+    const after = deriveAll(t, dataOf(entries, workouts), cache);
 
     const now = [...cache.trainingWeeks.values()];
     for (let i = 0; i < before.length - 1; i++) expect(now[i]).toBe(before[i]);
@@ -303,14 +314,14 @@ describe('トレの作り直す範囲', () => {
     const cache = createDeriveCache();
     const entries = entriesOf(200, 37, 0.1);
     const workouts = workoutsOf(200, 37);
-    deriveAll(dataOf(entries, workouts), cache);
+    deriveAll(t, dataOf(entries, workouts), cache);
     const before = [...cache.trainingWeeks.values()];
 
     const changed = EXERCISES.map((e, i) =>
       i === 0 ? { ...e, subGroups: [{ group: 'core' as const, weight: 1 }] } : e,
     );
     const data: AppData = { ...dataOf(entries, workouts), exercises: changed };
-    const after = deriveAll(data, cache);
+    const after = deriveAll(t, data, cache);
 
     const now = [...cache.trainingWeeks.values()];
     for (let i = 0; i < before.length; i++) expect(now[i]).not.toBe(before[i]);
@@ -321,14 +332,16 @@ describe('トレの作り直す範囲', () => {
     const cache = createDeriveCache();
     const entries = entriesOf(300, 41, 0.1);
     const workouts = workoutsOf(300, 41);
-    deriveAll(dataOf(entries, workouts), cache);
+    deriveAll(t, dataOf(entries, workouts), cache);
 
     for (const back of [5, 90, 220]) {
       entries[addDays(todayISO(), -back)] = {
         am: { weight: 55, bodyFat: 12, waist: null },
         pm: { weight: null, bodyFat: null, waist: null },
       };
-      expect(deriveAll(dataOf(entries, workouts), cache)).toEqual(full(dataOf(entries, workouts)));
+      expect(deriveAll(t, dataOf(entries, workouts), cache)).toEqual(
+        full(dataOf(entries, workouts)),
+      );
     }
   });
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NumericInput } from '../NumericInput';
-import { GOAL_TYPE_LABELS, REP_UNIT_LABELS, isCardio } from '../../lib/exerciseCatalog';
+import { GOAL_TYPE_KEYS, REP_UNIT_KEYS, exerciseName, isCardio } from '../../lib/exerciseCatalog';
 import { todayISO } from '../../lib/date';
 import { fmt } from '../../lib/format';
 import {
@@ -19,6 +19,8 @@ import { Button } from '../Button';
 import { Segmented } from '../Segmented';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
+import type { MessageKey } from '../../lib/i18n';
 
 /** 主指標が重量で数えるものかを見分けるための印。綴りそのものは表示に使わない */
 const WEIGHT = 'weight';
@@ -29,16 +31,15 @@ interface Props {
   onUpdate: (exercise: Exercise) => void;
 }
 
-const NOTES: Record<GoalType, string> = {
+const NOTE_KEYS: Record<GoalType, MessageKey> = {
   // どれも 2 行に収まる長さにそろえる（下の goalNote が 2 行ぶんの高さを持つ）
-  maintain:
-    'いまの水準を保てていればよい種目です。数値は決めず、到達の判定もしません（開始比だけ出ます）。',
-  weight: '判定は、その日いちばん重かった記録した重量で行います（推定1RMでは判定しません）。',
-  volume: '判定は、その日の総挙上量（有効重量 × レップ数の合計）で行います。',
-  reps: 'そのセッションの最大レップ数で判定します。',
-  distance: 'その日の合計距離（m）で判定します。何本に分けても合計で数えます。',
-  speed: '合計距離 ÷ 合計時間（m/分）で判定します。速いほど大きい値です。',
-  duration: 'その日の合計時間で判定します。',
+  maintain: 'goalNote.maintain',
+  weight: 'goalNote.weight',
+  volume: 'goalNote.volume',
+  reps: 'goalNote.reps',
+  distance: 'goalNote.distance',
+  speed: 'goalNote.speed',
+  duration: 'goalNote.duration',
 };
 
 /**
@@ -57,6 +58,7 @@ const NOTES: Record<GoalType, string> = {
  * 見ないと決められない。**値は入れない**（アプリが目標を発明することになる）。
  */
 export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
+  const t = useT();
   /*
    * 秒で数える種目は重量を記録できない（挙上量に計上されないので入力欄も出していない）。
    * 届きようのない目標を選択肢に出さない。
@@ -97,9 +99,9 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
   const maintainUnit = cardio
     ? history.some((h) => h.point.meters != null)
       ? 'm'
-      : '分'
+      : t('metric.durationUnit')
     : exercise.repUnit === 'seconds'
-      ? '秒'
+      ? t('unit.seconds')
       : WEIGHT;
   /*
    * この立て方が重量で数えるものか。**重量だけを換算の対象にする。**
@@ -113,13 +115,13 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
     type === 'weight' || type === 'volume' || (type === 'maintain' && maintainUnit === WEIGHT);
   const unit =
     type === 'reps'
-      ? REP_UNIT_LABELS[exercise.repUnit]
+      ? t(REP_UNIT_KEYS[exercise.repUnit])
       : type === 'distance'
         ? 'm'
         : type === 'duration'
-          ? '分'
+          ? t('metric.durationUnit')
           : type === 'speed'
-            ? 'm/分'
+            ? t('metric.speedUnit')
             : type === 'maintain'
               ? maintainUnit === WEIGHT
                 ? weightLabel
@@ -155,11 +157,11 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
   return (
     <div className={s.goalForm}>
       <Segmented
-        label={`${exercise.name}の目標の種類`}
+        label={t('goalEditor.typeOf', { name: exerciseName(t, exercise) })}
         value={type}
         options={types.map((id) => ({
           id,
-          label: id === 'reps' && seconds ? '秒数' : GOAL_TYPE_LABELS[id],
+          label: id === 'reps' && seconds ? t('set.seconds') : t(GOAL_TYPE_KEYS[id]),
         }))}
         onChange={choose}
       />
@@ -180,7 +182,7 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
         <NumericInput
           id={`goal-value-${exercise.id}`}
           className={s.goalValue}
-          ariaLabel={`${exercise.name}の目標`}
+          ariaLabel={t('exercise.goalOf', { name: exerciseName(t, exercise) })}
           value={show(exercise.goal?.value ?? null)}
           min={weighty ? rangeIn(range, weightUnit)[0] : range[0]}
           max={weighty ? rangeIn(range, weightUnit)[1] : range[1]}
@@ -207,14 +209,14 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
 
       <p className={s.goalFacts}>
         {best == null ? (
-          'この種目の記録はまだありません。'
+          t('goalEditor.noRecords')
         ) : (
           <>
-            いま{' '}
+            {t('goalEditor.now')}{' '}
             <b>
               {fmt(show(latest), digits)} {unit}
             </b>{' '}
-            ・ 過去最大{' '}
+            {t('detail.best')}{' '}
             <b>
               {fmt(show(best), digits)} {unit}
             </b>
@@ -230,12 +232,12 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
       <div className={exercise.goal ? undefined : s.goalRemoveEmpty}>
         {exercise.goal && (
           <Button tone="ghost" size="sub" onClick={() => onUpdate({ ...exercise, goal: null })}>
-            目標を外す
+            {t('groupGoal.remove')}
           </Button>
         )}
       </div>
 
-      <p className={`${ui.note} ${s.goalNote}`}>{NOTES[type]}</p>
+      <p className={`${ui.note} ${s.goalNote}`}>{t(NOTE_KEYS[type])}</p>
     </div>
   );
 }

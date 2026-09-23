@@ -5,7 +5,13 @@ import { Meter } from '../Meter';
 import { Modal } from '../Modal';
 import { TimeSeriesChart } from '../charts/TimeSeriesChart';
 import type { ChartSeries, SeriesPoint } from '../charts/TimeSeriesChart';
-import { GROUP_LABELS, countsReps, isCardio, muscleOf } from '../../lib/exerciseCatalog';
+import {
+  GROUP_KEYS,
+  countsReps,
+  exerciseName,
+  isCardio,
+  muscleOf,
+} from '../../lib/exerciseCatalog';
 import { BodyMap } from './weekPlan/BodyMap';
 import { addDays, formatMD, isoToTime, startOfWeek, todayISO } from '../../lib/date';
 import { deltaTone, fmt, fmtDelta, fmtVolume } from '../../lib/format';
@@ -23,6 +29,7 @@ import { TONE_CLASS } from '../tone';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 import { useWeightFormat } from '../../hooks/useWeightUnit';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   open: boolean;
@@ -132,7 +139,8 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
   if (!exercise) return null;
 
   // 秒で数える種目は挙上量に計上しないので重量系を出さない。有酸素は距離・時間・速度に入れ替わる
-  const metrics = metricsFor(unit).filter((m) =>
+  const t = useT();
+  const metrics = metricsFor(t, unit).filter((m) =>
     isCardio(exercise.group)
       ? m.cardioOnly
       : !m.cardioOnly && (!m.needsWeight || countsReps(exercise.repUnit)),
@@ -200,40 +208,47 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
   for (const sub of exercise.subGroups) share[sub.group] = sub.weight;
 
   return (
-    <Modal open={open} title={exercise.name} onClose={onClose}>
+    <Modal open={open} title={exerciseName(t, exercise)} onClose={onClose}>
       <div>
-        <ChipGroup options={metrics} value={metric.id} onChange={setMetricId} label="指標" tight />
+        <ChipGroup
+          options={metrics}
+          value={metric.id}
+          onChange={setMetricId}
+          label={t('exTrend.metric')}
+          tight
+        />
 
         <div className={s.statRow}>
-          <span className={s.statLabel}>過去最大</span>
+          <span className={s.statLabel}>{t('detail.best')}</span>
           <b>{fmt(best, metric.digits)}</b>
           <span>{metric.unit}</span>
           {stall && (
             <span style={{ marginLeft: 'auto' }}>
-              {fmt(conv(stall.weight))}
-              {unitLabel} のまま {stall.weeks}週
+              {t('detail.stalled', {
+                weight: fmt(conv(stall.weight)),
+                unit: unitLabel,
+                weeks: stall.weeks,
+              })}
             </span>
           )}
         </div>
 
         <div className={s.statSub}>
           <span>
-            直近 {fmt(current, metric.digits)} {metric.unit}
+            {t('summary.recent', { value: `${fmt(current, metric.digits)} ${metric.unit}` })}
           </span>
           {delta != null && (
             <span className={TONE_CLASS[deltaTone(delta, false, 0)]}>
-              開始比 {fmtDelta(delta, metric.digits)}
+              {t('detail.fromBase', { delta: fmtDelta(delta, metric.digits) })}
             </span>
           )}
         </div>
 
         {progress != null && (
           <>
-            <Meter value={progress} label="目標までの進捗" block />
+            <Meter value={progress} label={t('detail.goalProgress')} block />
             <div className={s.statSub}>
-              <span>
-                目標 {fmt(weightTarget)} {unitLabel} まで
-              </span>
+              <span>{t('detail.toGoal', { value: fmt(weightTarget), unit: ` ${unitLabel}` })}</span>
               <span style={{ marginLeft: 'auto' }}>{Math.round(progress * 100)}%</span>
             </div>
           </>
@@ -251,38 +266,44 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
              下の週の内訳と同じ `refDate` を使うので、グラフと内訳が同じ週を指す。
           */
           highlight={isoToTime(refDate)}
-          ariaLabel={`${exercise.name}の${metric.label}の推移`}
+          ariaLabel={t('exTrend.aria', { name: exerciseName(t, exercise), metric: metric.label })}
           emptyMessage={
             metric.needsWeight && exercise.repUnit === 'seconds'
-              ? '秒で数える種目なので、この指標は出せません'
-              : 'この期間に記録がありません'
+              ? t('detail.noSecondsMetric')
+              : t('group.noRange')
           }
           reference={
             metric.weightLike && weightTarget != null
-              ? { value: weightTarget, label: `目標 ${fmt(weightTarget)}${unitLabel}` }
+              ? {
+                  value: weightTarget,
+                  label: t('detail.goalRef', { value: fmt(weightTarget), unit: unitLabel }),
+                }
               : null
           }
         />
 
-        {metric.id === 'oneRm' && <p className={ui.note}>推定1RMは記録からの換算値です。</p>}
+        {metric.id === 'oneRm' && <p className={ui.note}>{t('detail.oneRmNote')}</p>}
 
         {cardioWeek && (
           <>
             <div className={s.dialogHead}>
-              <span>今週の合計</span>
+              <span>{t('detail.weekTotal')}</span>
               <span>
                 {formatMD(cardioWeek.weekStart)}〜{formatMD(cardioWeek.weekEnd)}
               </span>
             </div>
             <div className={s.goalFoot}>
-              <span>{cardioWeek.days}回</span>
+              <span>{t('summary.times')}</span>
               <span>
-                {cardioWeek.distance != null && `${cardioWeek.distance}m ・ `}
-                {cardioWeek.minutes}分{cardioWeek.speed != null && ` ・ ${cardioWeek.speed}m/分`}
+                {t('detail.cardioTotal', {
+                  meters: cardioWeek.distance ?? 0,
+                  minutes: cardioWeek.minutes,
+                })}
+                {cardioWeek.speed != null && t('detail.speedSuffix', { n: cardioWeek.speed })}
               </span>
             </div>
             {/* 種目をまたいだ合計は出さない。走った距離と漕いだ距離を足しても読めない */}
-            <p className={ui.note}>この種目ぶんだけの合計です。</p>
+            <p className={ui.note}>{t('detail.thisExerciseOnly')}</p>
           </>
         )}
 
@@ -295,16 +316,19 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
         {muscle != null && (
           <>
             <div className={s.dialogHead}>
-              <span>効く部位</span>
-              <span>主部位 1 ・ 補助は係数ぶん</span>
+              <span>{t('detail.affected')}</span>
+              <span>{t('detail.affectedHint')}</span>
             </div>
-            <BodyMap tint={share} label={`${exercise.name}が効く部位`} />
+            <BodyMap
+              tint={share}
+              label={t('detail.bodyMapOf', { name: exerciseName(t, exercise) })}
+            />
             <p className={ui.note}>
               {[
-                `${GROUP_LABELS[exercise.group]} 1`,
-                ...exercise.subGroups.map((x) => `${GROUP_LABELS[x.group]} ${x.weight}`),
+                `${t(GROUP_KEYS[exercise.group])} 1`,
+                ...exercise.subGroups.map((x) => `${t(GROUP_KEYS[x.group])} ${x.weight}`),
               ].join(' / ')}
-              セットとして数えます。
+              {t('detail.countedAs')}
             </p>
           </>
         )}
@@ -312,7 +336,7 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
         {contribution && (
           <>
             <div className={s.dialogHead}>
-              <span>週のセット数への貢献</span>
+              <span>{t('detail.contribution')}</span>
               <span>
                 {formatMD(contribution.weekStart)}〜{formatMD(contribution.weekEnd)}
               </span>
@@ -321,10 +345,10 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
               const total = contribution.week?.setsByGroup[row.group] ?? 0;
               return (
                 <div key={row.group} className={s.groupRow}>
-                  <span>{GROUP_LABELS[row.group]}</span>
+                  <span>{t(GROUP_KEYS[row.group])}</span>
                   <Meter
                     value={total > 0 ? row.sets / total : 0}
-                    label={`${GROUP_LABELS[row.group]}の割合`}
+                    label={t('detail.groupShare', { name: t(GROUP_KEYS[row.group]) })}
                   />
                   <span className={s.groupValue}>
                     <b>{formatSets(row.sets)}</b> / {formatSets(total)}
@@ -335,21 +359,29 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
             <p className={ui.note}>
               補助部位は種目ごとの係数ぶんで数えます（この種目は
               {[
-                `${GROUP_LABELS[exercise.group]}×1`,
-                ...exercise.subGroups.map((x) => `${GROUP_LABELS[x.group]}×${x.weight}`),
-              ].join('・')}
+                `${t(GROUP_KEYS[exercise.group])}×1`,
+                ...exercise.subGroups.map((x) => `${t(GROUP_KEYS[x.group])}×${x.weight}`),
+              ].join(t('common.listSep'))}
               ）。
             </p>
           </>
         )}
 
         <div className={s.dialogHead}>
-          <span>元データ</span>
-          <span>{history.length}日ぶん</span>
+          <span>{t('trend.rawData')}</span>
+          <span>{t('detail.rawDays', { n: history.length })}</span>
         </div>
 
         {/* 表そのものが目的の面なので、畳まない（summary を渡さない） */}
-        <DataTable columns={['日付', 'トップセット', 'セット', '挙上量', '推定1RM']}>
+        <DataTable
+          columns={[
+            t('table.date'),
+            t('detail.topSet'),
+            t('metric.setsUnit'),
+            t('metric.volume'),
+            t('metric.oneRm'),
+          ]}
+        >
           {[...history].reverse().map((h) => (
             <tr key={h.date}>
               <th scope="row">{formatMD(h.date)}</th>

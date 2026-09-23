@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { addDays, formatMD, formatMDW, fromISO, startOfWeek, todayISO, toISO } from '../lib/date';
 import { ChipGroup } from './ChipGroup';
 import { CardHeader } from './CardHeader';
+import { useT } from '../lib/i18n';
+import type { MessageKey } from '../lib/i18n';
 import ui from '../styles/ui.module.scss';
 import s from './RecordCalendar.module.scss';
 
@@ -24,7 +26,16 @@ interface Props {
   onSelect: (date: string) => void;
 }
 
-const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+/** 曜日の見出し。**文字は辞書が持つ**（`weekday.0`〜`weekday.6`） */
+const WEEKDAY_KEYS = [
+  'weekday.0',
+  'weekday.1',
+  'weekday.2',
+  'weekday.3',
+  'weekday.4',
+  'weekday.5',
+  'weekday.6',
+] as const satisfies readonly MessageKey[];
 
 /**
  * 表示する範囲。
@@ -34,9 +45,9 @@ const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
  * 過去が 1 日も映らない。2 週なら、週のどこで開いても直前の記録が入る。
  */
 const RANGES = [
-  { id: 'week', label: '1週', weeks: 1 },
-  { id: 'two', label: '2週', weeks: 2 },
-  { id: 'month', label: '月', weeks: 0 },
+  { id: 'week', key: 'calendar.oneWeek', weeks: 1 },
+  { id: 'two', key: 'calendar.twoWeeks', weeks: 2 },
+  { id: 'month', key: 'calendar.month', weeks: 0 },
 ] as const;
 
 type RangeId = (typeof RANGES)[number]['id'];
@@ -70,6 +81,7 @@ function shiftMonth(iso: string, by: number): string {
  */
 export function RecordCalendar({ marked, filled, selected, summary, firstDate, onSelect }: Props) {
   const today = todayISO();
+  const t = useT();
   const [rangeId, setRangeId] = useState<RangeId>('two');
   /** 表示の起点。押した日ではなく、めくった位置を持つ */
   const [anchor, setAnchor] = useState(today);
@@ -89,7 +101,7 @@ export function RecordCalendar({ marked, filled, selected, summary, firstDate, o
       const [y, m] = month.split('-');
       return {
         cells: out,
-        label: `${y}年${Number(m)}月`,
+        label: t('calendar.yearMonth', { y: y!, m: Number(m) }),
         back: shiftMonth(anchor, -1),
         next: shiftMonth(anchor, 1),
       };
@@ -117,12 +129,12 @@ export function RecordCalendar({ marked, filled, selected, summary, firstDate, o
 
   return (
     <section className={ui.card}>
-      <CardHeader title="記録の継続" hint={summary} />
+      <CardHeader title={t('calendar.title')} hint={summary} />
 
       <ChipGroup
-        options={RANGES}
+        options={RANGES.map((r) => ({ id: r.id, label: t(r.key) }))}
         value={rangeId}
-        label="表示する範囲"
+        label={t('calendar.range')}
         onChange={(id) => {
           setRangeId(id);
           // 範囲を変えたら、いま見ている日が入る位置に戻す
@@ -136,7 +148,7 @@ export function RecordCalendar({ marked, filled, selected, summary, firstDate, o
           className={s.navBtn}
           onClick={() => setAnchor(back)}
           disabled={!canBack}
-          aria-label="前へ"
+          aria-label={t('common.prev')}
         >
           ‹
         </button>
@@ -147,16 +159,16 @@ export function RecordCalendar({ marked, filled, selected, summary, firstDate, o
           type="button"
           className={s.navBtn}
           onClick={() => setAnchor(next)}
-          aria-label="次へ"
+          aria-label={t('common.next')}
         >
           ›
         </button>
       </div>
 
       <div className={s.week} aria-hidden="true">
-        {WEEKDAYS.map((w) => (
-          <span key={w} className={s.weekday}>
-            {w}
+        {WEEKDAY_KEYS.map((key) => (
+          <span key={key} className={s.weekday}>
+            {t(key)}
           </span>
         ))}
       </div>
@@ -179,7 +191,9 @@ export function RecordCalendar({ marked, filled, selected, summary, firstDate, o
                 .filter(Boolean)
                 .join(' ')}
               aria-current={iso === selected}
-              aria-label={`${formatMDW(iso)}${iso === today ? ' 今日' : ''}${has ? ' 記録あり' : ''}`}
+              aria-label={`${formatMDW(t, iso)}${iso === today ? ` ${t('common.today')}` : ''}${
+                has ? ` ${t('calendar.hasRecord')}` : ''
+              }`}
               onClick={() => onSelect(iso)}
             >
               <span className={s.num}>{Number(iso.slice(8))}</span>

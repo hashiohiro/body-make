@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { GroupGoalEditor } from './GroupGoalEditor';
 import { Meter } from '../Meter';
 import { Modal } from '../Modal';
-import { GROUP_LABELS, GROUP_ORDER, isCardio, isListed } from '../../lib/exerciseCatalog';
+import { GROUP_KEYS, GROUP_ORDER, isCardio, isListed } from '../../lib/exerciseCatalog';
 import { addDays, formatMD, startOfWeek, todayISO } from '../../lib/date';
 import { fmtVolume } from '../../lib/format';
 import { cardioWeek, formatSets } from '../../lib/training';
@@ -12,13 +12,18 @@ import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 import { useWeightFormat } from '../../hooks/useWeightUnit';
+import { useT } from '../../lib/i18n';
+import type { T } from '../../lib/i18n';
 
-/** 最終実施からの日数の言い方。回復ダイアログと同じ語彙を使う */
-function lastDoneLabel(days: number | null): string {
-  if (days == null) return '記録なし';
-  if (days === 0) return '今日';
-  if (days === 1) return '昨日';
-  return `${days}日前`;
+/**
+ * 最終実施からの日数の言い方。回復ダイアログと同じ語彙を使う。
+ * `t` は引数で受ける——ここは部品ではないのでフックを呼べない。
+ */
+function lastDoneLabel(t: T, days: number | null): string {
+  if (days == null) return t('common.noRecord');
+  if (days === 0) return t('common.today');
+  if (days === 1) return t('recovery.yesterday');
+  return t('recovery.daysAgo', { n: days });
 }
 
 interface Props {
@@ -57,6 +62,7 @@ export function WeeklyVolumeCard({
   sessions,
   onSetGroupGoal,
 }: Props) {
+  const t = useT();
   const { conv } = useWeightFormat();
   /** 開いている部位。押したらそのまま目標を決める面（段は増やさない） */
   const [open, setOpen] = useState<MuscleGroup | null>(null);
@@ -96,11 +102,9 @@ export function WeeklyVolumeCard({
     <>
       <section className={ui.card}>
         <CardHeader
-          title="今週の量"
+          title={t('volume.thisWeek')}
           hint={
-            <>
-              {stats.thisWeekDays}日 ・ {formatSets(totalSets)}セット
-            </>
+            <>{t('volume.daysSets', { days: stats.thisWeekDays, sets: formatSets(totalSets) })}</>
           }
         />
 
@@ -109,10 +113,10 @@ export function WeeklyVolumeCard({
             key={row.group}
             type="button"
             className={s.volRow}
-            aria-label={`${GROUP_LABELS[row.group]}の今週の量`}
+            aria-label={t('volume.ofGroup', { name: t(GROUP_KEYS[row.group]) })}
             onClick={() => setOpen(row.group)}
           >
-            <span className={s.volName}>{GROUP_LABELS[row.group]}</span>
+            <span className={s.volName}>{t(GROUP_KEYS[row.group])}</span>
 
             {/*
               目標を決めていない部位にはバーを出さない。割る相手がないので、
@@ -121,7 +125,10 @@ export function WeeklyVolumeCard({
             {row.progress == null ? (
               <span />
             ) : (
-              <Meter value={row.progress} label={`${GROUP_LABELS[row.group]}の今週の量`} />
+              <Meter
+                value={row.progress}
+                label={t('volume.ofGroup', { name: t(GROUP_KEYS[row.group]) })}
+              />
             )}
 
             {/*
@@ -147,7 +154,7 @@ export function WeeklyVolumeCard({
               いつやったかをそのまま書く。回復ダイアログと同じ言い方にそろえる。
               今週が 0 でも、ここが「昨日」なら週替わりで空になっただけだと読める
             */}
-            <span className={s.volStatus}>{lastDoneLabel(row.days)}</span>
+            <span className={s.volStatus}>{lastDoneLabel(t, row.days)}</span>
             <span className={s.chevron} aria-hidden="true">
               ›
             </span>
@@ -166,16 +173,16 @@ export function WeeklyVolumeCard({
         */}
         {hasCardio && (
           <div className={s.volRow}>
-            <span className={s.volName}>{GROUP_LABELS.cardio}</span>
+            <span className={s.volName}>{t(GROUP_KEYS.cardio)}</span>
             <span className={s.volWide}>
-              {cardio.days}回 / {cardio.minutes}分
+              {t('volume.cardio', { times: cardio.days, minutes: cardio.minutes })}
             </span>
-            <span className={s.volStatus}>{lastDoneLabel(stats.daysSinceCardio)}</span>
+            <span className={s.volStatus}>{lastDoneLabel(t, stats.daysSinceCardio)}</span>
           </div>
         )}
 
         <p className={ui.note}>
-          今週は {formatMD(thisWeekStart)} 〜 {formatMD(thisWeekEnd)}。日曜に 0 へ戻ります。
+          {t('volume.weekRange', { from: formatMD(thisWeekStart), to: formatMD(thisWeekEnd) })}
         </p>
       </section>
 
@@ -185,7 +192,11 @@ export function WeeklyVolumeCard({
         組みは種目の目標と同じ（`GroupGoalEditor`）。
       */}
       {current && (
-        <Modal open title={`${GROUP_LABELS[current.group]}の目標`} onClose={() => setOpen(null)}>
+        <Modal
+          open
+          title={t('exercise.goalOf', { name: t(GROUP_KEYS[current.group]) })}
+          onClose={() => setOpen(null)}
+        >
           <GroupGoalEditor
             group={current.group}
             target={current.target}

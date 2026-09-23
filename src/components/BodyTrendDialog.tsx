@@ -2,6 +2,7 @@ import { Modal } from './Modal';
 import { BodyTrend } from './charts/BodyTrend';
 import { isoToTime } from '../lib/date';
 import type { DailyPoint, Settings, WeekPoint } from '../types';
+import { useT } from '../lib/i18n';
 
 interface Props {
   open: boolean;
@@ -23,8 +24,10 @@ interface Props {
  * 推定カロリー収支・元データ。**同じ名前の面に、開き方で違うものを出さない。**
  */
 export function BodyTrendDialog({ open, onClose, daily, weeks, settings, date }: Props) {
+  const t = useT();
+
   return (
-    <Modal open={open} title="体組成の推移" onClose={onClose}>
+    <Modal open={open} title={t('trend.body')} onClose={onClose}>
       <BodyTrend daily={daily} weeks={weeks} settings={settings} highlight={isoToTime(date)} />
     </Modal>
   );

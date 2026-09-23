@@ -2,6 +2,7 @@ import { Modal } from './Modal';
 import { DEMO_TODAY, formatMD } from '../lib/date';
 import { Button } from './Button';
 import ui from '../styles/ui.module.scss';
+import { useT } from '../lib/i18n';
 
 interface Props {
   onStart: () => void;
@@ -23,20 +24,18 @@ interface Props {
  * 保存先がこの端末であること。使い方の案内は置かない。
  */
 export function DemoNotice({ onStart }: Props) {
+  const t = useT();
+
   return (
-    <Modal open title="デモ" onClose={onStart}>
-      <p className={ui.note}>
-        操作を試すためのサイトです。中身は作成者の記録で、開き直すたびに初期データへ戻ります。
-      </p>
-      <p className={ui.note}>この端末で入力した内容は、進むと初期データで上書きされます。</p>
-      <p className={ui.note}>
-        記録に合わせて、今日を {formatMD(DEMO_TODAY)} として動きます。日付は進みません。
-      </p>
-      <p className={ui.note}>記録が送られる先はありません。この端末のブラウザにだけ残ります。</p>
+    <Modal open title={t('demo.title')} onClose={onStart}>
+      <p className={ui.note}>{t('demo.note1')}</p>
+      <p className={ui.note}>{t('demo.note2')}</p>
+      <p className={ui.note}>{t('demo.note3', { date: formatMD(DEMO_TODAY) })}</p>
+      <p className={ui.note}>{t('demo.note4')}</p>
 
       <div className={ui.btnRow}>
         <Button tone="primary" onClick={onStart}>
-          初期データではじめる
+          {t('demo.start')}
         </Button>
       </div>
     </Modal>

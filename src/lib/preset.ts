@@ -1,17 +1,16 @@
-import { WEEKDAY_JA, weekdayIndex } from './date';
+import { WEEKDAY_KEYS, weekdayIndex } from './date';
+import type { T } from './i18n';
 import type { Preset, SessionSet, Weekday } from '../types';
 
 /** 曜日の札に出す文字。複数なら「月・木」。持たないプリセットは null */
-export function weekdaysLabel(weekdays: readonly Weekday[]): string | null {
+export function weekdaysLabel(t: T, weekdays: readonly Weekday[]): string | null {
   if (weekdays.length === 0) return null;
-  return weekdays.map((d) => WEEKDAY_JA[d]).join('・');
+  return weekdays.map((d) => t(WEEKDAY_KEYS[d])).join(t('common.listSep'));
 }
 
 /** 選べる曜日の一覧。日曜から土曜（`startOfWeek` と同じ並び） */
-export const WEEKDAY_CHOICES: { id: Weekday; label: string }[] = WEEKDAY_JA.map((label, i) => ({
-  id: i as Weekday,
-  label,
-}));
+export const weekdayChoices = (t: T): { id: Weekday; label: string }[] =>
+  WEEKDAY_KEYS.map((key, i) => ({ id: i as Weekday, label: t(key) }));
 
 /**
  * その日に出す順に並べ替える。**今日の曜日のものを先頭へ。**

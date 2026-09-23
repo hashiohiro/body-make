@@ -1,5 +1,5 @@
-import { GROUP_LABELS } from '../../lib/exerciseCatalog';
-import { addDays, formatMD, startOfWeek, todayISO, weekdayJa } from '../../lib/date';
+import { GROUP_KEYS } from '../../lib/exerciseCatalog';
+import { addDays, formatMD, startOfWeek, todayISO, weekdayLabel } from '../../lib/date';
 import { fmt } from '../../lib/format';
 import { sessionGroups } from '../../lib/training';
 import type { TrainingStats } from '../../lib/training';
@@ -7,6 +7,7 @@ import type { SessionPoint } from '../../types';
 import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   sessions: readonly SessionPoint[];
@@ -21,10 +22,11 @@ interface Props {
  * 足した数字は、何をやったのかを説明しない（部位別の内訳のほうが常に情報量が多い）。
  */
 export function TrainingSummary({ sessions, stats }: Props) {
+  const t = useT();
   const latest = sessions[sessions.length - 1];
   if (!latest) return null;
 
-  const groups = sessionGroups(latest).map((g) => GROUP_LABELS[g]);
+  const groups = sessionGroups(latest).map((g) => t(GROUP_KEYS[g]));
 
   const today = todayISO();
   const weekStart = startOfWeek(today);
@@ -36,11 +38,11 @@ export function TrainingSummary({ sessions, stats }: Props) {
     <>
       <div className={s.pair}>
         <section className={ui.card}>
-          <CardHeader title="今週のトレーニング" />
+          <CardHeader title={t('summary.thisWeek')} />
 
           <div className={s.statRow} style={{ marginBottom: 0 }}>
             <b>{stats.thisWeekDays}</b>
-            <span>日</span>
+            <span>{t('stat.days')}</span>
           </div>
 
           <div className={s.week}>
@@ -54,31 +56,37 @@ export function TrainingSummary({ sessions, stats }: Props) {
                   ]
                     .filter(Boolean)
                     .join(' ')}
-                  title={`${formatMD(date)}${trained.has(date) ? ' トレーニング' : ''}`}
+                  title={
+                    trained.has(date)
+                      ? t('summary.dayTrained', { date: formatMD(date) })
+                      : formatMD(date)
+                  }
                 />
-                {weekdayJa(date)}
+                {weekdayLabel(t, date)}
               </span>
             ))}
           </div>
 
           <div className={s.goalFoot}>
-            <span>直近 {groups.join('・')}</span>
+            <span>{t('summary.recent', { value: groups.join(t('common.listSep')) })}</span>
           </div>
         </section>
 
         <section className={ui.card}>
-          <CardHeader title="トレーニングの通算回数" />
+          <CardHeader title={t('summary.total')} />
 
           <div className={s.statRow} style={{ marginBottom: 0 }}>
             <b>{stats.sessions}</b>
-            <span>回</span>
+            <span>{t('summary.times')}</span>
           </div>
 
           <div className={s.goalFoot}>
-            <span>{stats.firstDate ? `${formatMD(stats.firstDate)} から` : ''}</span>
+            <span>
+              {stats.firstDate ? t('summary.since', { date: formatMD(stats.firstDate) }) : ''}
+            </span>
           </div>
           <div className={s.goalFoot}>
-            <span>週平均 {fmt(stats.weeklyAverage)} 日</span>
+            <span>{t('summary.weeklyAverage', { n: fmt(stats.weeklyAverage) })}</span>
           </div>
         </section>
       </div>

@@ -297,8 +297,22 @@
     @include field-number;
   }
 
+  /*
+   * 選ぶ欄だけ、文字の欄より広く取る。
+   *
+   * **幅はいちばん長い選択肢から決める。**132px のままだと、矢印ぶんの 30px を
+   * 引いた 92px にしか文字が入らず、「端末に合わせる」も「Solarized Light」も切れていた。
+   *
+   *   Match the device   16 字 × 約 7.5px = 約 120px（いまの最長）
+   *   ＋ 左の余白 10 ＋ 矢印ぶん 30 ＋ 枠 2  = 約 162px
+   *
+   * 右端は文字の欄とそろう（行の端に寄せているので、幅が違っても揃う）。
+   * それでも入らない語が来たら、切らずに … で畳む——途中で切れると読めない。
+   */
   select {
+    width: 168px;
     text-align: left;
+    @include truncate;
     @include field-select;
   }
 }

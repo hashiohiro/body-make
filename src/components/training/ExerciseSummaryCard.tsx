@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Tag } from '../Tag';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   /** 行までスクロールしたいときに使う */
@@ -52,13 +53,14 @@ export function ExerciseSummaryCard({
   actions,
   children,
 }: Props) {
+  const t = useT();
   return (
     <div className={s.itemCard} id={id}>
       <div className={s.statRow}>
         <span className={s.exName}>{name}</span>
         {tag && <Tag>{tag}</Tag>}
         {kind && <Tag kind="chosen">{kind}</Tag>}
-        {goal && <Tag kind="chosen">目標 {goal}</Tag>}
+        {goal && <Tag kind="chosen">{t('card.goal', { value: goal })}</Tag>}
       </div>
 
       <div className={s.goalFoot}>

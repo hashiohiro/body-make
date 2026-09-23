@@ -1,6 +1,6 @@
 import { TimeSeriesChart } from '../charts/TimeSeriesChart';
 import type { ChartSeries } from '../charts/TimeSeriesChart';
-import { GROUP_COLORS, GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
+import { GROUP_COLORS, GROUP_KEYS, GROUP_ORDER } from '../../lib/exerciseCatalog';
 import { addDays, isoToTime, startOfWeek, todayISO } from '../../lib/date';
 import { ChipGroup } from '../ChipGroup';
 import { groupValuesFor } from './groupValues';
@@ -8,6 +8,7 @@ import type { GroupValueId } from './groupValues';
 import type { WeekSetCount } from '../../lib/training';
 import ui from '../../styles/ui.module.scss';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   weeks: readonly WeekSetCount[];
@@ -27,18 +28,19 @@ interface Props {
  * 記録の無い部位は線を出さない。0 が横に伸びるだけで場所を取る
  */
 export function GroupTrendChart({ weeks, valueId, onValueChange }: Props) {
-  const values = groupValuesFor(useWeightUnit());
+  const t = useT();
+  const values = groupValuesFor(t, useWeightUnit());
   const value = values.find((v) => v.id === valueId)!;
 
   if (weeks.length === 0) {
-    return <p className={ui.emptyState}>まだトレーニングの記録がありません。</p>;
+    return <p className={ui.emptyState}>{t('group.noRecords')}</p>;
   }
 
   const series: ChartSeries[] = GROUP_ORDER.filter((g) =>
     weeks.some((w) => value.pick(w, g) > 0),
   ).map((g) => ({
     id: g,
-    label: GROUP_LABELS[g],
+    label: t(GROUP_KEYS[g]),
     color: GROUP_COLORS[g],
     kind: 'line',
     points: weeks.map((w) => ({ t: isoToTime(w.start), v: value.pick(w, g) })),
@@ -50,7 +52,12 @@ export function GroupTrendChart({ weeks, valueId, onValueChange }: Props) {
 
   return (
     <div>
-      <ChipGroup options={values} value={valueId} onChange={onValueChange} label="表示する値" />
+      <ChipGroup
+        options={values}
+        value={valueId}
+        onChange={onValueChange}
+        label={t('group.valueAxis')}
+      />
 
       <TimeSeriesChart
         series={series}
@@ -60,8 +67,8 @@ export function GroupTrendChart({ weeks, valueId, onValueChange }: Props) {
         legend
         // 週次なので、印を付けるのは今週の始まり（日曜）
         highlight={isoToTime(startOfWeek(todayISO()))}
-        ariaLabel={`部位別の週あたり${value.label}の推移`}
-        emptyMessage="この期間に記録がありません"
+        ariaLabel={t('group.trendAria', { value: value.label })}
+        emptyMessage={t('group.noRange')}
       />
     </div>
   );

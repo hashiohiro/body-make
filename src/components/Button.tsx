@@ -28,6 +28,14 @@ interface Props {
   /** 押すと下に面が開くとき（詳細設定・レビューの値） */
   expanded?: boolean | undefined;
   /**
+   * 何かが増えるボタン。頭に ＋ を置く。
+   *
+   * **記号を文言に混ぜない。**「＋ プリセットを作る」を辞書に入れると、
+   * 見出しの「プリセットを作る」と同じ語が 2 つに分かれ、片方だけ直る。
+   * 記号は見た目なので、ここが持つ。
+   */
+  adds?: boolean | undefined;
+  /**
    * **置き場所だけ**を渡す（幅・余白）。見た目は `tone` と `size` が持つ。
    * 色や大きさをここから足すと、軸を 1 つにした意味が無くなる。
    */
@@ -59,6 +67,7 @@ export function Button({
   label,
   pressed,
   expanded,
+  adds,
   className,
 }: Props) {
   return (
@@ -73,6 +82,7 @@ export function Button({
       {...(expanded == null ? {} : { 'aria-expanded': expanded })}
       onClick={onClick}
     >
+      {adds && <span aria-hidden="true">＋ </span>}
       {children}
     </button>
   );

@@ -9,6 +9,7 @@ import type { EnergyWindow } from '../../lib/energy';
 import type { DailyPoint, Settings, WeekPoint } from '../../types';
 import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   /** 期間で絞ったあとの日次。絞るのは呼び出し側の仕事 */
@@ -35,6 +36,7 @@ interface Props {
  * 集計期間はこのカードだけに効くパラメータなので、ここが持つ。
  */
 export function BodyTrend({ daily, weeks, settings, highlight = null, note = false }: Props) {
+  const t = useT();
   const [energyWindow, setEnergyWindow] = useState<EnergyWindow>(1);
 
   const energy = useMemo(() => computeEnergyBalance(weeks, energyWindow), [weeks, energyWindow]);
@@ -45,33 +47,33 @@ export function BodyTrend({ daily, weeks, settings, highlight = null, note = fal
       <BodyTrendCharts daily={daily} settings={settings} highlight={highlight} note={note} />
 
       <section className={ui.card}>
-        <CardHeader title="週平均の体組成" hint={<>kg</>} />
+        <CardHeader title={t('trend.weeklyBody')} hint={<>kg</>} />
         <WeeklyCompositionChart weeks={weeks} />
-        <p className={ui.note}>除脂肪体重を保ったまま体脂肪量だけ減っているのが理想の形です。</p>
+        <p className={ui.note}>{t('trend.compositionNote')}</p>
         <WeeklyTable weeks={weeks} />
       </section>
 
       <section className={ui.card}>
-        <CardHeader title="推定カロリー収支" hint={<>kcal/日</>} />
+        <CardHeader title={t('trend.energy')} hint={<>{t('trend.kcalPerDay')}</>} />
 
         {/* 集計期間はこのグラフだけに効くパラメータなので、対象の直上に置く */}
         <ChipGroup
-          options={ENERGY_WINDOWS.map((w) => ({ id: w, label: `${w}週ごと` }))}
+          options={ENERGY_WINDOWS.map((w) => ({ id: w, label: t('trend.everyNWeeks', { w }) }))}
           value={energyWindow}
           onChange={setEnergyWindow}
-          label="集計期間"
+          label={t('trend.period')}
         />
 
         {energy.length === 0 ? (
           <p className={ui.emptyState}>
             {shortBy > 0 ? (
               <>
-                {energyWindow}週ごとの比較には{energyWindow + 1}週ぶんの記録が必要です。
+                {t('trend.needWeeks', { n: energyWindow + 1 })}
                 <br />
-                あと{shortBy}週ぶん記録すると表示されます。
+                {t('trend.needMoreWeeks', { n: shortBy })}
               </>
             ) : (
-              <>この期間に比較できる週がありません。</>
+              <>{t('trend.noComparableWeeks')}</>
             )}
           </p>
         ) : (
@@ -81,15 +83,11 @@ export function BodyTrend({ daily, weeks, settings, highlight = null, note = fal
           </>
         )}
 
-        <p className={ui.note}>
-          「摂取 − 消費」の推定値です（摂取カロリーそのものではありません）。
-          数週間の傾向で見る値で、1週ぶんを鵜呑みにしないでください。
-          棒と灰色マーカーの差が大きい週ほど、体組成計の読みが荒れています。
-        </p>
+        <p className={ui.note}>{t('trend.energyNote')}</p>
       </section>
 
       <section className={ui.card}>
-        <CardHeader title="元データ" />
+        <CardHeader title={t('trend.rawData')} />
         <DailyTable daily={daily} waist={settings.waistEnabled} />
       </section>
     </>

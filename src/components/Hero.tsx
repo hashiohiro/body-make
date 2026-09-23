@@ -3,6 +3,7 @@ import { deltaTone, fmt, fmtDelta } from '../lib/format';
 import type { DeltaTone } from '../lib/format';
 import { TONE_CLASS } from './tone';
 import s from './Hero.module.scss';
+import { useT } from '../lib/i18n';
 
 interface Props {
   weight: number | null;
@@ -29,7 +30,6 @@ interface SubProps {
   tone: DeltaTone;
   color: string;
   spark: readonly { t: number; v: number }[];
-  sparkLabel: string;
 }
 
 /**
@@ -39,7 +39,9 @@ interface SubProps {
  * 腹囲は「体重が止まっていてもここは落ちているか」。どちらも
  * 単独で見る数字ではないので、大きな数値にはせず、同じ器で下に積む。
  */
-function SubRow({ label, value, unit, delta, tone, color, spark, sparkLabel }: SubProps) {
+function SubRow({ label, value, unit, delta, tone, color, spark }: SubProps) {
+  const t = useT();
+
   return (
     <div className={s.sub}>
       <p className={s.subHead}>
@@ -48,10 +50,17 @@ function SubRow({ label, value, unit, delta, tone, color, spark, sparkLabel }: S
           {fmt(value)}
           <span className={s.subUnit}>{unit}</span>
         </b>
-        <span className={`${s.subDelta} ${TONE_CLASS[tone]}`}>開始から {fmtDelta(delta)}</span>
+        <span className={`${s.subDelta} ${TONE_CLASS[tone]}`}>
+          {t('common.fromStart', { delta: fmtDelta(delta), unit: '' })}
+        </span>
       </p>
       {spark.length >= 2 && (
-        <Sparkline points={spark} color={color} height={36} ariaLabel={sparkLabel} />
+        <Sparkline
+          points={spark}
+          color={color}
+          height={36}
+          ariaLabel={t('common.recentTrendOf', { name: label })}
+        />
       )}
     </div>
   );
@@ -73,44 +82,47 @@ export function Hero({
   waistSpark,
   caption,
 }: Props) {
+  const t = useT();
   const tone = deltaTone(delta, true);
   // 除脂肪体重は維持が正解。±0.5kg を中立域として色を付けない
   const leanTone = deltaTone(leanDelta, false, 0.5);
 
   return (
     <section className={s.hero}>
-      <p className={s.label}>現在の体重（7日移動平均）</p>
+      <p className={s.label}>{t('hero.movingAverageOf', { name: t('common.weight') })}</p>
       <p className={s.value}>
         {fmt(weight)}
         <span className={s.unit}>kg</span>
       </p>
       <p className={`${s.delta} ${TONE_CLASS[tone]}`}>
         <span aria-hidden="true">{TONE_ICON[tone]}</span>
-        開始から {fmtDelta(delta)} kg
+        {t('common.fromStart', { delta: fmtDelta(delta), unit: ' kg' })}
       </p>
 
       {spark.length >= 2 && (
         <div className={s.spark}>
-          <Sparkline points={spark} ariaLabel="直近の体重（7日移動平均）の推移" />
+          <Sparkline
+            points={spark}
+            ariaLabel={t('common.recentTrendOf', { name: t('common.weight') })}
+          />
         </div>
       )}
 
       {lean != null && (
         <SubRow
-          label="除脂肪体重"
+          label={t('hero.leanMass')}
           value={lean}
           unit="kg"
           delta={leanDelta}
           tone={leanTone}
           color="var(--s-lean)"
           spark={leanSpark}
-          sparkLabel="直近の除脂肪体重（7日移動平均）の推移"
         />
       )}
 
       {waist != null && (
         <SubRow
-          label="腹囲"
+          label={t('hero.waist')}
           value={waist}
           unit="cm"
           delta={waistDelta}
@@ -118,7 +130,6 @@ export function Hero({
           tone={deltaTone(waistDelta, true)}
           color="var(--s-waist)"
           spark={waistSpark}
-          sparkLabel="直近の腹囲（7日移動平均）の推移"
         />
       )}
 

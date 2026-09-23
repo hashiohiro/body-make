@@ -1,5 +1,5 @@
 import { addDays, formatMD } from '../../lib/date';
-import { GROUP_LABELS, muscleOf } from '../../lib/exerciseCatalog';
+import { GROUP_KEYS, muscleOf } from '../../lib/exerciseCatalog';
 import { requiredDays } from '../../lib/check';
 import type { GroupSets } from '../../lib/check';
 import { goalCurrent, goalUnitOf } from '../../lib/training';
@@ -8,6 +8,7 @@ import { fmt } from '../../lib/format';
 import { useWeightFormat } from '../../hooks/useWeightUnit';
 import type { Exercise, ExercisePoint, GroupGoals, MuscleGroup } from '../../types';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   exercise: Exercise;
@@ -64,6 +65,7 @@ export function ExerciseRipple({
   todayGroupSets,
   cardio,
 }: Props) {
+  const t = useT();
   const { label: unitLabel, conv } = useWeightFormat();
   const rows: Row[] = [];
   const muscle = muscleOf(exercise.group);
@@ -76,8 +78,8 @@ export function ExerciseRipple({
      */
     rows.push({
       key: 'cardio',
-      label: '今週の有酸素',
-      value: `${cardio.days} 回 / ${cardio.minutes} 分`,
+      label: t('ripple.cardioWeek'),
+      value: t('volume.cardio', { times: cardio.days, minutes: cardio.minutes }),
     });
   } else {
     /*
@@ -97,19 +99,21 @@ export function ExerciseRipple({
     const before = after - mine;
 
     const show = (n: number) => (volumeAxis ? fmt(conv(n), 0) : sets1(n));
-    const unit = volumeAxis ? unitLabel : 'セット';
+    const unit = volumeAxis ? unitLabel : t('metric.setsUnit');
     // まだ何も打っていなければ矢印を出さない（8 → 8 は読むものが増えるだけ）
     const moved = mine > 0 ? `${show(before)} → ${show(after)}` : show(after);
 
     let note = '';
     if (target) {
       const reached = after >= target.value && before < target.value;
-      note = reached ? `（目標 ${show(target.value)} に到達）` : `（目標 ${show(target.value)}）`;
+      note = reached
+        ? t('ripple.goalReached', { value: show(target.value) })
+        : t('ripple.goalOf', { value: show(target.value) });
     }
 
     rows.push({
       key: 'group',
-      label: `${GROUP_LABELS[muscle]} 今週`,
+      label: t('ripple.groupWeek', { group: t(GROUP_KEYS[muscle]) }),
       value: `${moved} ${unit}${note}`,
     });
 
@@ -126,9 +130,12 @@ export function ExerciseRipple({
     if (days > 0 && days !== requiredDays(withoutMine)) {
       rows.push({
         key: 'recovery',
-        label: `${GROUP_LABELS[muscle]}の次`,
+        label: t('ripple.nextOf', { group: t(GROUP_KEYS[muscle]) }),
         // 日付が答えで、セット数がその根拠。日数は日付が言っているので添えない
-        value: `${formatMD(addDays(date, days))}（${sets1(todaySets)} セット）`,
+        value: t('ripple.nextValue', {
+          date: formatMD(addDays(date, days)),
+          sets: sets1(todaySets),
+        }),
       });
     }
   }
@@ -145,14 +152,17 @@ export function ExerciseRipple({
     const current = goalCurrent(goal.type, point);
     const before = previous ? goalCurrent(goal.type, previous.point) : null;
     if (current != null && current >= goal.value && (before == null || before < goal.value)) {
-      const unit = goalUnitOf(goal.type, exercise.repUnit);
+      const unit = goalUnitOf(t, goal.type, exercise.repUnit);
       const kg = unit === 'kg';
       const digits = goal.type === 'weight' || goal.type === 'speed' ? 1 : 0;
       const value = kg ? conv(goal.value) : goal.value;
       rows.push({
         key: 'goal',
-        label: '目標',
-        value: `${fmt(value, digits)} ${kg ? unitLabel : unit} に到達`,
+        label: t('common.goal'),
+        value: t('ripple.reached', {
+          value: fmt(value, digits),
+          unit: kg ? unitLabel : unit,
+        }),
       });
     }
   }

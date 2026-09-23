@@ -6,6 +6,7 @@ import { formatMD, formatMDW, toISO } from '../../lib/date';
 import { linePath, linearScale, niceScale, tickDecimals, timeTicks } from './scales';
 import { YAxis } from './YAxis';
 import s from './charts.module.scss';
+import { useT } from '../../lib/i18n';
 
 export interface SeriesPoint {
   t: number;
@@ -71,10 +72,17 @@ export function TimeSeriesChart({
   height = 220,
   digits = 1,
   reference = null,
-  emptyMessage = 'まだ記録がありません',
+  /**
+   * 記録が無いときの文。**既定を持たない。**
+   *
+   * 引数の既定値はフックの外なので、ここに文字列を置くと**言語が配られる前**に
+   * 決まってしまう。呼び出し側が辞書から引いて渡す（渡さなければ何も出さない）。
+   */
+  emptyMessage,
   legend,
   highlight = null,
 }: TimeSeriesChartProps) {
+  const t = useT();
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
   /** プロットの矩形。外を触ったかどうかは**ここ**で判定する */
   const hitRef = useRef<SVGRectElement>(null);
@@ -219,7 +227,7 @@ export function TimeSeriesChart({
       )}
 
       <div className={s.wrap} ref={wrapRef}>
-        {!hasData && <div className={s.empty}>{emptyMessage}</div>}
+        {!hasData && emptyMessage != null && <div className={s.empty}>{emptyMessage}</div>}
 
         {hasData && width > 0 && (
           <svg
@@ -416,7 +424,7 @@ export function TimeSeriesChart({
 
         {activeTime != null && (
           <div ref={tipRef} className={`${s.tip} ${s.tipOn}`} style={{ left: tipLeft }}>
-            <div className={s.tipDate}>{formatMDW(toISO(new Date(activeTime)))}</div>
+            <div className={s.tipDate}>{formatMDW(t, toISO(new Date(activeTime)))}</div>
             {series.map((serie) => {
               const p = serie.points.find((point) => point.t === activeTime);
               return (

@@ -11,6 +11,7 @@ import { formatMD } from '../lib/date';
 import type { BodyData } from '../hooks/useBodyData';
 import type { Domain } from '../types';
 import { Button } from '../components/Button';
+import { useT } from '../lib/i18n';
 import ui from '../styles/ui.module.scss';
 
 interface Props {
@@ -32,6 +33,7 @@ const SPARK_DAYS = 30;
 export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
   // 部位別の配分は全期間ぶん（表側が直近 5 週に切る）。作るのは useBodyData で 1 回だけ
   const { daily, stats, sessions, weeklySets, trainingStats, data } = body;
+  const t = useT();
   const waistEnabled = data.settings.waistEnabled;
   // 表とダイアログのグラフで同じ値を見る
   const [groupValueId, setGroupValueId] = useState<GroupValueId>('sets');
@@ -68,8 +70,12 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
 
   const caption =
     stats.first && stats.latest
-      ? `${formatMD(stats.first.date)} から ${stats.totalSpanDays}日間 · ${stats.recordedDays}日ぶん記録`
-      : 'まずは今日の体重を入れてみましょう';
+      ? t('home.since', {
+          date: formatMD(stats.first.date),
+          days: stats.totalSpanDays,
+          recorded: stats.recordedDays,
+        })
+      : t('home.firstStep');
 
   return (
     <>
@@ -79,13 +85,13 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
         (daily.length === 0 ? (
           <section className={ui.card}>
             <p className={ui.emptyState}>
-              記録がまだありません。
+              {t('common.noRecords')}
               <br />
-              今日の体重を入れると、ここに現在地と推移が出ます。
+              {t('home.emptyHint')}
             </p>
             <div className={ui.btnRow}>
               <Button tone="primary" onClick={onOpenRecords}>
-                記録する
+                {t('home.record')}
               </Button>
             </div>
           </section>
@@ -105,7 +111,7 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
               caption={caption}
             />
             <StatTiles stats={stats} />
-            {trendLink('体重・体脂肪率の推移')}
+            {trendLink(t('home.bodyTrendLink'))}
           </>
         ))}
 
@@ -120,7 +126,7 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
                 valueId={groupValueId}
                 onValueChange={setGroupValueId}
               />
-              {trendLink('種目別の推移')}
+              {trendLink(t('home.exerciseTrendLink'))}
             </>
           )}
         </>
@@ -128,14 +134,14 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
 
       {domain === 'body' && daily.length > 0 && (
         <>
-          <p className={ui.sectionLabel}>実績</p>
+          <p className={ui.sectionLabel}>{t('badge.section')}</p>
           <BadgeGrid badges={badges} />
         </>
       )}
 
       {domain === 'training' && trainingStats.sessions > 0 && (
         <>
-          <p className={ui.sectionLabel}>実績</p>
+          <p className={ui.sectionLabel}>{t('badge.section')}</p>
           <BadgeGrid badges={badges} />
         </>
       )}

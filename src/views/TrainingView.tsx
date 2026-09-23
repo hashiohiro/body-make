@@ -13,7 +13,7 @@ import type { WeightUnit } from '../lib/weight';
 import { defaultSetsFor } from '../lib/preset';
 import { useConfirm } from '../components/ConfirmDialog';
 import { OrderList } from '../components/training/OrderList';
-import { groupsOf, isCardio } from '../lib/exerciseCatalog';
+import { exerciseName, groupsOf, isCardio } from '../lib/exerciseCatalog';
 import { addDays, startOfWeek, weekdayIndex } from '../lib/date';
 import {
   buildBodyWeightLookup,
@@ -24,6 +24,7 @@ import {
   previousPoint,
 } from '../lib/training';
 import { emptyGroupSets } from '../lib/check';
+import { useT } from '../lib/i18n';
 import { isCardioSet } from '../types';
 import type { Exercise, Preset, SessionSet, Weekday } from '../types';
 import type { BodyData } from '../hooks/useBodyData';
@@ -123,7 +124,13 @@ export function TrainingView({ body, date }: Props) {
    */
   const [inputUnit, setInputUnit] = useState<WeightUnit>(data.settings.inputWeightUnit);
   useEffect(() => setInputUnit(data.settings.inputWeightUnit), [data.settings.inputWeightUnit]);
+  const t = useT();
   const [ask, confirmDialog] = useConfirm();
+  /** 種目 ID から、いまの言語で読む名前。消えた種目は空（確認の見出しに出す相手がいない） */
+  const nameOf = (id: string) => {
+    const found = byId.get(id);
+    return found ? exerciseName(t, found) : '';
+  };
 
   const usedIds = new Set(dayEntries.map((e) => e.exerciseId));
   const goalExercise = goalId ? (byId.get(goalId) ?? null) : null;
@@ -132,7 +139,10 @@ export function TrainingView({ body, date }: Props) {
 
   // 名前を付けて残した組み合わせ。中身の部位は、そのつどマイ種目から引き直す
   const option = useCallback(
-    (preset: Preset) => ({ ...preset, groupsLabel: groupsOf(data.exercises, preset.exerciseIds) }),
+    (preset: Preset) => ({
+      ...preset,
+      groupsLabel: groupsOf(t, data.exercises, preset.exerciseIds),
+    }),
     [data.exercises],
   );
 
@@ -216,10 +226,10 @@ export function TrainingView({ body, date }: Props) {
     const entry = dayEntries.find((e) => e.exerciseId === id);
     if (entry?.sets.some(hasValue)) {
       ask({
-        title: 'この日から外しますか？',
-        subject: byId.get(id)?.name ?? '',
-        note: '打ったセットも消えます。ほかの日の記録は残ります。',
-        confirmLabel: 'セットごと外す',
+        title: t('training.removeTitle'),
+        subject: nameOf(id),
+        note: t('training.removeNote'),
+        confirmLabel: t('training.removeConfirm'),
         destructive: true,
         onConfirm: () => removeDayExercise(date, id),
       });
@@ -254,12 +264,16 @@ export function TrainingView({ body, date }: Props) {
     const set = entry?.sets[index];
     const exercise = byId.get(id);
     if (set && hasValue(set)) {
-      const unit = exercise && isCardio(exercise.group) ? '本' : 'セット';
+      const bout = exercise != null && isCardio(exercise.group);
       ask({
-        title: `${index + 1}${unit}目を削除しますか？`,
-        subject: exercise?.name,
-        note: '打った値は戻せません。',
-        confirmLabel: `${index + 1}${unit}目を削除`,
+        title: bout
+          ? t('training.deleteBoutTitle', { n: index + 1 })
+          : t('training.deleteSetTitle', { n: index + 1 }),
+        subject: exercise ? exerciseName(t, exercise) : undefined,
+        note: t('training.deleteNote'),
+        confirmLabel: bout
+          ? t('training.deleteBout', { n: index + 1 })
+          : t('setRow.remove', { n: index + 1 }),
         destructive: true,
         onConfirm: () => removeSet(date, id, index),
       });
@@ -286,7 +300,11 @@ export function TrainingView({ body, date }: Props) {
           history={checkHistory}
           presets={presets}
           currentIds={currentIds}
-          currentName={currentIds.length > 0 ? `${groupsOf(data.exercises, currentIds)}の日` : ''}
+          currentName={
+            currentIds.length > 0
+              ? t('training.dayName', { groups: groupsOf(t, data.exercises, currentIds) })
+              : ''
+          }
           applied={applied}
           onSave={savePreset}
           onUpdate={updatePreset}
@@ -316,7 +334,10 @@ export function TrainingView({ body, date }: Props) {
       */}
       {moving != null && (
         <section className={ui.card}>
-          <CardHeader title="並べ替え" hint={<>{dayEntries.length}種目</>} />
+          <CardHeader
+            title={t('training.reorder')}
+            hint={<>{t('training.exercises', { n: dayEntries.length })}</>}
+          />
 
           <OrderList
             entries={dayEntries.map((entry) => ({
@@ -325,7 +346,7 @@ export function TrainingView({ body, date }: Props) {
               group: byId.get(entry.exerciseId)?.group ?? null,
             }))}
             movingId={moving}
-            label="この日"
+            label={t('training.reorderLabel')}
             onGrab={setMoving}
             onCancel={() => setMoving(null)}
             onReorder={(ids) => {
@@ -334,7 +355,7 @@ export function TrainingView({ body, date }: Props) {
             }}
           />
 
-          <p className={ui.note}>置き場所を選ぶと、カードの並びが変わります。記録は動きません。</p>
+          <p className={ui.note}>{t('training.reorderNote')}</p>
         </section>
       )}
 
@@ -407,7 +428,7 @@ export function TrainingView({ body, date }: Props) {
         打っている欄が指の下から逃げる。一覧の面と同じ理由で、件数に高さを預けない。
       */}
       {editExercise && editEntry && (
-        <Modal open title={editExercise.name} tall onClose={() => setEditId(null)}>
+        <Modal open title={exerciseName(t, editExercise)} tall onClose={() => setEditId(null)}>
           {/*
             その日の種目。**閉じずに移れるようにする**（`docs/design-ripple.md` §4）。
             1 種目打つたびに 閉じる → スクロール → 次のカードを探す → 開く を
@@ -423,11 +444,11 @@ export function TrainingView({ body, date }: Props) {
             <ChipGroup
               options={dayEntries.map((entry) => ({
                 id: entry.exerciseId,
-                label: byId.get(entry.exerciseId)?.name ?? '',
+                label: nameOf(entry.exerciseId),
               }))}
               value={editExercise.id}
               onChange={setEditId}
-              label="打つ種目"
+              label={t('training.pickExercise')}
               // 種目が増えると端が切れる。開いている種目へ寄せ、まだ続くことを端に出す
               scrollable
             />
@@ -484,7 +505,11 @@ export function TrainingView({ body, date }: Props) {
       )}
 
       {goalExercise && (
-        <Modal open title={`${goalExercise.name}の目標`} onClose={() => setGoalId(null)}>
+        <Modal
+          open
+          title={t('exercise.goalOf', { name: exerciseName(t, goalExercise) })}
+          onClose={() => setGoalId(null)}
+        >
           <GoalEditor exercise={goalExercise} sessions={sessions} onUpdate={upsertExercise} />
         </Modal>
       )}

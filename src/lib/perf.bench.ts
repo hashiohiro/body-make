@@ -8,6 +8,9 @@ import { buildSessions, buildWeeklySets, computeTrainingStats, exerciseGoals } f
 import { createDeriveCache, deriveAll } from './incremental';
 import { startOfWeek, todayISO } from './date';
 import type { AppData, Entries, Workouts } from '../types';
+import { makeT } from './i18n';
+
+const t = makeT('ja');
 
 /*
  * 入力 1 回ぶんの重さを測る。
@@ -107,7 +110,7 @@ function deriveTraining({ data, daily, sessions }: Fixture) {
   const weekly = s.length > 0 ? buildWeeklySets(s, s[0]!.date) : [];
   computeTrainingStats(s, weekly);
   buildCheckHistory(s, data.exercises);
-  exerciseGoals(s, data.exercises);
+  exerciseGoals(t, s, data.exercises);
   return sessions;
 }
 
@@ -115,7 +118,7 @@ for (const years of [1, 5, 10]) {
   describe(`${years}年ぶん`, () => {
     const f = fixture(years);
     const cache = createDeriveCache();
-    deriveAll(f.data, cache);
+    deriveAll(t, f.data, cache);
     // 1 週ぶんの生データ。保存で実際に変換される単位
     const oneWeek = weekOf(f.data);
 
@@ -148,7 +151,7 @@ for (const years of [1, 5, 10]) {
         am: { weight: 70 + (tick++ % 50) / 100, bodyFat: 20, waist: null },
         pm: EMPTY_PM,
       };
-      deriveAll({ ...f.data, entries }, cache);
+      deriveAll(t, { ...f.data, entries }, cache);
     });
 
     /*

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Strong } from '../Strong';
 import { PresetBlock } from './PresetBlock';
 import { Modal } from '../Modal';
 import { BodyMap } from './weekPlan/BodyMap';
@@ -7,14 +8,15 @@ import { useConfirm } from '../ConfirmDialog';
 import { ChoicePanel } from '../ChoicePanel';
 import { PresetCreateDialog } from './PresetCreateDialog';
 import { WEEKDAYS } from '../../lib/weekPlan';
-import { WEEKDAY_JA } from '../../lib/date';
-import { GROUP_LABELS, GROUP_ORDER, groupsOf } from '../../lib/exerciseCatalog';
+import { WEEKDAY_KEYS } from '../../lib/date';
+import { GROUP_KEYS, GROUP_ORDER, groupsOf } from '../../lib/exerciseCatalog';
 import { weekLoad } from '../../lib/weekPlan';
 import type { Exercise, GroupGoals, MuscleGroup, Preset, Weekday } from '../../types';
 import { CardHeader } from '../CardHeader';
 import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   presets: readonly Preset[];
@@ -52,6 +54,7 @@ export function WeekMenuManager({
   onAddExercises,
   onCreate,
 }: Props) {
+  const t = useT();
   /** その曜日のプリセットを作っている最中か */
   const [creatingFor, setCreatingFor] = useState<Weekday | null>(null);
   /** 編集しているプリセット。**行を押したらそのまま開く**（畳んだ段を挟まない） */
@@ -86,13 +89,16 @@ export function WeekMenuManager({
 
   return (
     <section className={ui.card}>
-      <CardHeader title="週メニュー" hint={<>{placed.length}件</>} />
+      <CardHeader
+        title={t('settings.week')}
+        hint={<>{t('settings.count', { n: placed.length })}</>}
+      />
 
       {placed.length === 0 && (
         <p className={ui.emptyState}>
-          まだ週メニューがありません。
+          {t('week.empty')}
           <br />
-          曜日を押して、持っているプリセットを置くか、新しく作ってください。
+          {t('week.emptyHint')}
         </p>
       )}
 
@@ -104,14 +110,14 @@ export function WeekMenuManager({
       */}
       {peak > 0 && (
         <div className={s.weekFigure}>
-          <p className={ui.sectionLabel}>週に鍛える部位</p>
-          <BodyMap tint={tint} label="週に鍛える部位" />
+          <p className={ui.sectionLabel}>{t('week.bodyMap')}</p>
+          <BodyMap tint={tint} label={t('week.bodyMap')} />
           <p className={ui.note}>
-            濃いほど週のセット数が多い部位です。
-            {GROUP_ORDER.filter((g) => load.totals[g] > 0)
-              .map((g) => `${GROUP_LABELS[g]} ${load.totals[g]}`)
-              .join(' / ')}
-            セット
+            {t('week.tintNote', {
+              breakdown: GROUP_ORDER.filter((g) => load.totals[g] > 0)
+                .map((g) => `${t(GROUP_KEYS[g])} ${load.totals[g]}`)
+                .join(' / '),
+            })}
           </p>
         </div>
       )}
@@ -129,11 +135,11 @@ export function WeekMenuManager({
               <button
                 type="button"
                 className={s.weekRowHead}
-                aria-label={`${WEEKDAY_JA[day]}曜日を決める`}
+                aria-label={t('week.setDay', { day: t(WEEKDAY_KEYS[day]) })}
                 onClick={() => setStarting(day)}
               >
-                <span className={s.weekRowDay}>{WEEKDAY_JA[day]}</span>
-                <span className={s.weekRowRest}>休み</span>
+                <span className={s.weekRowDay}>{t(WEEKDAY_KEYS[day])}</span>
+                <span className={s.weekRowRest}>{t('week.rest')}</span>
                 <span className={s.weekRowMark} aria-hidden="true">
                   ＋
                 </span>
@@ -148,15 +154,18 @@ export function WeekMenuManager({
                   key={preset.id}
                   type="button"
                   className={s.weekRowHead}
-                  aria-label={`${WEEKDAY_JA[day]}曜日の${preset.name}を編集`}
+                  aria-label={t('week.editOn', { day: t(WEEKDAY_KEYS[day]), name: preset.name })}
                   onClick={() => setEditingId(preset.id)}
                 >
                   {/* 同じ日に 2 件置けるので、曜日は先頭の行にだけ出す */}
-                  <span className={s.weekRowDay}>{i === 0 ? WEEKDAY_JA[day] : ''}</span>
+                  <span className={s.weekRowDay}>{i === 0 ? t(WEEKDAY_KEYS[day]) : ''}</span>
                   <span className={s.weekRowBody}>
                     <span className={s.weekRowName}>{preset.name}</span>
                     <span className={s.weekRowGroups}>
-                      {`${groupsOf(exercises, preset.exerciseIds)}　${preset.exerciseIds.length}種目`}
+                      {t('week.presetSummary', {
+                        groups: groupsOf(t, exercises, preset.exerciseIds),
+                        n: preset.exerciseIds.length,
+                      })}
                     </span>
                   </span>
                   <span className={s.weekRowMark} aria-hidden="true">
@@ -172,16 +181,20 @@ export function WeekMenuManager({
       {/* 間隔は週全体の話。開かなくても読めるよう、一覧に出す */}
       {peak > 0 && (
         <RecoveryGrid
-          caption="部位ごとの間隔"
+          caption={t('week.interval')}
           days={WEEKDAYS.map((d) => load.perDay[d])}
-          labels={WEEKDAY_JA}
+          labels={WEEKDAY_KEYS.map((k) => t(k))}
         />
       )}
 
       {load.unknown.length > 0 && (
         <p className={ui.note}>
-          {load.unknown.map((g) => GROUP_LABELS[g]).join('・')} は数に入れていません。<b>週目標</b>
-          を決めるか、プリセットの<b>既定のセット</b>を 決めると入ります。
+          <Strong
+            text={t('week.unknownNote', {
+              groups: load.unknown.map((g) => t(GROUP_KEYS[g])).join(t('common.listSep')),
+            })}
+            values={[t('week.weeklyGoal'), t('preset.defaults')]}
+          />
         </p>
       )}
 
@@ -189,20 +202,20 @@ export function WeekMenuManager({
       {starting != null && (
         <Modal
           open
-          title={`${WEEKDAY_JA[starting]}曜日にやること`}
+          title={t('week.dayTitle', { day: t(WEEKDAY_KEYS[starting]) })}
           onClose={() => setStarting(null)}
         >
           <ChoicePanel
             choices={[
               {
-                label: '新しく作る',
+                label: t('week.createNew'),
                 onSelect: () => {
                   setCreatingFor(starting);
                   setStarting(null);
                 },
               },
               {
-                label: 'プリセットから選ぶ',
+                label: t('picker.fromPresets'),
                 onSelect: () => {
                   setPicking(starting);
                   setStarting(null);
@@ -219,7 +232,7 @@ export function WeekMenuManager({
         <PresetCreateDialog
           exercises={exercises}
           presets={presets}
-          title={`${WEEKDAY_JA[creatingFor]}曜日のプリセットを作る`}
+          title={t('week.createOn', { day: t(WEEKDAY_KEYS[creatingFor]) })}
           onCreate={(name, ids) => onCreate(name, ids, [creatingFor])}
           onAddExercises={onAddExercises}
           onClose={() => setCreatingFor(null)}
@@ -234,14 +247,14 @@ export function WeekMenuManager({
       {picking != null && (
         <Modal
           open
-          title={`${WEEKDAY_JA[picking]}曜日にやるプリセット`}
+          title={t('week.pickOn', { day: t(WEEKDAY_KEYS[picking]) })}
           onClose={() => setPicking(null)}
         >
           {free.length === 0 ? (
             <p className={ui.emptyState}>
-              まだプリセットがありません。
+              {t('preset.managerEmpty')}
               <br />
-              「新しく作る」から作ってください。
+              {t('week.noPresetsHint')}
             </p>
           ) : (
             <div>
@@ -250,7 +263,10 @@ export function WeekMenuManager({
                   key={preset.id}
                   type="button"
                   className={s.presetPick}
-                  aria-label={`${preset.name}を${WEEKDAY_JA[picking]}曜日にする`}
+                  aria-label={t('week.assignTo', {
+                    name: preset.name,
+                    day: t(WEEKDAY_KEYS[picking]),
+                  })}
                   onClick={() => {
                     onUpdate({
                       ...preset,
@@ -260,8 +276,12 @@ export function WeekMenuManager({
                   }}
                 >
                   <span className={s.presetName}>{preset.name}</span>
-                  <span className={s.presetGroups}>{groupsOf(exercises, preset.exerciseIds)}</span>
-                  <span className={s.presetCount}>{preset.exerciseIds.length}種目</span>
+                  <span className={s.presetGroups}>
+                    {groupsOf(t, exercises, preset.exerciseIds)}
+                  </span>
+                  <span className={s.presetCount}>
+                    {t('training.exercises', { n: preset.exerciseIds.length })}
+                  </span>
                 </button>
               ))}
             </div>
@@ -299,7 +319,7 @@ export function WeekMenuManager({
                   onUpdate({ ...editing, weekdays: editing.weekdays.filter((x) => x !== d) })
                 }
               >
-                {WEEKDAY_JA[d]}曜日から外す
+                {t('week.removeDay', { day: t(WEEKDAY_KEYS[d]) })}
               </Button>
             ))}
           </div>

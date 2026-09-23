@@ -2,6 +2,7 @@ import { deltaTone, fmt, fmtDelta } from '../lib/format';
 import type { DeltaTone } from '../lib/format';
 import type { Stats } from '../types';
 import { TONE_CLASS } from './tone';
+import { useT } from '../lib/i18n';
 import ui from '../styles/ui.module.scss';
 import s from './StatTiles.module.scss';
 
@@ -17,33 +18,34 @@ interface Tile {
 }
 
 export function StatTiles({ stats }: { stats: Stats }) {
+  const t = useT();
   const tiles: Tile[] = [
     {
       key: 'bodyFat',
-      label: '体脂肪率',
+      label: t('common.bodyFat'),
       value: fmt(stats.currentBodyFat),
       unit: '%',
       delta: fmtDelta(stats.bodyFatDelta),
       tone: deltaTone(stats.bodyFatDelta, true),
       color: 'var(--s-fat)',
-      deltaLabel: '開始比',
+      deltaLabel: t('stat.fromStart'),
     },
     {
       key: 'fatMass',
-      label: '体脂肪量',
+      label: t('table.fatMass'),
       value: fmt(stats.currentFatMass),
       unit: 'kg',
       delta: fmtDelta(stats.fatMassDelta),
       tone: deltaTone(stats.fatMassDelta, true),
       color: 'var(--s-fat)',
-      deltaLabel: '開始比',
+      deltaLabel: t('stat.fromStart'),
     },
     {
       key: 'streak',
-      label: '体組成の連続記録',
+      label: t('stat.bodyStreak'),
       value: String(stats.streak),
-      unit: '日',
-      delta: `直近30日 ${Math.round(stats.recordRate * 100)}%`,
+      unit: t('stat.days'),
+      delta: t('stat.recordRate', { rate: Math.round(stats.recordRate * 100) }),
       tone: 'flat',
       color: null,
       deltaLabel: '',

@@ -27,6 +27,7 @@ import {
   weekStarts,
 } from './weekly';
 import type { BodyWeek, TrainingWeek, WeekSlice, WorkoutSlice } from './weekly';
+import type { T } from './i18n';
 
 /**
  * 増分の導出。
@@ -108,14 +109,14 @@ const EMPTY_STATS: Stats = {
  * 途中の週が変わればそこから後ろは作り直しになる。逆に、直近の日を打っている
  * あいだは**最後の 1 週だけ**が作り直される。
  */
-export function deriveAll(data: AppData, cache: DeriveCache): Derived {
+export function deriveAll(t: T, data: AppData, cache: DeriveCache): Derived {
   const starts = weekStarts(data.entries, data.workouts);
   if (starts.length === 0) {
     cache.entrySlices.clear();
     cache.workoutSlices.clear();
     cache.bodyWeeks.clear();
     cache.trainingWeeks.clear();
-    return empty(data);
+    return empty(t, data);
   }
 
   const entrySlices = sliceEntries(data.entries, starts, cache.entrySlices);
@@ -166,11 +167,11 @@ export function deriveAll(data: AppData, cache: DeriveCache): Derived {
   }
 
   const body = combineBody(bodyWeeks, data.settings);
-  const training = combineTraining(trainingWeeks, data.exercises);
+  const training = combineTraining(t, trainingWeeks, data.exercises);
   return { ...body, ...training };
 }
 
-function empty(data: AppData): Derived {
+function empty(t: T, data: AppData): Derived {
   return {
     daily: [],
     weeks: [],
@@ -189,7 +190,7 @@ function empty(data: AppData): Derived {
      * 「すべてのマイ種目に目標を決めています」と出る、という食い違いになる）。
      * すぐ上の `buildCheckHistory` は種目を渡しているのに、ここだけ抜けていた。
      */
-    trainingGoals: exerciseGoals([], data.exercises.filter(isListed)),
+    trainingGoals: exerciseGoals(t, [], data.exercises.filter(isListed)),
   };
 }
 
@@ -391,6 +392,7 @@ function headAverage(
  * ------------------------------------------------------------------ */
 
 function combineTraining(
+  t: T,
   built: readonly TrainingWeek[],
   exercises: readonly Exercise[],
 ): Pick<Derived, 'sessions' | 'weeklySets' | 'trainingStats' | 'checkHistory' | 'trainingGoals'> {
@@ -447,6 +449,7 @@ function combineTraining(
      * 表示に戻したときにそのまま復活させる（消すのは「目標を外す」を押したときだけ）。
      */
     trainingGoals: exerciseGoals(
+      t,
       sessions,
       exercises.filter((e) => isListed(e)),
     ),

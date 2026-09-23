@@ -6,9 +6,11 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { loadData } from './lib/storage';
 import { applyStoredTheme } from './hooks/useTheme';
 import './styles/global.scss';
+import { deviceLocale, translate } from './lib/i18n';
+import type { MessageKey } from './lib/i18n';
 
 const container = document.getElementById('root');
-if (!container) throw new Error('#root が見つかりません');
+if (!container) throw new Error('#root not found');
 
 /*
  * 記録を読み終えてから React を載せる。
@@ -51,11 +53,14 @@ void loadData().then(
      * 読めなかったことだけを伝えて開き直してもらう
      * （`storage.ts` の Backend 'none' と同じ考え方）。
      */
+    /*
+      **端末の言語で出す。**記録が読めていないので、記録の中の設定（`Settings.locale`）が
+      引けない。ここだけは端末に従う（`ErrorBoundary` と同じ扱い）。
+    */
+    const t = (key: MessageKey) => translate(deviceLocale(), key);
     const boot = container.querySelector('.boot');
     if (boot) {
-      boot.innerHTML =
-        '<p><b>記録を読み出せませんでした。</b></p>' +
-        '<p>記録は消えていません。開き直すと戻ることがあります。</p>';
+      boot.innerHTML = `<p><b>${t('alert.readFailed')}</b></p><p>${t('boot.readFailedNote')}</p>`;
       boot.setAttribute('style', 'opacity:1;animation:none');
     }
   },

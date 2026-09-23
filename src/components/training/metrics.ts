@@ -3,6 +3,7 @@ import type { ExerciseHistoryPoint } from '../../lib/training';
 import { WEIGHT_UNIT_LABEL, fromKgOrNull } from '../../lib/weight';
 import type { WeightUnit } from '../../lib/weight';
 import type { ExercisePoint } from '../../types';
+import type { MessageKey, T } from '../../lib/i18n';
 
 /** 種目の推移で切り替えられる指標。一覧とダイアログの両方が同じ定義を使う */
 export interface Metric {
@@ -31,29 +32,36 @@ const WEIGHT_METRICS = new Set(['volume', 'maxWeight', 'oneRm']);
 const BASE_METRICS: Metric[] = [
   {
     id: 'volume',
-    label: '挙上量',
+    label: 'metric.volume',
     unit: 'kg',
     digits: 0,
     needsWeight: true,
     pick: pickVolume,
   },
-  { id: 'sets', label: 'セット数', unit: 'セット', digits: 0, pick: (p) => p.workSets },
+  { id: 'sets', label: 'metric.sets', unit: 'metric.setsUnit', digits: 0, pick: (p) => p.workSets },
   // 有酸素は本数（インターバルの本数、サーキットのラウンド数）
-  { id: 'bouts', label: '本数', unit: '本', digits: 0, cardioOnly: true, pick: (p) => p.workSets },
+  {
+    id: 'bouts',
+    label: 'metric.bouts',
+    unit: 'metric.boutsUnit',
+    digits: 0,
+    cardioOnly: true,
+    pick: (p) => p.workSets,
+  },
   // レップ数に左右されない「その日いちばん重かった重量」。推定1RM と並べると、
   // 重量が上がったのか同じ重量で回数が伸びたのかを切り分けられる
   // 最大重量と目標は「バーに載せた数字」で見る。挙上量と推定1RM は換算後の負荷
   {
     id: 'maxWeight',
-    label: '最大重量',
+    label: 'metric.maxWeight',
     unit: 'kg',
     digits: 1,
     weightLike: true,
     needsWeight: true,
     pick: pickTopWeight,
   },
-  { id: 'maxReps', label: '最大回数', unit: '', digits: 0, pick: (p) => p.maxReps },
-  { id: 'oneRm', label: '推定1RM', unit: 'kg', digits: 1, needsWeight: true, pick: pickOneRm },
+  { id: 'maxReps', label: 'metric.maxReps', unit: '', digits: 0, pick: (p) => p.maxReps },
+  { id: 'oneRm', label: 'metric.oneRm', unit: 'kg', digits: 1, needsWeight: true, pick: pickOneRm },
 
   /*
    * 有酸素。距離が「量」、速度が「強度」で、筋トレの 挙上量 / 推定1RM にあたる。
@@ -61,7 +69,7 @@ const BASE_METRICS: Metric[] = [
    */
   {
     id: 'distance',
-    label: '距離',
+    label: 'metric.distance',
     // 入力欄と同じ m。桁を合わせ直さずに読める
     unit: 'm',
     digits: 0,
@@ -71,16 +79,16 @@ const BASE_METRICS: Metric[] = [
   },
   {
     id: 'minutes',
-    label: '時間',
-    unit: '分',
+    label: 'metric.duration',
+    unit: 'metric.durationUnit',
     digits: 0,
     cardioOnly: true,
     pick: (p) => p.minutes,
   },
   {
     id: 'speed',
-    label: '速度',
-    unit: 'm/分',
+    label: 'metric.speed',
+    unit: 'metric.speedUnit',
     digits: 1,
     cardioOnly: true,
     pick: (p) => p.speed,
@@ -94,17 +102,24 @@ const BASE_METRICS: Metric[] = [
  * ポンド表示のときは `pick` の出口で換算し、単位の綴りも差し替える必要がある。
  * ここで一度にやれば、推移のグラフ・軸・ツールチップ・開始比がまとめて追従する。
  */
-export function metricsFor(unit: WeightUnit): Metric[] {
-  if (unit === 'kg') return BASE_METRICS;
-  return BASE_METRICS.map((metric) =>
-    WEIGHT_METRICS.has(metric.id)
-      ? {
-          ...metric,
-          unit: WEIGHT_UNIT_LABEL[unit],
-          pick: (point: ExercisePoint) => fromKgOrNull(metric.pick(point), unit),
-        }
-      : metric,
-  );
+export function metricsFor(t: T, unit: WeightUnit): Metric[] {
+  return BASE_METRICS.map((metric) => {
+    // 名前と単位はキーで持っているので、出す直前に引く（`docs/design-i18n.md`）
+    const named = {
+      ...metric,
+      label: t(metric.label as MessageKey),
+      unit:
+        metric.unit === '' || metric.unit === 'kg' || metric.unit === 'm'
+          ? metric.unit
+          : t(metric.unit as MessageKey),
+    };
+    if (unit === 'kg' || !WEIGHT_METRICS.has(metric.id)) return named;
+    return {
+      ...named,
+      unit: WEIGHT_UNIT_LABEL[unit],
+      pick: (point: ExercisePoint) => fromKgOrNull(metric.pick(point), unit),
+    };
+  });
 }
 
 /** 開始値は最初の 3 セッションの平均。初回 1 点だと当日の調子が以後すべての差分に乗る */

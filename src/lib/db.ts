@@ -30,7 +30,7 @@ export function openDb(): Promise<IDBDatabase> {
 
   dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
-      reject(new Error('IndexedDB が無い環境'));
+      reject(new Error('IndexedDB is unavailable'));
       return;
     }
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -38,9 +38,9 @@ export function openDb(): Promise<IDBDatabase> {
       if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB を開けない'));
+    req.onerror = () => reject(req.error ?? new Error('cannot open IndexedDB'));
     // 別のタブが古い版を掴んでいる。開けないので呼び出し側が localStorage へ落ちる
-    req.onblocked = () => reject(new Error('IndexedDB が別のタブに掴まれている'));
+    req.onblocked = () => reject(new Error('IndexedDB is blocked by another tab'));
   });
 
   // 失敗を覚え込ませない。次の起動でもう一度試せるようにする
@@ -58,8 +58,8 @@ function tx<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBReque
         const req = fn(transaction.objectStore(STORE));
         // 値が返るのは request、書けたことの保証は transaction の complete。両方を待つ
         transaction.oncomplete = () => resolve(req.result);
-        transaction.onabort = () => reject(transaction.error ?? new Error('中断'));
-        transaction.onerror = () => reject(transaction.error ?? new Error('失敗'));
+        transaction.onabort = () => reject(transaction.error ?? new Error('aborted'));
+        transaction.onerror = () => reject(transaction.error ?? new Error('failed'));
       }),
   );
 }
@@ -95,8 +95,8 @@ export function readAll(): Promise<[string, unknown][]> {
         const values = store.getAll();
         transaction.oncomplete = () =>
           resolve((keys.result as string[]).map((k, i) => [k, values.result[i]]));
-        transaction.onabort = () => reject(transaction.error ?? new Error('中断'));
-        transaction.onerror = () => reject(transaction.error ?? new Error('失敗'));
+        transaction.onabort = () => reject(transaction.error ?? new Error('aborted'));
+        transaction.onerror = () => reject(transaction.error ?? new Error('failed'));
       }),
   );
 }
@@ -120,8 +120,8 @@ export function writeMany(
         for (const [key, value] of puts) store.put(value, key);
         for (const key of deletes) store.delete(key);
         transaction.oncomplete = () => resolve();
-        transaction.onabort = () => reject(transaction.error ?? new Error('中断'));
-        transaction.onerror = () => reject(transaction.error ?? new Error('失敗'));
+        transaction.onabort = () => reject(transaction.error ?? new Error('aborted'));
+        transaction.onerror = () => reject(transaction.error ?? new Error('failed'));
       }),
   );
 }

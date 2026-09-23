@@ -1,9 +1,10 @@
 import { Fragment } from 'react';
-import { GROUP_LABELS } from '../../lib/exerciseCatalog';
+import { GROUP_KEYS } from '../../lib/exerciseCatalog';
 import type { ExerciseGroup } from '../../types';
 import { Tag } from '../Tag';
 import { MiniButton } from '../MiniButton';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 export interface OrderEntry {
   id: string;
@@ -54,6 +55,7 @@ export function OrderList({
   onReorder,
   onDrop,
 }: Props) {
+  const t = useT();
   const ids = entries.map((e) => e.id);
   const from = movingId == null ? -1 : ids.indexOf(movingId);
   const movingName = from >= 0 ? entries[from]!.name : '';
@@ -69,11 +71,13 @@ export function OrderList({
         type="button"
         className={s.orderSlot}
         aria-label={
-          to === 0 ? `${movingName}を先頭へ` : `${movingName}を${entries[to - 1]!.name}の後ろへ`
+          to === 0
+            ? t('order.toTop', { name: movingName })
+            : t('order.after', { name: movingName, target: entries[to - 1]!.name })
         }
         onClick={() => onReorder(move(ids, from, to))}
       >
-        ここへ
+        {t('order.dropHere')}
       </button>
     );
   };
@@ -86,9 +90,9 @@ export function OrderList({
 
           {i === from ? (
             <div className={`${s.orderItem} ${s.orderItemMoving}`}>
-              <span className={s.orderItemName}>{movingName} を移動中</span>
-              <MiniButton label="移動をやめる" onClick={onCancel}>
-                やめる
+              <span className={s.orderItemName}>{t('order.moving', { name: movingName })}</span>
+              <MiniButton label={t('order.cancel')} onClick={onCancel}>
+                {t('common.stop')}
               </MiniButton>
             </div>
           ) : (
@@ -100,10 +104,10 @@ export function OrderList({
               {/* 移動中は、置き場所を選ぶこと以外を出さない */}
               {from < 0 && (
                 <>
-                  <Tag>{entry.group ? GROUP_LABELS[entry.group] : ''}</Tag>
+                  <Tag>{entry.group ? t(GROUP_KEYS[entry.group]) : ''}</Tag>
                   {entries.length > 1 && (
                     <MiniButton
-                      label={`${label}の${entry.name}を移動`}
+                      label={t('order.moveOf', { label, name: entry.name })}
                       onClick={() => onGrab(entry.id)}
                     >
                       ⇅
@@ -111,7 +115,7 @@ export function OrderList({
                   )}
                   {onDrop && (
                     <MiniButton
-                      label={`${label}から${entry.name}を外す`}
+                      label={t('order.removeFrom', { label, name: entry.name })}
                       onClick={() => onDrop(entry.id)}
                     >
                       −

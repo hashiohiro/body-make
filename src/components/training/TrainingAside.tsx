@@ -7,6 +7,7 @@ import type { Preset } from '../../types';
 import { RecoveryDialog, recoverySummary } from './Recovery';
 import type { CheckHistory } from '../../lib/check';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   date: string;
@@ -45,13 +46,14 @@ export function TrainingAside({
 }: Props) {
   const [open, setOpen] = useState<'recovery' | 'presets' | null>(null);
 
+  const t = useT();
   const composing = currentIds.length > 0;
   /*
    * **出すのは保存の状態だけ。**呼び出しは ＋ がやるので、ここに件数を出しても
    * 押す理由にならない（押した先に一覧は無い）。
    */
   const unsaved = composing && !presets.some((p) => sameSet(p.exerciseIds, currentIds));
-  const presetValue = !composing ? '—' : unsaved ? '未保存' : '保存済み';
+  const presetValue = !composing ? '—' : unsaved ? t('aside.unsaved') : t('aside.saved');
 
   return (
     <>
@@ -59,12 +61,14 @@ export function TrainingAside({
         <button
           type="button"
           className={s.asideItem}
-          aria-label="回復の状態を見る"
+          aria-label={t('aside.recovery')}
           onClick={() => setOpen('recovery')}
         >
           {/* 出しているのは回復した部位だけなので、見出しでそう言う（値は名前だけ） */}
-          <span className={s.asideLabel}>回復済み</span>
-          <span className={s.asideValue}>{recoverySummary(history, date)}</span>
+          <span className={s.asideLabel}>{t('aside.recovered')}</span>
+          <span className={s.asideValue}>
+            {recoverySummary(t, history, date) ?? t('recovery.none')}
+          </span>
           <span className={s.asideChevron} aria-hidden="true">
             ›
           </span>
@@ -73,10 +77,10 @@ export function TrainingAside({
         <button
           type="button"
           className={s.asideItem}
-          aria-label="プリセットを開く"
+          aria-label={t('aside.presets')}
           onClick={() => setOpen('presets')}
         >
-          <span className={s.asideLabel}>プリセット</span>
+          <span className={s.asideLabel}>{t('settings.presets')}</span>
           <span className={`${s.asideValue} ${unsaved ? s.asideAlert : ''}`}>{presetValue}</span>
           <span className={s.asideChevron} aria-hidden="true">
             ›
@@ -92,7 +96,7 @@ export function TrainingAside({
       />
 
       {open === 'presets' && (
-        <Modal open title="プリセット" onClose={() => setOpen(null)}>
+        <Modal open title={t('settings.presets')} onClose={() => setOpen(null)}>
           <PresetCard
             presets={presets}
             currentIds={currentIds}

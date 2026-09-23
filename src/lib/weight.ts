@@ -1,3 +1,4 @@
+import type { MessageKey } from './i18n';
 /**
  * 重量の単位。**保存は必ずキログラム。**
  *
@@ -12,9 +13,9 @@ export type WeightUnit = 'kg' | 'lb';
 export const WEIGHT_UNIT_LABEL: Record<WeightUnit, string> = { kg: 'kg', lb: 'lb' };
 
 /** 設定の選択肢。綴りだけでは何のことか読めないので、名前を添える */
-export const WEIGHT_UNIT_OPTIONS: { id: WeightUnit; label: string }[] = [
-  { id: 'kg', label: 'キログラム (kg)' },
-  { id: 'lb', label: 'ポンド (lb)' },
+export const WEIGHT_UNIT_OPTIONS: { id: WeightUnit; key: MessageKey }[] = [
+  { id: 'kg', key: 'unit.kg' },
+  { id: 'lb', key: 'unit.lb' },
 ];
 
 /** 1 lb = 0.45359237 kg（国際ヤード・ポンドの定義値。近似ではない） */

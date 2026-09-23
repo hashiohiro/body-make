@@ -7,6 +7,7 @@ import type { EnergyPoint } from '../../lib/energy';
 import { bandLayout, divergingBar, linearScale, niceScale } from './scales';
 import { YAxis } from './YAxis';
 import s from './charts.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   points: readonly EnergyPoint[];
@@ -26,6 +27,7 @@ const kcal = (v: number) => fmtDelta(v, 0);
  * 破線マーカー = 体脂肪量ベースの推定（体組成計のノイズが乗るので色は与えず、形で区別する）。
  */
 export function EnergyBalanceChart({ points, height = 250 }: Props) {
+  const t = useT();
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
   /** プロットの矩形。外を触ったかどうかは**ここ**で判定する */
   const plotRef = useRef<SVGRectElement>(null);
@@ -64,15 +66,15 @@ export function EnergyBalanceChart({ points, height = 250 }: Props) {
       <div className={s.legend}>
         <span className={s.legendItem}>
           <i className={s.keyBox} style={{ background: 'var(--s-deficit)' }} aria-hidden="true" />
-          不足（マイナス収支）
+          {t('energy.deficit')}
         </span>
         <span className={s.legendItem}>
           <i className={s.keyBox} style={{ background: 'var(--s-surplus)' }} aria-hidden="true" />
-          余剰（プラス収支）
+          {t('energy.surplus')}
         </span>
         <span className={s.legendItem}>
           <i className={s.keyLine} style={{ background: 'var(--ink-2)' }} aria-hidden="true" />
-          体脂肪量ベースの推定
+          {t('energy.fatBased')}
         </span>
       </div>
 
@@ -83,10 +85,10 @@ export function EnergyBalanceChart({ points, height = 250 }: Props) {
             width={width}
             height={height}
             role="img"
-            aria-label="週ごとの推定カロリー収支（kcal/日）"
+            aria-label={t('energy.aria')}
             onPointerLeave={() => setActive(null)}
           >
-            <title>週ごとの推定カロリー収支（kcal/日）</title>
+            <title>{t('energy.aria')}</title>
 
             {/* ゼロ線はグリッドではなく基準線なので、下で軸と同じ強さで引く */}
             <YAxis
@@ -208,8 +210,11 @@ export function EnergyBalanceChart({ points, height = 250 }: Props) {
             style={{ left: Math.min(Math.max(barX(active) - 60, 4), Math.max(4, width - 168)) }}
           >
             <div className={s.tipDate}>
-              {formatMD(points[active]!.from)}〜{formatMD(points[active]!.to)}（
-              {points[active]!.days}日）
+              {t('energy.span', {
+                from: formatMD(points[active]!.from),
+                to: formatMD(points[active]!.to),
+                days: points[active]!.days,
+              })}
             </div>
             <div className={s.tipRow}>
               <i
@@ -220,24 +225,26 @@ export function EnergyBalanceChart({ points, height = 250 }: Props) {
                 }}
                 aria-hidden="true"
               />
-              体重ベース
-              <b>{kcal(points[active]!.kcalWeight)} kcal/日</b>
-            </div>
-            <div className={s.tipRow}>
-              <i className={s.keyLine} style={{ background: 'var(--ink-2)' }} aria-hidden="true" />
-              体脂肪量ベース
+              {t('energy.weightBased')}
               <b>
-                {points[active]!.kcalFat == null
-                  ? '—'
-                  : `${kcal(points[active]!.kcalFat!)} kcal/日`}
+                {kcal(points[active]!.kcalWeight)} {t('trend.kcalPerDay')}
               </b>
             </div>
             <div className={s.tipRow}>
-              体重の変化
+              <i className={s.keyLine} style={{ background: 'var(--ink-2)' }} aria-hidden="true" />
+              {t('energy.fatBasedShort')}
+              <b>
+                {points[active]!.kcalFat == null
+                  ? '—'
+                  : `${kcal(points[active]!.kcalFat!)} ${t('trend.kcalPerDay')}`}
+              </b>
+            </div>
+            <div className={s.tipRow}>
+              {t('energy.weightChange')}
               <b>{fmtDelta(points[active]!.weightDelta, 2)} kg</b>
             </div>
             <div className={s.tipRow}>
-              体脂肪量の変化
+              {t('energy.fatChange')}
               <b>
                 {points[active]!.fatDelta == null
                   ? '—'

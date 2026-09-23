@@ -4,7 +4,7 @@ import { PickDialog } from './PickDialog';
 import { PresetDefaultsForm } from './PresetDefaultsForm';
 import { Modal } from '../Modal';
 import { dropLastExerciseRequest } from './presetConfirm';
-import { groupsOf } from '../../lib/exerciseCatalog';
+import { exerciseName, groupsOf } from '../../lib/exerciseCatalog';
 import { weekdaysLabel } from '../../lib/preset';
 import { Tag } from '../Tag';
 import { PRESET_NAME_MAX } from '../../lib/storage';
@@ -15,6 +15,7 @@ import { MiniButton } from '../MiniButton';
 import { NameEntryRow } from '../NameEntryRow';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   preset: Preset;
@@ -58,6 +59,7 @@ export function PresetBlock({
   onAddExercises,
   ask,
 }: Props) {
+  const t = useT();
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState('');
   const [picking, setPicking] = useState(false);
@@ -66,13 +68,17 @@ export function PresetBlock({
   const [moving, setMoving] = useState<string | null>(null);
 
   const byId = new Map(exercises.map((e) => [e.id, e]));
-  const nameOf = (id: string) => byId.get(id)?.name ?? '（削除された種目）';
+  const nameOf = (id: string) => {
+    const found = byId.get(id);
+    // 括弧は「これは名前ではない」という飾り。語そのものは指摘の面と同じキー
+    return found ? exerciseName(t, found) : `（${t('rule.deletedExercise')}）`;
+  };
   const trimmed = draft.trim().slice(0, PRESET_NAME_MAX);
   const taken = presets.some((p) => p.id !== preset.id && p.name === trimmed);
 
   /** 最後の 1 つを外すのは削除と同じ。問いは中身の一覧と選ぶ面で共有する */
   const askDropLast = (exerciseId: string) =>
-    ask(dropLastExerciseRequest(preset, nameOf(exerciseId), () => onRemove(preset.id)));
+    ask(dropLastExerciseRequest(t, preset, nameOf(exerciseId), () => onRemove(preset.id)));
 
   const drop = (exerciseId: string) => {
     if (preset.exerciseIds.length === 1) {
@@ -85,15 +91,15 @@ export function PresetBlock({
   return (
     <div className={s.presetBlock}>
       {/* 押せない理由は**確定ボタンの上**。押したあとの位置に置かない */}
-      {renaming && taken && <p className={ui.note}>同じ名前のプリセットがあります。</p>}
+      {renaming && taken && <p className={ui.note}>{t('preset.nameTaken')}</p>}
       {renaming ? (
         <NameEntryRow
           value={draft}
           onChange={setDraft}
-          label={`${preset.name}の新しい名前`}
-          placeholder="プリセット名"
-          commitLabel="この名前にする"
-          cancelLabel="名前の変更をやめる"
+          label={t('preset.newNameOf', { name: preset.name })}
+          placeholder={t('preset.nameLabel')}
+          commitLabel={t('preset.commitName')}
+          cancelLabel={t('preset.cancelName')}
           disabled={trimmed === '' || taken}
           onCommit={() => {
             onUpdate({ ...preset, name: draft });
@@ -106,10 +112,12 @@ export function PresetBlock({
           <span className={s.presetName}>
             {preset.name}
             {/* 曜日を決めた人にだけ出る札。決めていなければ何も増えない */}
-            {preset.weekdays.length > 0 && <Tag>{weekdaysLabel(preset.weekdays)}</Tag>}
+            {preset.weekdays.length > 0 && <Tag>{weekdaysLabel(t, preset.weekdays)}</Tag>}
           </span>
-          <span className={s.presetGroups}>{groupsOf(exercises, preset.exerciseIds)}</span>
-          <span className={s.presetCount}>{preset.exerciseIds.length}種目</span>
+          <span className={s.presetGroups}>{groupsOf(t, exercises, preset.exerciseIds)}</span>
+          <span className={s.presetCount}>
+            {t('training.exercises', { n: preset.exerciseIds.length })}
+          </span>
 
           {/*
             ここに残すのは名前の変更だけ。**伏せる・消すは一覧のカードが持つ**
@@ -117,7 +125,7 @@ export function PresetBlock({
             同じ操作を 2 か所に置くと、片方だけ直って挙動がずれる。
           */}
           <MiniButton
-            label={`${preset.name}の名前を変更`}
+            label={t('preset.renameOf', { name: preset.name })}
             onClick={() => {
               setDraft(preset.name);
               setRenaming(true);
@@ -135,12 +143,17 @@ export function PresetBlock({
       <div className={ui.btnRow}>
         <button type="button" className={s.optionalEntry} onClick={() => setDefaultsOpen(true)}>
           {/* 決めてあるかは ＋ の有無で読む */}
-          {hasDefaults(preset) ? '既定のセット' : '＋ 既定のセット'}
+          {!hasDefaults(preset) && <span aria-hidden="true">＋ </span>}
+          {t('preset.defaults')}
         </button>
       </div>
 
       {defaultsOpen && (
-        <Modal open title={`${preset.name}の既定のセット`} onClose={() => setDefaultsOpen(false)}>
+        <Modal
+          open
+          title={t('preset.defaultsOf', { name: preset.name })}
+          onClose={() => setDefaultsOpen(false)}
+        >
           <PresetDefaultsForm preset={preset} exercises={exercises} onUpdate={onUpdate} />
         </Modal>
       )}
@@ -192,11 +205,12 @@ export function PresetBlock({
         {moving == null && (
           <div className={ui.btnRow}>
             <Button
+              adds
               size="sub"
-              label={`${preset.name}に種目を足す`}
+              label={t('preset.addExerciseTo', { name: preset.name })}
               onClick={() => setPicking(true)}
             >
-              ＋ 種目を足す
+              {t('picker.menu')}
             </Button>
           </div>
         )}

@@ -6,6 +6,7 @@ import { useWeightFormat } from '../../hooks/useWeightUnit';
 import { TONE_CLASS } from '../tone';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   exercise: Exercise;
@@ -30,6 +31,7 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
    * 出す直前に読むときの単位へ直す。**差分も換算後どうしで取る**——
    * 片方だけ直すと、前回比が別の物差しの引き算になる。
    */
+  const t = useT();
   const { label: unitLabel, conv } = useWeightFormat();
   const volume = conv(point?.volume ?? 0);
   const prevVolume = previous?.point.volume == null ? null : conv(previous.point.volume);
@@ -61,9 +63,9 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
         <span>
           {cardio
             ? (point?.workSets ?? 0) > 1
-              ? `${point?.workSets} 本`
+              ? t('totals.cardioSets', { n: point?.workSets ?? 0 })
               : ''
-            : `${point?.workSets ?? 0} セット`}
+            : t('common.sets', { n: point?.workSets ?? 0 })}
         </span>
         {/*
           有酸素は挙上量を持たない。**0 kg と書かない。**
@@ -71,8 +73,12 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
         */}
         {cardio ? (
           <>
-            {point?.speed != null && <span>{fmt(point.speed)} m/分</span>}
-            <b>{point?.meters != null ? `${point.meters} m` : `${point?.minutes ?? 0} 分`}</b>
+            {point?.speed != null && <span>{t('common.speed', { n: fmt(point.speed) })}</span>}
+            <b>
+              {point?.meters != null
+                ? `${point.meters} m`
+                : t('totals.minutes', { n: point?.minutes ?? 0 })}
+            </b>
           </>
         ) : (
           <>
@@ -82,7 +88,7 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
             */}
             {point?.oneRm != null && (
               <span>
-                推定1RM {fmt(conv(point.oneRm))} {unitLabel}
+                {t('totals.oneRm', { value: fmt(conv(point.oneRm)), unit: unitLabel })}
                 {point.measured ? ' *' : ''}
               </span>
             )}
@@ -117,13 +123,13 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
           */}
           {bestWeight != null && (
             <span>
-              最高重量 {fmt(conv(bestWeight))}
+              {t('totals.bestWeight')} {fmt(conv(bestWeight))}
               {overWeight && <> → {fmt(conv(topWeight!))}</>} {unitLabel}
             </span>
           )}
           {best != null && best > 0 && (
             <span>
-              最高挙上量 {fmtVolume(conv(best))}
+              {t('totals.bestVolume')} {fmtVolume(conv(best))}
               {overVolume && <> → {fmtVolume(conv(rawVolume))}</>} {unitLabel}
             </span>
           )}

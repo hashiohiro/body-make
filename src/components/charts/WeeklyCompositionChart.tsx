@@ -6,6 +6,7 @@ import type { WeekPoint } from '../../types';
 import { bandLayout, linearScale, niceScale, roundedTopRect, tickDecimals } from './scales';
 import { YAxis } from './YAxis';
 import s from './charts.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   weeks: readonly WeekPoint[];
@@ -20,6 +21,7 @@ const MAX_BAND = 76;
 const SEGMENT_GAP = 2;
 
 export function WeeklyCompositionChart({ weeks, height = 250 }: Props) {
+  const t = useT();
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
   /** プロットの矩形。外を触ったかどうかは**ここ**で判定する */
   const plotRef = useRef<SVGRectElement>(null);
@@ -57,9 +59,9 @@ export function WeeklyCompositionChart({ weeks, height = 250 }: Props) {
       <figure>
         <div className={s.wrap} ref={wrapRef}>
           <div className={s.empty}>
-            体組成の内訳には体重と体脂肪率の両方が必要です。
+            {t('composition.needBoth')}
             <br />
-            両方そろった週ができると表示されます。
+            {t('composition.needBothHint')}
           </div>
         </div>
       </figure>
@@ -71,11 +73,11 @@ export function WeeklyCompositionChart({ weeks, height = 250 }: Props) {
       <div className={s.legend}>
         <span className={s.legendItem}>
           <i className={s.keyBox} style={{ background: 'var(--s-lean)' }} aria-hidden="true" />
-          除脂肪体重
+          {t('hero.leanMass')}
         </span>
         <span className={s.legendItem}>
           <i className={s.keyBox} style={{ background: 'var(--s-fat)' }} aria-hidden="true" />
-          体脂肪量
+          {t('table.fatMass')}
         </span>
       </div>
 
@@ -86,10 +88,10 @@ export function WeeklyCompositionChart({ weeks, height = 250 }: Props) {
             width={width}
             height={height}
             role="img"
-            aria-label="週平均の体組成（除脂肪体重と体脂肪量の積み上げ）"
+            aria-label={t('composition.aria')}
             onPointerLeave={() => setActive(null)}
           >
-            <title>週平均の体組成（除脂肪体重と体脂肪量の積み上げ）</title>
+            <title>{t('composition.aria')}</title>
 
             <YAxis
               ticks={scale.ticks}
@@ -188,16 +190,16 @@ export function WeeklyCompositionChart({ weeks, height = 250 }: Props) {
             </div>
             <div className={s.tipRow}>
               <i className={s.keyDot} style={{ background: 'var(--s-lean)' }} aria-hidden="true" />
-              除脂肪体重
+              {t('hero.leanMass')}
               <b>{rows[active]!.leanMass!.toFixed(1)}kg</b>
             </div>
             <div className={s.tipRow}>
               <i className={s.keyDot} style={{ background: 'var(--s-fat)' }} aria-hidden="true" />
-              体脂肪量
+              {t('table.fatMass')}
               <b>{rows[active]!.fatMass!.toFixed(1)}kg</b>
             </div>
             <div className={s.tipRow}>
-              体脂肪率
+              {t('common.bodyFat')}
               <b>{rows[active]!.bodyFat!.toFixed(1)}%</b>
             </div>
           </div>

@@ -8,9 +8,11 @@ import { baselineOf, lastOf, metricsFor } from './metrics';
 import { SearchToggle } from './SearchToggle';
 import {
   EXERCISE_GROUP_ORDER,
-  GROUP_LABELS,
+  GROUP_KEYS,
   countsReps,
+  exerciseName,
   isCardio,
+  otherLocaleNames,
 } from '../../lib/exerciseCatalog';
 import { deltaTone, fmt, fmtDelta } from '../../lib/format';
 import { exerciseHistory } from '../../lib/training';
@@ -20,6 +22,7 @@ import { TONE_CLASS } from '../tone';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   sessions: readonly SessionPoint[];
@@ -57,6 +60,7 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
   /** 名前で探す。見出しの行に畳んである（`SearchToggle`） */
   const [query, setQuery] = useState('');
 
+  const t = useT();
   // 部位は主部位だけで絞る。ここで見たいのは種目の推移で、配分ではない
   // （補助部位まで拾うと、腕にベンチプレスが並ぶ）
   const groups = EXERCISE_GROUP_ORDER.filter((g) => recorded.some((e) => e.group === g));
@@ -67,7 +71,10 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
    * 「全種目の折れ線を並べて形を比べる」のが主な用途なので、絞り込みを主役にしない。
    * それでも「ベンチだけ見たい」はよくあり、胸に 10 種持つ人には部位チップだけでは足りない。
    */
-  const shown = recorded.filter((e) => matchesGroup(e, group) && matchesQuery(e.name, query));
+  const shown = recorded.filter(
+    (e) =>
+      matchesGroup(e, group) && matchesQuery(exerciseName(t, e), query, otherLocaleNames(e.id)),
+  );
 
   /*
    * 指標は一覧ぜんぶに効くので、出ている種目全体で出せるかを見る。
@@ -76,7 +83,7 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
    * 有酸素チップを選べば専用の指標に切り替わる。
    */
   const allCardio = shown.length > 0 && shown.every((e) => isCardio(e.group));
-  const metrics = metricsFor(useWeightUnit()).filter((m) =>
+  const metrics = metricsFor(t, useWeightUnit()).filter((m) =>
     allCardio
       ? m.cardioOnly
       : !m.cardioOnly && (!m.needsWeight || shown.some((e) => countsReps(e.repUnit))),
@@ -116,7 +123,7 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
   if (recorded.length === 0) {
     return (
       <section className={ui.card}>
-        <p className={ui.emptyState}>まだトレーニングの記録がありません。</p>
+        <p className={ui.emptyState}>{t('group.noRecords')}</p>
       </section>
     );
   }
@@ -124,9 +131,9 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
   return (
     <>
       <section className={ui.card}>
-        <CardHeader title="種目別の推移">
+        <CardHeader title={t('home.exerciseTrendLink')}>
           {recorded.length > FILTER_THRESHOLD && (
-            <SearchToggle query={query} onQuery={setQuery} label="種目を検索" />
+            <SearchToggle query={query} onQuery={setQuery} label={t('picker.search')} />
           )}
         </CardHeader>
 
@@ -135,7 +142,7 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
             options={metrics}
             value={metric.id}
             onChange={setMetricId}
-            label="指標"
+            label={t('exTrend.metric')}
             showLabel
             tight
           />
@@ -147,7 +154,7 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
           {/* 見出しは主部位で切る。並びも部位順にして、どこを見ているかを見失わないようにする */}
           {EXERCISE_GROUP_ORDER.filter((g) => rows.some((r) => r.ex.group === g)).map((g) => (
             <div key={g} className={s.trendGroup}>
-              <div className={s.pickerLabel}>{GROUP_LABELS[g]}</div>
+              <div className={s.pickerLabel}>{t(GROUP_KEYS[g])}</div>
               {rows
                 .filter((r) => r.ex.group === g)
                 .map((row) => (
@@ -157,7 +164,7 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
                     className={s.trendRow}
                     onClick={() => setOpenId(row.ex.id)}
                   >
-                    <span className={s.trendName}>{row.ex.name}</span>
+                    <span className={s.trendName}>{exerciseName(t, row.ex)}</span>
                     <span className={s.trendStat}>
                       <b>{fmt(row.value, metric.digits)}</b>
                       {metric.unit && <em>{metric.unit}</em>}
@@ -174,7 +181,10 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
                         height={22}
                         dot={false}
                         color="var(--s-lean)"
-                        ariaLabel={`${row.ex.name}の${metric.label}の推移`}
+                        ariaLabel={t('exTrend.aria', {
+                          name: exerciseName(t, row.ex),
+                          metric: metric.label,
+                        })}
                       />
                     </span>
                   </button>

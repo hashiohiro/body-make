@@ -15,7 +15,8 @@ import type {
   Workouts,
 } from '../types';
 import { addDays, diffDays, formatMD, isoToTime, startOfWeek, todayISO } from './date';
-import { REP_UNIT_LABELS, isCardio, muscleOf } from './exerciseCatalog';
+import { REP_UNIT_KEYS, exerciseName, isCardio, muscleOf } from './exerciseCatalog';
+import type { T } from './i18n';
 import { isCardioSet } from '../types';
 import { WEIGHT_UNIT_LABEL, fromKg } from './weight';
 import type { WeightUnit } from './weight';
@@ -474,7 +475,7 @@ function fmtWeight(kg: number, unit: WeightUnit): string {
 }
 
 /** 「10,10,9 × 60kg」形式。同じ重量が続く間はまとめる。重量のない種目は「60,60秒」 */
-export function summarizeSets(point: ExercisePoint, weightUnit: WeightUnit = 'kg'): string {
+export function summarizeSets(t: T, point: ExercisePoint, weightUnit: WeightUnit = 'kg'): string {
   /*
    * 有酸素は「その日にどれだけ動いたか」なので、セットの並びではなく合計で書く。
    * 400m×5本 を「0.4km,0.4km,…」と並べても読むものが増えるだけで、
@@ -483,15 +484,15 @@ export function summarizeSets(point: ExercisePoint, weightUnit: WeightUnit = 'kg
   if (isCardio(point.group)) {
     const parts: string[] = [];
     if (point.meters != null) parts.push(`${point.meters}m`);
-    if (point.minutes != null) parts.push(`${point.minutes}分`);
-    if (point.speed != null) parts.push(`${point.speed}m/分`);
+    if (point.minutes != null) parts.push(t('totals.minutes', { n: point.minutes }));
+    if (point.speed != null) parts.push(t('common.speed', { n: point.speed }));
     return parts.length > 0 ? parts.join(' / ') : '—';
   }
 
   const work = point.sets.filter((s) => s.reps != null);
   if (work.length === 0) return '—';
 
-  const unit = point.repUnit === 'reps' ? '' : REP_UNIT_LABELS[point.repUnit];
+  const unit = point.repUnit === 'reps' ? '' : t(REP_UNIT_KEYS[point.repUnit]);
 
   const groups: { weight: number | null; reps: number[] }[] = [];
   for (const s of work) {
@@ -994,17 +995,18 @@ export const goalCurrent = (type: GoalType, p: ExercisePoint): number | null => 
 };
 
 /** 目標の単位。維持は主指標に合わせる */
-export function goalUnitOf(type: GoalType, repUnit: RepUnit): string {
+export function goalUnitOf(t: T, type: GoalType, repUnit: RepUnit): string {
   if (type === 'distance') return 'm';
-  if (type === 'duration') return '分';
-  if (type === 'speed') return 'm/分';
+  if (type === 'duration') return t('metric.durationUnit');
+  if (type === 'speed') return t('metric.speedUnit');
   if (type === 'weight') return 'kg';
   if (type === 'volume') return 'kg';
-  if (type === 'maintain') return repUnit === 'seconds' ? '秒' : 'kg';
-  return repUnit === 'seconds' ? '秒' : '回';
+  if (type === 'maintain') return repUnit === 'seconds' ? t('unit.seconds') : 'kg';
+  return repUnit === 'seconds' ? t('unit.seconds') : t('summary.times');
 }
 
 export function exerciseGoals(
+  t: T,
   sessions: readonly SessionPoint[],
   exercises: readonly Exercise[],
 ): ExerciseGoal[] {
@@ -1047,10 +1049,10 @@ export function exerciseGoals(
 
     goals.push({
       exerciseId: exercise.id,
-      name: exercise.name,
+      name: exerciseName(t, exercise),
       group: exercise.group,
       type: goal.type,
-      unit: goalUnitOf(goal.type, exercise.repUnit),
+      unit: goalUnitOf(t, goal.type, exercise.repUnit),
       // 重量と速度は 0.1 刻みで意味が変わる。距離は m なので整数
       digits: goal.type === 'weight' || goal.type === 'speed' ? 1 : 0,
       target: goal.value,

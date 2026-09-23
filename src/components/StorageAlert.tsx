@@ -1,10 +1,12 @@
 import { markExported } from '../lib/device';
+import { Strong } from './Strong';
 import { exportJson } from '../lib/io';
 import { currentBackend } from '../lib/storage';
 import type { AppData } from '../types';
 import { Button } from './Button';
 import ui from '../styles/ui.module.scss';
 import s from './StorageAlert.module.scss';
+import { useT } from '../lib/i18n';
 
 interface Props {
   data: AppData;
@@ -26,6 +28,7 @@ interface Props {
  * 「記録は消えていないので触らないでほしい」。同じ文面で済ませない。
  */
 export function StorageAlert({ data, failed }: Props) {
+  const t = useT();
   if (!failed) return null;
 
   /*
@@ -39,15 +42,13 @@ export function StorageAlert({ data, failed }: Props) {
     return (
       <div className={s.alert} role="alert">
         <p className={s.message}>
-          <b>記録を読み出せませんでした。</b>
+          <b>{t('alert.readFailed')}</b>
           <br />
-          この端末の保存領域を開けませんでした。<b>記録は消えていません。</b>
-          この画面が空に見えても、そのままにしてください。いま打った内容は保存されません。
-          開き直すと元に戻ることがあります。
+          <Strong text={t('alert.readFailedNote')} values={[t('alert.notLost')]} />
         </p>
         <div className={ui.btnRow}>
           <Button tone="primary" onClick={() => window.location.reload()}>
-            開き直す
+            {t('alert.reopen')}
           </Button>
         </div>
       </div>
@@ -57,10 +58,9 @@ export function StorageAlert({ data, failed }: Props) {
   return (
     <div className={s.alert} role="alert">
       <p className={s.message}>
-        <b>記録を保存できていません。</b>
+        <b>{t('alert.saveFailed')}</b>
         <br />
-        いま画面に出ている内容は、このまま閉じると失われます。ブラウザの空き容量が足りないか、
-        プライベートモードで開いている可能性があります。
+        {t('alert.saveFailedNote')}
       </p>
       <div className={ui.btnRow}>
         <Button
@@ -70,7 +70,7 @@ export function StorageAlert({ data, failed }: Props) {
             markExported();
           }}
         >
-          いますぐ JSON で書き出す
+          {t('alert.exportNow')}
         </Button>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { flushSave, loadData } from '../lib/storage';
 import { Button } from './Button';
 import ui from '../styles/ui.module.scss';
 import s from './ErrorBoundary.module.scss';
+import { deviceLocale, makeT } from '../lib/i18n';
 
 interface State {
   error: Error | null;
@@ -57,32 +58,35 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   };
 
   override render(): ReactNode {
+    /*
+     * **辞書から直に引く（フックを使わない）。**
+     *
+     * ここはクラス部品で、しかも描画が壊れたときに出る面。設定を読む経路ごと
+     * 壊れている可能性があるので、記録の中の言語ではなく**端末の言語**で出す。
+     */
+    const t = makeT(deviceLocale());
     const { error, stack, exportFailed } = this.state;
     if (error == null) return this.props.children;
 
     return (
       <div className={s.wrap}>
         <section className={ui.card}>
-          <p className={s.head}>画面を出せませんでした。</p>
-          <p className={ui.note}>
-            記録は消えていません。書き出しておけば、直ったあとに読み込み直せます。
-          </p>
+          <p className={s.head}>{t('error.title')}</p>
+          <p className={ui.note}>{t('error.note')}</p>
 
           <div className={ui.btnRow}>
             <Button tone="primary" onClick={this.save}>
-              記録を書き出す
+              {t('error.export')}
             </Button>
             <Button tone="ghost" onClick={() => window.location.reload()}>
-              開き直す
+              {t('alert.reopen')}
             </Button>
           </div>
 
-          {exportFailed && (
-            <p className={ui.note}>書き出せませんでした。開き直してからもう一度。</p>
-          )}
+          {exportFailed && <p className={ui.note}>{t('error.exportFailed')}</p>}
 
           <details className={s.detail}>
-            <summary>エラーの内容</summary>
+            <summary>{t('error.details')}</summary>
             <pre>
               {error.message}
               {stack}

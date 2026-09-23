@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { Modal } from '../Modal';
 import { RecoveryGrid } from './weekPlan/RecoveryGrid';
-import { GROUP_LABELS, GROUP_ORDER } from '../../lib/exerciseCatalog';
+import { GROUP_KEYS, GROUP_ORDER } from '../../lib/exerciseCatalog';
 import { MAX_RECOVERY_DAYS, groupReadiness, type CheckHistory } from '../../lib/check';
-import { WEEKDAY_JA, addDays, startOfWeek } from '../../lib/date';
+import { WEEKDAY_KEYS, addDays, startOfWeek } from '../../lib/date';
 import { formatSets } from '../../lib/training';
 import type { MuscleGroup } from '../../types';
+import { useT } from '../../lib/i18n';
+import type { T } from '../../lib/i18n';
 
 interface Props {
   open: boolean;
@@ -58,20 +60,26 @@ interface Row {
  * それは許可を出す言い方で、決めるのは本人（design-training.md §1.1）。
  * アプリが言えるのは体がどうなっているかまでで、やるかどうかはその先にある。
  */
-/** 部位ごとの行。要約と中身の両方が同じ数え方を通るように、1 か所で作る */
-function rowsOf(history: CheckHistory, date: string): Row[] {
+/**
+ * 部位ごとの行。要約と中身の両方が同じ数え方を通るように、1 か所で作る。
+ * `t` は引数で受ける——ここは部品ではないのでフックを呼べない。
+ */
+function rowsOf(t: T, history: CheckHistory, date: string): Row[] {
   const readiness = groupReadiness(history, date);
   return GROUP_ORDER.map((g) => {
     const r = readiness[g];
     return {
       key: g,
-      label: GROUP_LABELS[g],
+      label: t(GROUP_KEYS[g]),
       left: r.daysLeft,
       max: MAX_RECOVERY_DAYS,
       reason:
         r.since == null
-          ? '記録なし'
-          : `${r.since === 1 ? '昨日' : `${r.since}日前`} ${formatSets(r.sets)}セット`,
+          ? t('common.noRecord')
+          : t('recovery.sets', {
+              when: r.since === 1 ? t('recovery.yesterday') : t('recovery.daysAgo', { n: r.since }),
+              sets: formatSets(r.sets),
+            }),
     };
   });
 }
@@ -89,9 +97,9 @@ function rowsOf(history: CheckHistory, date: string): Row[] {
  * 続くと、部位と同じ物差しの話に見える。あれは回復ではなく実績で、
  * 置き場所はダイアログの中（別のセクション）にある。
  */
-export function recoverySummary(history: CheckHistory, date: string): string {
-  const recovered = rowsOf(history, date).filter((r) => r.left === 0);
-  return recovered.length === 0 ? 'なし' : recovered.map((r) => r.label).join('・');
+export function recoverySummary(t: T, history: CheckHistory, date: string): string | null {
+  const recovered = rowsOf(t, history, date).filter((r) => r.left === 0);
+  return recovered.length === 0 ? null : recovered.map((r) => r.label).join(t('common.listSep'));
 }
 
 /**
@@ -111,10 +119,11 @@ export function recoverySummary(history: CheckHistory, date: string): string {
 const LEAD = MAX_RECOVERY_DAYS - 1;
 
 function RecoveryBand({ history, date }: { history: CheckHistory; date: string }) {
+  const t = useT();
   const band = useMemo(() => {
     const from = startOfWeek(date);
     // 回復は最長でも中2日なので、手前 2 日ぶんあれば持ち越しは拾いきれる
-    return Array.from({ length: LEAD + WEEKDAY_JA.length }, (_, i) => {
+    return Array.from({ length: LEAD + WEEKDAY_KEYS.length }, (_, i) => {
       const sets = history.groupSets?.get(addDays(from, i - LEAD));
       return Object.fromEntries(GROUP_ORDER.map((g) => [g, sets?.[g] ?? 0])) as Record<
         MuscleGroup,
@@ -129,11 +138,19 @@ function RecoveryBand({ history, date }: { history: CheckHistory; date: string }
    * 落とすと、記録がゼロの週には表ごと出なくなっていた。
    */
   return (
-    <RecoveryGrid caption="今週" days={band} labels={WEEKDAY_JA} wrap={false} all skip={LEAD} />
+    <RecoveryGrid
+      caption={t('recovery.thisWeek')}
+      days={band}
+      labels={WEEKDAY_KEYS.map((k) => t(k))}
+      wrap={false}
+      all
+      skip={LEAD}
+    />
   );
 }
 
 export function RecoveryDialog({ open, onClose, date, history }: Props) {
+  const t = useT();
   if (!open) return null;
 
   /*
@@ -145,7 +162,7 @@ export function RecoveryDialog({ open, onClose, date, history }: Props) {
    * 読むだけの行をここに持つ必要がない。
    */
   return (
-    <Modal open title="回復" onClose={onClose}>
+    <Modal open title={t('recovery.title')} onClose={onClose}>
       <RecoveryBand history={history} date={date} />
     </Modal>
   );

@@ -8,6 +8,7 @@ import { Segmented } from './components/Segmented';
 import { StorageAlert } from './components/StorageAlert';
 import { Toast, useToast } from './components/Toast';
 import { useBodyData } from './hooks/useBodyData';
+import type { BodyData } from './hooks/useBodyData';
 import { usePersistentStorage } from './hooks/useStorageSafety';
 import { useTheme } from './hooks/useTheme';
 import { formatMDW, todayISO } from './lib/date';
@@ -17,15 +18,18 @@ import { ChartsView } from './views/ChartsView';
 import { GoalsView } from './views/GoalsView';
 import { HomeView } from './views/HomeView';
 import { RecordsView } from './views/RecordsView';
-import { SETTINGS_SECTIONS, SettingsView, settingsTitle } from './views/SettingsView';
+import { SETTINGS_SECTIONS, SettingsView, settingsTitleKey } from './views/SettingsView';
 import { WeightUnitProvider } from './hooks/useWeightUnit';
+import { LocaleProvider, useT } from './lib/i18n';
+import type { MessageKey } from './lib/i18n';
 import s from './App.module.scss';
 
-const TITLES: Record<TabId, string> = {
-  home: 'BodyMake',
-  goals: '目標',
-  records: '記録',
-  settings: '設定',
+/** タブの見出し。**文言はキーで持つ**（`docs/design-i18n.md`） */
+const TITLE_KEYS: Record<TabId, MessageKey> = {
+  home: 'nav.home',
+  goals: 'nav.goals',
+  records: 'nav.records',
+  settings: 'common.settings',
 };
 
 /**
@@ -35,8 +39,8 @@ const TITLES: Record<TabId, string> = {
  * 推移はタブではなく、ホームで見ている数字の続き（`#home/trend`）として置く。
  */
 const SECTIONS: Partial<Record<TabId, Record<string, string>>> = {
-  home: { trend: '推移' },
-  settings: Object.fromEntries(SETTINGS_SECTIONS.map((sec) => [sec.id, sec.label])),
+  home: { trend: 'trend' },
+  settings: Object.fromEntries(SETTINGS_SECTIONS.map((sec) => [sec.id, sec.key])),
 };
 
 function sectionTitle(tab: TabId, section: string | null): string | null {
@@ -57,7 +61,7 @@ function routeFromHash(): Route {
   // グラフタブは目標タブに置き換わった。古いブックマークと PWA の復帰位置を推移へ寄せる
   if (rawTab === 'charts') return { tab: 'home', section: 'trend', param: null };
 
-  const tab = rawTab && rawTab in TITLES ? (rawTab as TabId) : 'home';
+  const tab = rawTab && rawTab in TITLE_KEYS ? (rawTab as TabId) : 'home';
   const section = rawSection && sectionTitle(tab, rawSection) ? rawSection : null;
   return { tab, section, param: section ? rawParam || null : null };
 }
@@ -72,8 +76,23 @@ interface AppProps {
   initial: AppData;
 }
 
+/**
+ * 言語を配るだけの外側。
+ *
+ * `useT` は Provider の**内側**でしか効かないので、画面そのものは 1 段下に置く。
+ * 記録（`useBodyData`）はここで持つ——配る言語が記録の中の設定だから。
+ */
 export function App({ initial }: AppProps) {
   const body = useBodyData(initial);
+  return (
+    <LocaleProvider pref={body.data.settings.locale}>
+      <AppShell body={body} />
+    </LocaleProvider>
+  );
+}
+
+function AppShell({ body }: { body: BodyData }) {
+  const t = useT();
   const [route, setRoute] = useState<Route>(routeFromHash);
   /*
    * いまの日付。前面に戻るたびに読み直す（`hooks/useToday`）。
@@ -115,18 +134,19 @@ export function App({ initial }: AppProps) {
   usePersistentStorage(body.stats.recordedDays > 0 || body.trainingStats.sessions > 0);
 
   // 推移は体組成とトレーニングで中身が入れ替わるので、見出しも切り替えの側に従う
-  const trendTitle = domain === 'body' ? '体組成の推移' : 'トレーニングの推移';
+  const trendTitle = domain === 'body' ? t('trend.body') : t('trend.training');
   const title =
     route.tab === 'home' && route.section === 'trend'
       ? trendTitle
       : // 設定はセクションの中にもう 1 段ある（`#settings/training/presets`）
         route.tab === 'settings'
-        ? settingsTitle(route.section, route.param)
+        ? settingsTitleKey(route.section, route.param) &&
+          t(settingsTitleKey(route.section, route.param)!)
         : sectionTitle(route.tab, route.section);
 
   // このセッションで積んだ履歴の数と、戻り先の表示名
   const pushes = useRef(0);
-  const backLabel = useRef(TITLES.home);
+  const backLabel = useRef(t('nav.home'));
 
   /** 位置を URL に載せる。standalone 表示の戻る操作とリロードで位置が保たれる */
   const go = (next: Route, replace = false) => {
@@ -134,7 +154,7 @@ export function App({ initial }: AppProps) {
     if (replace) {
       window.history.replaceState(null, '', hash);
     } else {
-      backLabel.current = title ?? TITLES[route.tab];
+      backLabel.current = title ?? t(TITLE_KEYS[route.tab]);
       pushes.current++;
       if (window.location.hash !== hash) window.location.hash = hash;
     }
@@ -184,19 +204,24 @@ export function App({ initial }: AppProps) {
           <div className={s.topbarRow}>
             {title ? (
               <>
-                <button type="button" className={s.back} onClick={back} aria-label="戻る">
+                <button
+                  type="button"
+                  className={s.back}
+                  onClick={back}
+                  aria-label={t('common.back')}
+                >
                   ‹ {backLabel.current}
                 </button>
                 <h1 className={s.title}>{title}</h1>
               </>
             ) : (
               <>
-                <h1 className={s.title}>{TITLES[route.tab]}</h1>
+                <h1 className={s.title}>{t(TITLE_KEYS[route.tab])}</h1>
                 {/* 記録タブでは日付そのものが操作対象なので、日付ナビをヘッダに出す */}
                 {route.tab === 'records' ? (
                   <DateNav date={date} today={today} onChange={setDate} />
                 ) : (
-                  <span className={s.today}>{formatMDW(today)}</span>
+                  <span className={s.today}>{formatMDW(t, today)}</span>
                 )}
               </>
             )}
@@ -209,11 +234,11 @@ export function App({ initial }: AppProps) {
         */}
           {route.tab !== 'settings' && (
             <Segmented
-              label="表示する記録"
+              label={t('nav.domain')}
               value={domain}
               options={[
-                { id: 'body', label: '体組成' },
-                { id: 'training', label: 'トレーニング' },
+                { id: 'body', label: t('nav.body') },
+                { id: 'training', label: t('nav.training') },
               ]}
               onChange={changeDomain}
             />

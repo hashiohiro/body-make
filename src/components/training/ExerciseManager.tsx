@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import {
   EXERCISE_GROUP_ORDER,
-  GROUP_LABELS,
-  REP_UNIT_LABELS,
+  GROUP_KEYS,
+  REP_UNIT_KEYS,
   copyOf,
+  exerciseName,
   goalTypeLabel,
   isListed,
+  otherLocaleNames,
 } from '../../lib/exerciseCatalog';
 import type { BodyData } from '../../hooks/useBodyData';
 import type { Exercise, ExerciseGroup, SessionPoint } from '../../types';
@@ -30,6 +32,8 @@ import { useWeightUnit } from '../../hooks/useWeightUnit';
 import { todayISO } from '../../lib/date';
 import { WEIGHT_UNIT_LABEL, fromKg } from '../../lib/weight';
 import type { WeightUnit } from '../../lib/weight';
+import { useT } from '../../lib/i18n';
+import type { T } from '../../lib/i18n';
 
 interface Props {
   exercises: readonly Exercise[];
@@ -52,18 +56,18 @@ interface Props {
  * 目標の立て方と値。**目標タブの種目カードと同じ出し方にそろえる。**
  * 立て方はバッジ、値は「目標 100kg」。同じ種目を 2 画面で見るのに、形を変える理由がない。
  */
-function goalKind(exercise: Exercise): string | null {
-  return exercise.goal ? goalTypeLabel(exercise.goal.type, exercise.repUnit, true) : null;
+function goalKind(t: T, exercise: Exercise): string | null {
+  return exercise.goal ? goalTypeLabel(t, exercise.goal.type, exercise.repUnit, true) : null;
 }
 
 /**
  * 目標の値と単位。**重量で数える立て方だけ、読むときの単位へ直す。**
  * 保存は kg（`lib/weight.ts`）なので、ここは出す直前の換算。
  */
-function goalValue(exercise: Exercise, weightUnit: WeightUnit): string | null {
+function goalValue(t: T, exercise: Exercise, weightUnit: WeightUnit): string | null {
   const goal = exercise.goal;
   if (!goal || goal.value == null) return null;
-  if (goal.type === 'reps') return `${goal.value}${REP_UNIT_LABELS[exercise.repUnit]}`;
+  if (goal.type === 'reps') return `${goal.value}${t(REP_UNIT_KEYS[exercise.repUnit])}`;
   const value = fromKg(goal.value, weightUnit);
   return `${Math.round(value * 10) / 10}${WEIGHT_UNIT_LABEL[weightUnit]}`;
 }
@@ -93,6 +97,7 @@ export function ExerciseManager({
 }: Props) {
   // 目標の重量は kg で保存されている。一覧に出すときだけ読む単位へ直す
   const weightUnit = useWeightUnit();
+  const t = useT();
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<ExerciseGroup | 'all'>('all');
   /** 名前で探す。打ちはじめたら、部位の見出しをやめて平たい候補に差し替える */
@@ -113,7 +118,7 @@ export function ExerciseManager({
    */
   const nameTaken = (raw: string) => {
     const name = raw.trim();
-    return name !== '' && exercises.some((e) => e.name === name);
+    return name !== '' && exercises.some((e) => exerciseName(t, e) === name);
   };
   const canCopy = copyName.trim() !== '' && !nameTaken(copyName);
   const openDetail = (ex: Exercise) => {
@@ -142,10 +147,15 @@ export function ExerciseManager({
   const sorted = [...exercises].sort((a, b) => a.order - b.order);
   const searching = query.trim() !== '';
   // 検索とチップは AND。「腕で絞ってからカールを探す」がそのまま通る
-  const filtered = sorted.filter((e) => matchesGroup(e, filter) && matchesQuery(e.name, query));
+  const filtered = sorted.filter(
+    (e) =>
+      matchesGroup(e, filter) && matchesQuery(exerciseName(t, e), query, otherLocaleNames(e.id)),
+  );
   /* 打っている最中の並び。前方一致を先に出し、同じ近さなら元の並びのまま */
   const hits = searching
-    ? [...filtered].sort((a, b) => matchRank(a.name, query) - matchRank(b.name, query))
+    ? [...filtered].sort(
+        (a, b) => matchRank(exerciseName(t, a), query) - matchRank(exerciseName(t, b), query),
+      )
     : filtered;
   const shown = filtered.filter((e) => isListed(e));
   /*
@@ -180,10 +190,10 @@ export function ExerciseManager({
       return;
     }
     ask({
-      title: '種目を削除しますか？',
-      subject: ex.name,
-      note: `この種目の記録 ${days}日ぶんも一緒に消えます。元に戻せません。`,
-      confirmLabel: '記録ごと削除',
+      title: t('manage.deleteTitle'),
+      subject: exerciseName(t, ex),
+      note: t('manage.deleteNote', { days }),
+      confirmLabel: t('manage.deleteConfirm'),
       destructive: true,
       onConfirm: () => onRemove(ex.id),
     });
@@ -200,14 +210,18 @@ export function ExerciseManager({
   const card = (ex: Exercise) => (
     <ExerciseSummaryCard
       key={ex.id}
-      name={ex.name}
+      name={exerciseName(t, ex)}
       // 主部位は見出しが持っているので、ここは補助部位だけ
       tag={
-        ex.subGroups.length > 0 ? ex.subGroups.map((x) => GROUP_LABELS[x.group]).join('·') : null
+        ex.subGroups.length > 0 ? ex.subGroups.map((x) => t(GROUP_KEYS[x.group])).join('·') : null
       }
-      kind={goalKind(ex)}
-      goal={goalValue(ex, weightUnit)}
-      factLeft={(usage.get(ex.id) ?? 0) > 0 ? `記録 ${usage.get(ex.id)}日` : '記録はまだありません'}
+      kind={goalKind(t, ex)}
+      goal={goalValue(t, ex, weightUnit)}
+      factLeft={
+        (usage.get(ex.id) ?? 0) > 0
+          ? t('manage.recordedDays', { n: usage.get(ex.id)! })
+          : t('common.noRecord')
+      }
       /*
         負荷の数え方と回数の単位は出さない。**一覧で読むものではない。**
         ふだんはカタログの既定で正しく、触るのは自作種目のときくらいなので、
@@ -217,21 +231,27 @@ export function ExerciseManager({
         ex.shelf === 'hidden' ? (
           <>
             <MiniButton
-              label={`${ex.name}を表示に戻す`}
+              label={t('manage.unhideOf', { name: exerciseName(t, ex) })}
               onClick={() => onUpdate({ ...ex, shelf: 'listed' })}
             >
-              表示に戻す
+              {t('manage.unhide')}
             </MiniButton>
-            <MiniButton label={`${ex.name}を削除`} onClick={() => remove(ex)}>
-              削除
+            <MiniButton
+              label={t('manage.deleteOf', { name: exerciseName(t, ex) })}
+              onClick={() => remove(ex)}
+            >
+              {t('settings.delete')}
             </MiniButton>
             {/*
               伏せた種目でも**推移は開ける。**非表示は「選ぶのをやめた」印で、
               記録はそのまま残っている。読む道が無いほうが不整合になる。
             */}
             <span className={s.actionsTail}>
-              <MiniButton label={`${ex.name}の推移を見る`} onClick={() => setTrendOf(ex.id)}>
-                推移
+              <MiniButton
+                label={t('common.trendOf', { name: exerciseName(t, ex) })}
+                onClick={() => setTrendOf(ex.id)}
+              >
+                {t('common.trend')}
               </MiniButton>
             </span>
           </>
@@ -243,27 +263,33 @@ export function ExerciseManager({
             */}
             <MiniButton
               pressed={editing === ex.id}
-              label={`${ex.name}の設定`}
+              label={t('exercise.settingsOf', { name: exerciseName(t, ex) })}
               onClick={() => openDetail(ex)}
             >
-              設定
+              {t('common.settings')}
             </MiniButton>
             <MiniButton
-              label={`${ex.name}を非表示にする`}
+              label={t('manage.hideOf', { name: exerciseName(t, ex) })}
               onClick={() => onUpdate({ ...ex, shelf: 'hidden' })}
             >
-              非表示
+              {t('manage.hidden')}
             </MiniButton>
-            <MiniButton label={`${ex.name}を削除`} onClick={() => remove(ex)}>
-              削除
+            <MiniButton
+              label={t('manage.deleteOf', { name: exerciseName(t, ex) })}
+              onClick={() => remove(ex)}
+            >
+              {t('settings.delete')}
             </MiniButton>
             {/*
               推移は**この種目をどうするか**ではなく、**過去を読む**ための入口。
               性格が違うので、右端へ離して置く（`actionsTail`）。
             */}
             <span className={s.actionsTail}>
-              <MiniButton label={`${ex.name}の推移を見る`} onClick={() => setTrendOf(ex.id)}>
-                推移
+              <MiniButton
+                label={t('common.trendOf', { name: exerciseName(t, ex) })}
+                onClick={() => setTrendOf(ex.id)}
+              >
+                {t('common.trend')}
               </MiniButton>
             </span>
           </>
@@ -276,7 +302,7 @@ export function ExerciseManager({
     <section className={ui.card}>
       {/* 検索を開いているあいだは、件数の代わりに欄が入る（行は増やさない） */}
       <CardHeader
-        title="マイ種目"
+        title={t('settings.exercises')}
         /*
           件数は出さない。**一覧がそのまま件数になっている**うえ、
           「目標 nn件」も「非表示 nn件」も、下にその一覧が並んでいる話を
@@ -284,20 +310,20 @@ export function ExerciseManager({
         */
       >
         {sorted.length > FILTER_THRESHOLD && (
-          <SearchToggle query={query} onQuery={setQuery} label="種目を検索" />
+          <SearchToggle query={query} onQuery={setQuery} label={t('picker.search')} />
         )}
       </CardHeader>
 
       {/* 追加は一番上。登録済みが増えるほど、下に置くとスクロールを強いることになる */}
       <div className={ui.btnRow}>
-        <Button tone="primary" onClick={() => setAdding(true)}>
-          ＋ マイ種目に追加
+        <Button adds tone="primary" onClick={() => setAdding(true)}>
+          {t('manage.add')}
         </Button>
       </div>
 
       {/* 一覧の続きに出すと、どこまでが追加の画面か分からなくなるのでモーダルにする */}
       {/* カタログは一覧なので高さを固定する（検索で件数が減っても縮まない） */}
-      <Modal open={adding} title="マイ種目に追加" tall onClose={() => setAdding(false)}>
+      <Modal open={adding} title={t('manage.add')} tall onClose={() => setAdding(false)}>
         <div>
           <CatalogPicker exercises={exercises} onAdd={onAdd} />
 
@@ -306,7 +332,7 @@ export function ExerciseManager({
       </Modal>
 
       {sorted.length === 0 ? (
-        <p className={ui.emptyState}>マイ種目はまだ空です。</p>
+        <p className={ui.emptyState}>{t('common.noExercises')}</p>
       ) : (
         <>
           {sorted.length > FILTER_THRESHOLD && (
@@ -338,30 +364,25 @@ export function ExerciseManager({
 
                 return (
                   <div key={group}>
-                    <div className={s.manageGroup}>{GROUP_LABELS[group]}</div>
+                    <div className={s.manageGroup}>{t(GROUP_KEYS[group])}</div>
 
                     {items.map(card)}
                   </div>
                 );
               })}
 
-          {filtered.length === 0 && (
-            <p className={ui.emptyState}>このフィルターに合う種目はありません。</p>
-          )}
+          {filtered.length === 0 && <p className={ui.emptyState}>{t('catalog.noMatch')}</p>}
 
           {hiddenShown.length > 0 && (
             <>
-              <div className={s.manageGroup}>非表示</div>
+              <div className={s.manageGroup}>{t('manage.hidden')}</div>
               {hiddenShown.map(card)}
             </>
           )}
 
-          <p className={ui.note}>目標も、種目そのものの性質も、行の入口から開けます。</p>
+          <p className={ui.note}>{t('manage.entryNote')}</p>
           {/* 80 文字以内 */}
-          <p className={ui.note}>
-            非表示にすると、記録やプリセットで選ぶときの候補から外れます。
-            記録は残るので、推移では今までどおり見られます。
-          </p>
+          <p className={ui.note}>{t('manage.hideNote')}</p>
         </>
       )}
 
@@ -392,7 +413,11 @@ export function ExerciseManager({
         */
         <Modal
           open
-          title={copying ? `${settingsExercise.name}を複製` : `${settingsExercise.name}の設定`}
+          title={
+            copying
+              ? t('manage.copyOf', { name: exerciseName(t, settingsExercise) })
+              : t('exercise.settingsOf', { name: exerciseName(t, settingsExercise) })
+          }
           onClose={() => {
             setCopying(false);
             setEditing(null);
@@ -401,13 +426,10 @@ export function ExerciseManager({
         >
           {copying ? (
             <div className={s.newForm}>
-              <p className={ui.note}>
-                部位・補助部位・負荷の数え方・体重係数・1RM の分母を、そのまま写します。
-                記録と目標は写しません。
-              </p>
+              <p className={ui.note}>{t('manage.copyNote')}</p>
 
               <label className={s.newField} htmlFor="copy-name">
-                新しい種目の名前
+                {t('manage.newName')}
                 {/* この面は名前を打つだけなので、開いたらすぐ打てるようにする */}
                 <TextField
                   id="copy-name"
@@ -419,13 +441,11 @@ export function ExerciseManager({
                 />
               </label>
 
-              {nameTaken(copyName) && (
-                <p className={ui.note}>同じ名前の種目があります。名前を変えてください。</p>
-              )}
+              {nameTaken(copyName) && <p className={ui.note}>{t('manage.nameTakenRename')}</p>}
 
               <div className={ui.btnRow}>
                 <Button tone="primary" disabled={!canCopy} onClick={copy}>
-                  複製する
+                  {t('manage.copyDo')}
                 </Button>
               </div>
             </div>
@@ -446,11 +466,11 @@ export function ExerciseManager({
                   onClick={() => {
                     // 元の名前を入れておく。**同じ名前では作れない**ので、
                     // どこを足せばいいか（ワイドグリップ〜）が形から分かる
-                    setCopyName(settingsExercise.name);
+                    setCopyName(exerciseName(t, settingsExercise));
                     setCopying(true);
                   }}
                 >
-                  この種目を複製
+                  {t('manage.copyThis')}
                 </Button>
               </div>
 
@@ -463,7 +483,7 @@ export function ExerciseManager({
               {(usage.get(settingsExercise.id) ?? 0) > 0 && (
                 <div className={ui.btnRow}>
                   <Button size="sub" onClick={() => setMoving(true)}>
-                    記録を別の種目へ移行
+                    {t('manage.moveRecords')}
                   </Button>
                 </div>
               )}

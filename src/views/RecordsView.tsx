@@ -3,11 +3,12 @@ import { BodyTrendDialog } from '../components/BodyTrendDialog';
 import { QuickEntry } from '../components/QuickEntry';
 import { RecordCalendar } from '../components/RecordCalendar';
 import { TrainingView } from './TrainingView';
-import { formatMD, weekdayJa } from '../lib/date';
+import { formatMD, weekdayLabel } from '../lib/date';
 import { fmt } from '../lib/format';
 import type { BodyData } from '../hooks/useBodyData';
 import type { Domain } from '../types';
 import { CardHeader } from '../components/CardHeader';
+import { useT } from '../lib/i18n';
 import { Button } from '../components/Button';
 import ui from '../styles/ui.module.scss';
 import s from './RecordsView.module.scss';
@@ -34,6 +35,7 @@ const MORE_ROWS = 180;
 
 export function RecordsView({ body, date, onDateChange, domain }: Props) {
   const { daily, weeks, data, sessions, stats, trainingStats, setValue } = body;
+  const t = useT();
   const [limit, setLimit] = useState(INITIAL_ROWS);
   const [trendOpen, setTrendOpen] = useState(false);
 
@@ -61,7 +63,7 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
         marked={bodyDates}
         filled={bodyFullDates}
         selected={date}
-        summary={`最長 ${stats.bestStreak}日 · 通算 ${stats.recordedDays}日`}
+        summary={t('records.streakSummary', { best: stats.bestStreak, total: stats.recordedDays })}
         firstDate={stats.first?.date ?? null}
         onSelect={onDateChange}
       />
@@ -70,7 +72,10 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
         marked={trainingDates}
         filled={trainingDates}
         selected={date}
-        summary={`今週 ${trainingStats.thisWeekDays}日 · 通算 ${trainingStats.sessions}回`}
+        summary={t('records.trainingSummary', {
+          week: trainingStats.thisWeekDays,
+          total: trainingStats.sessions,
+        })}
         firstDate={trainingStats.firstDate}
         onSelect={onDateChange}
       />
@@ -108,10 +113,10 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
       />
 
       <section className={ui.card}>
-        <CardHeader title="記録一覧" hint={<>タップで編集</>} />
+        <CardHeader title={t('records.list')} hint={<>{t('records.listHint')}</>} />
 
         {rows.length === 0 ? (
-          <p className={ui.emptyState}>まだ記録がありません。</p>
+          <p className={ui.emptyState}>{t('common.noRecords')}</p>
         ) : (
           <div className={s.list}>
             {rows.map((point) => (
@@ -125,21 +130,21 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
                 <span className={s.date}>
                   {formatMD(point.date)}
                   <br />
-                  {weekdayJa(point.date)}
+                  {weekdayLabel(t, point.date)}
                 </span>
                 <span className={s.values}>
                   {point.weight == null ? (
-                    <span className={s.missing}>未記録</span>
+                    <span className={s.missing}>{t('records.missing')}</span>
                   ) : (
                     <>
                       {fmt(point.weight)} kg
                       <small>
-                        {point.bodyFat == null ? '体脂肪率なし' : `${fmt(point.bodyFat)} %`}
+                        {point.bodyFat == null ? t('records.noBodyFat') : `${fmt(point.bodyFat)} %`}
                       </small>
                     </>
                   )}
                 </span>
-                <span className={s.slots} aria-label={`記録回数 ${point.slots}`}>
+                <span className={s.slots} aria-label={t('records.slotCount', { n: point.slots })}>
                   <i
                     className={`${s.dot} ${point.am.weight != null || point.am.bodyFat != null ? s.dotOn : ''}`}
                   />
@@ -160,7 +165,8 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
                 onClick={() => setLimit((n) => n + MORE_ROWS)}
                 className={s.more}
               >
-                さらに{Math.min(rest, MORE_ROWS)}日ぶん見る<small>残り {rest}日</small>
+                {t('records.showMore', { n: Math.min(rest, MORE_ROWS) })}
+                <small>{t('records.showMoreRest', { n: rest })}</small>
               </Button>
             )}
           </div>

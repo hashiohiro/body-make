@@ -1,4 +1,8 @@
 import { newId } from './id';
+import { LOCALES, translate } from './i18n';
+import type { Locale, MessageKey, T } from './i18n';
+import { CATALOG_NAMES_EN } from './catalogNames.en';
+import type { CatalogId } from './catalogNames.en';
 import type {
   Exercise,
   ExerciseGroup,
@@ -127,27 +131,26 @@ const BOTH_OR_BW: Implement[] = ['barbell', 'dumbbell', 'bodyweight'];
  * 目標の立て方のラベル。一覧では ↑ を付けた短い形でバッジにする。
  * 「維持」だけ矢印を持たない（伸ばさないと決めたもの）。
  */
-export const GOAL_TYPE_LABELS: Record<GoalType, string> = {
-  maintain: '維持',
-  weight: '重量',
-  volume: '挙上量',
-  reps: '回数',
-  distance: '距離',
-  duration: '時間',
-  speed: '速度',
+export const GOAL_TYPE_KEYS: Record<GoalType, MessageKey> = {
+  maintain: 'goalType.maintain',
+  weight: 'goalType.weight',
+  volume: 'metric.volume',
+  reps: 'set.reps',
+  distance: 'metric.distance',
+  duration: 'metric.duration',
+  speed: 'metric.speed',
 };
 
 /** 単位に合わせて「回数」を言い換える。バッジは矢印つき */
-export function goalTypeLabel(type: GoalType, repUnit: RepUnit, arrow = false): string {
-  const base =
-    type === 'reps' && repUnit !== 'reps' ? REP_UNIT_NOUNS[repUnit] : GOAL_TYPE_LABELS[type];
-  return arrow && type !== 'maintain' ? `${base}↑` : base;
+export function goalTypeLabel(t: T, type: GoalType, repUnit: RepUnit, arrow = false): string {
+  const base = type === 'reps' && repUnit !== 'reps' ? t('set.seconds') : t(GOAL_TYPE_KEYS[type]);
+  return arrow && type !== 'maintain' ? t('goalType.arrow', { label: base }) : base;
 }
 
-export const IMPLEMENT_LABELS: Record<Implement, string> = {
-  barbell: 'バーベル',
-  dumbbell: 'ダンベル',
-  bodyweight: '自重',
+export const IMPLEMENT_KEYS: Record<Implement, MessageKey> = {
+  barbell: 'catalog.implementBarbell',
+  dumbbell: 'catalog.dumbbell',
+  bodyweight: 'catalog.bodyweight',
 };
 
 /**
@@ -1914,14 +1917,14 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
 ];
 
-export const GROUP_LABELS: Record<ExerciseGroup, string> = {
-  chest: '胸',
-  back: '背中',
-  legs: '脚',
-  shoulders: '肩',
-  arms: '腕',
-  core: '体幹',
-  cardio: '有酸素',
+export const GROUP_KEYS: Record<ExerciseGroup, MessageKey> = {
+  chest: 'group.chest',
+  back: 'group.back',
+  legs: 'group.legs',
+  shoulders: 'group.shoulders',
+  arms: 'group.arms',
+  core: 'group.core',
+  cardio: 'group.cardio',
 };
 
 /**
@@ -1950,7 +1953,7 @@ export function muscleOf(group: ExerciseGroup): MuscleGroup | null {
  * 種目 ID の並びから、やる部位の並びを作る（「胸・肩・腕」）。
  * プリセットは名前だけでは中身を思い出せないので、記録画面でも設定でも同じ形で添える。
  */
-export function groupsOf(exercises: readonly Exercise[], ids: readonly string[]): string {
+export function groupsOf(t: T, exercises: readonly Exercise[], ids: readonly string[]): string {
   const byId = new Map(exercises.map((e) => [e.id, e]));
   const groups = new Set<ExerciseGroup>();
   for (const id of ids) {
@@ -1958,8 +1961,8 @@ export function groupsOf(exercises: readonly Exercise[], ids: readonly string[])
     if (group) groups.add(group);
   }
   return EXERCISE_GROUP_ORDER.filter((g) => groups.has(g))
-    .map((g) => GROUP_LABELS[g])
-    .join('・');
+    .map((g) => t(GROUP_KEYS[g]))
+    .join(t('common.listSep'));
 }
 
 /** 部位を同時に 6 本描くとき用。トークン側で配色によらず固定してある */
@@ -1990,31 +1993,24 @@ export const GROUP_COLORS: Record<MuscleGroup, string> = {
  * 効いている部位の数では判定できない。ベンチプレスも左右の胸に効いているが、
  * バーは 1 本で、書いた 60kg にすでに左右ぶんが入っている。
  */
-export const LOAD_MODE_LABELS: Record<LoadMode, string> = {
-  standard: 'ウエイト1つ',
-  perSide: 'ウエイト2つ',
-  bodyweight: '自重＋加重',
+export const LOAD_MODE_KEYS: Record<LoadMode, MessageKey> = {
+  standard: 'loadMode.standard',
+  perSide: 'loadMode.perSide',
+  bodyweight: 'loadMode.bodyweight',
 };
 
 /** 同じ 10kg を書いたときに何として数えるか。選び直すと結果が変わるので、例で示す */
-export const LOAD_MODE_HINTS: Record<LoadMode, string> = {
-  standard: 'バー・マシン・片手ずつのダンベル。10kg と書けば 10kg として数えます',
-  perSide:
-    '左右に1つずつ同時に持つ種目。書くのは片方ぶんで、10kg なら 10×2 = 20kg として数えます（最高重量と推定1RMは書いた 10kg のまま）',
-  bodyweight: '懸垂・ディップス。重量欄は体重に足す追加分。体重68kgなら 10kg で 78kg',
+export const LOAD_MODE_HINT_KEYS: Record<LoadMode, MessageKey> = {
+  standard: 'loadMode.standardHint',
+  perSide: 'loadMode.perSideHint',
+  bodyweight: 'loadMode.bodyweightHint',
 };
 
 export const LOAD_MODE_ORDER: LoadMode[] = ['standard', 'perSide', 'bodyweight'];
 
-export const REP_UNIT_LABELS: Record<RepUnit, string> = {
-  reps: '回',
-  seconds: '秒',
-};
-
-/** 「回数」「秒数」。目標の立て方の名前に使う */
-const REP_UNIT_NOUNS: Record<RepUnit, string> = {
-  reps: '回数',
-  seconds: '秒数',
+export const REP_UNIT_KEYS: Record<RepUnit, MessageKey> = {
+  reps: 'summary.times',
+  seconds: 'unit.seconds',
 };
 
 /** 回で数えるか。挙上量・推定1RM を出せるのはこれが真のときだけ */
@@ -2075,6 +2071,67 @@ export function copyOf(source: Exercise, name: string, order: number): Exercise 
     shelf: 'listed',
     goal: null,
   };
+}
+
+/**
+ * その言語でのカタログ名。**登録したときに入る形**（器具の別まで含む）。
+ *
+ * 日本語はカタログの `name` がそのまま基準。英語は `catalogNames.en.ts` の表から引く
+ * （`docs/design-i18n.md` §4）。表に無い ID は日本語のまま出す——
+ * 名前が消えるより、訳されていないほうがまだ使える。
+ */
+export function catalogFullName(locale: Locale, entry: CatalogEntry, implement: Implement): string {
+  const base =
+    locale === 'ja' ? entry.name : (CATALOG_NAMES_EN[entry.id as CatalogId] ?? entry.name);
+  return entry.implements == null
+    ? base
+    : translate(locale, 'catalog.nameWithImplement', {
+        name: base,
+        implement: translate(locale, IMPLEMENT_KEYS[implement]),
+      });
+}
+
+/**
+ * 探すときに足す語。**もう一方の言語のカタログ名。**
+ *
+ * 英語で使っていても「ベンチ」で引けるほうが、切り替えた直後に困らない
+ * （`docs/design-i18n.md` §4）。別名（`aliases`）とは分けて渡す——
+ * 当たった語を札に出すのは別名だけで、名前そのものを札にしても読む足しにならない。
+ */
+export function otherLocaleNames(id: string): readonly string[] {
+  const found = catalogOf(id);
+  return found ? LOCALES.map((l) => catalogFullName(l, found.entry, found.implement)) : [];
+}
+
+/** 種目 ID からカタログの行と器具を引く。自作・複製は null */
+function catalogOf(id: string): CatalogChoice | null {
+  const suffix = id.endsWith('_bw') ? 'bodyweight' : id.endsWith('_db') ? 'dumbbell' : null;
+  const base = suffix ? id.slice(0, id.lastIndexOf('_')) : id;
+  const entry = CATALOG.find((c) => c.id === base);
+  if (!entry) return null;
+  return { entry, implement: entry.implements ? (suffix ?? 'barbell') : 'barbell' };
+}
+
+/**
+ * 画面に出す種目名。**改名していなければ、いまの言語で読む。**
+ *
+ * ```
+ * 本人が改名していれば          → その名前（自作種目も同じ）
+ * カタログ由来で改名していなければ → いまの言語の名前
+ * ```
+ *
+ * 改名したかどうかは**保存されている名前がカタログ名と一致するか**で見る。
+ * 別のフラグを持たない——持つと、改名を取り消したときに古い印が残る。
+ * 一致を見るのは持っている言語ぜんぶ。日本語で登録して英語に切り替えても、
+ * 英語で登録して日本語に切り替えても、同じように読める。
+ */
+export function exerciseName(t: T, exercise: Pick<Exercise, 'id' | 'name'>): string {
+  const found = catalogOf(exercise.id);
+  if (!found) return exercise.name;
+  const untouched = LOCALES.some(
+    (l) => catalogFullName(l, found.entry, found.implement) === exercise.name,
+  );
+  return untouched ? catalogFullName(t.locale, found.entry, found.implement) : exercise.name;
 }
 
 export function catalogId(entry: CatalogEntry, implement: Implement): string {
@@ -2142,7 +2199,7 @@ export function fromCatalog(
      * 手元の一覧で呼び方が揺れると、同じ種目が別々のものに見える
      * （別名は探すための入口で、持ちものの名前ではない）。
      */
-    name: dual ? `${entry.name}（${IMPLEMENT_LABELS[implement]}）` : entry.name,
+    name: catalogFullName('ja', entry, implement),
     // ダンベルは左右に 1 つずつ持つので 2 倍。自重版は体重を係数ぶん乗せる
     loadMode: dual ? (IMPLEMENT_LOAD[implement] ?? entry.loadMode) : entry.loadMode,
     // 係数を使うのは自重版だけ。加重版に残すと、効かない値が設定画面に出る

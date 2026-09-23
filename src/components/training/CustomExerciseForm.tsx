@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { EXERCISE_GROUP_ORDER, GROUP_LABELS, emptyCheckValues } from '../../lib/exerciseCatalog';
+import { EXERCISE_GROUP_ORDER, GROUP_KEYS, emptyCheckValues } from '../../lib/exerciseCatalog';
 import { ExerciseCalcFields } from './ExerciseCalcFields';
 import { newId } from '../../lib/id';
 import { Select } from '../Select';
@@ -9,6 +9,7 @@ import type { Exercise, ExerciseGroup, LoadMode, RepUnit } from '../../types';
 import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 /** 種目名の上限。一覧で枠を割らない長さ（プリセット名より少し長く取る） */
 const NAME_MAX = 40;
@@ -40,6 +41,7 @@ interface Props {
  * 聞くのは**名前と部位だけ。**残りは既定値で作れて、あとから種目の設定で変えられる。
  */
 export function CustomExerciseForm({ exercises, onCreate }: Props) {
+  const t = useT();
   const [form, setForm] = useState(EMPTY_FORM);
   const [advanced, setAdvanced] = useState(false);
 
@@ -78,10 +80,10 @@ export function CustomExerciseForm({ exercises, onCreate }: Props) {
 
   return (
     <div className={s.newForm}>
-      <div className={s.pickerLabel}>カタログにない種目を作る</div>
+      <div className={s.pickerLabel}>{t('custom.title')}</div>
 
       <label className={s.newField}>
-        名前
+        {t('custom.name')}
         {/* 追加のボタンは部位と詳細設定の下にある。打ち終わりに Enter でそのまま作れる */}
         <TextField
           value={form.name}
@@ -92,17 +94,17 @@ export function CustomExerciseForm({ exercises, onCreate }: Props) {
       </label>
 
       <label className={s.newField}>
-        部位
+        {t('group.label')}
         <Select
           value={form.group}
-          options={EXERCISE_GROUP_ORDER.map((g) => ({ id: g, label: GROUP_LABELS[g] }))}
+          options={EXERCISE_GROUP_ORDER.map((g) => ({ id: g, label: t(GROUP_KEYS[g]) }))}
           onChange={(group) => setForm((f) => ({ ...f, group }))}
         />
       </label>
 
       <div className={ui.btnRow}>
         <Button tone="ghost" size="sub" expanded={advanced} onClick={() => setAdvanced((v) => !v)}>
-          {advanced ? '詳細設定を閉じる' : '詳細設定'}
+          {advanced ? t('custom.closeDetails') : t('custom.details')}
         </Button>
       </div>
 
@@ -114,18 +116,15 @@ export function CustomExerciseForm({ exercises, onCreate }: Props) {
       )}
 
       {/* 押せない理由は**ボタンの上**。押したあとの位置に置くと、押してから探すことになる */}
-      {taken && <p className={ui.note}>同じ名前の種目があります（非表示のものも含みます）。</p>}
+      {taken && <p className={ui.note}>{t('custom.nameTaken')}</p>}
 
       <div className={ui.btnRow}>
         <Button tone="primary" size="sub" disabled={name === '' || taken} onClick={submit}>
-          追加
+          {t('custom.add')}
         </Button>
       </div>
 
-      <p className={ui.note}>
-        名前と部位だけで作れます。触らなければ「ウエイト1つ」「回で数える」になり、
-        あとから各行の「設定」で変えられます。
-      </p>
+      <p className={ui.note}>{t('custom.note')}</p>
     </div>
   );
 }

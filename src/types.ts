@@ -1,4 +1,5 @@
 import type { WeightUnit } from './lib/weight';
+import type { LocalePref } from './lib/i18n';
 
 /** 1 日 2 回（朝・夜）計測というエクセル「日次記録」シートの計測設計をそのまま型にしている */
 export type SlotId = 'am' | 'pm';
@@ -48,6 +49,14 @@ export interface Settings {
   /** 'YYYY-MM-DD' */
   targetDate: string | null;
   theme: ThemePref;
+  /**
+   * 表示する言語。**テーマと同じ形**——端末に従うか、名指しか。
+   *
+   * 記録（`AppData`）に入るので、書き出した JSON を別の端末で読めば言語も移る。
+   * 訳すのは利用者が読むものだけで、**数え方は言語で変わらない**
+   * （週は日曜〜土曜のまま。`docs/design-i18n.md` §1.1）。
+   */
+  locale: LocalePref;
   /**
    * 腹囲を記録するか。**既定は false。**
    *

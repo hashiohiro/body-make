@@ -1,4 +1,5 @@
 import { DateField } from './DateField';
+import { Strong } from './Strong';
 import { Button } from './Button';
 import { useState } from 'react';
 import { NumericInput } from './NumericInput';
@@ -7,6 +8,7 @@ import { fmt, fmtDelta, fmtPercent } from '../lib/format';
 import { BODYFAT_RANGE, WEIGHT_RANGE } from '../lib/storage';
 import type { Projection, Settings, Stats } from '../types';
 import { Meter } from './Meter';
+import { useT } from '../lib/i18n';
 import ui from '../styles/ui.module.scss';
 import s from './GoalMeter.module.scss';
 
@@ -24,6 +26,7 @@ interface Props {
  * 「あと 3.2kg」を見る場所と、その 3.2kg を決め直す場所が離れたままになる。
  */
 export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const target = settings.targetWeight;
   const current = stats.currentWeight;
@@ -32,8 +35,8 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
     <div className={s.editor}>
       <div className={ui.formRow}>
         <label htmlFor="target-weight">
-          目標体重
-          <small>到達予測と進捗バーの基準になります</small>
+          {t('goal.targetWeight')}
+          <small>{t('goal.targetWeightHint')}</small>
         </label>
         <span className={ui.inputUnit}>
           <NumericInput
@@ -49,7 +52,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
       </div>
 
       <div className={ui.formRow}>
-        <label htmlFor="target-bf">目標体脂肪率</label>
+        <label htmlFor="target-bf">{t('goal.targetBodyFat')}</label>
         <span className={ui.inputUnit}>
           <NumericInput
             id="target-bf"
@@ -65,8 +68,8 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
 
       <div className={ui.formRow}>
         <label htmlFor="target-date">
-          目標日
-          <small>必要ペースを逆算します</small>
+          {t('goal.targetDate')}
+          <small>{t('goal.targetDateHint')}</small>
         </label>
         {/* 目標日は外せる（決めていない状態がある）ので、空を受ける */}
         <DateField
@@ -83,9 +86,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
         ここに欄を作らないのは、同じ値を直す場所を 2 つにしないため。
         入れていない人には、どこにあるかだけ書く。
       */}
-      {settings.heightCm == null && (
-        <p className={ui.note}>設定 &gt; 体組成 で身長を入れると、BMI が出ます。</p>
-      )}
+      {settings.heightCm == null && <p className={ui.note}>{t('goal.heightHint')}</p>}
     </div>
   );
 
@@ -94,9 +95,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
       <section className={ui.card}>
         {!editing && (
           <p className={ui.emptyState}>
-            {target == null
-              ? '目標体重を決めると、到達予測日と進捗バーが出ます。'
-              : '体重を記録すると、目標までの進捗が出ます。'}
+            {target == null ? t('goal.needTarget') : t('goal.needRecord')}
           </p>
         )}
 
@@ -108,7 +107,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
             expanded={editing}
             onClick={() => setEditing((v) => !v)}
           >
-            {editing ? '閉じる' : target == null ? '目標を決める' : '目標を変更'}
+            {editing ? t('common.close') : target == null ? t('goal.set') : t('goal.change')}
           </Button>
         </div>
       </section>
@@ -122,63 +121,64 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
   return (
     <section className={ui.card}>
       <div className={s.head}>
-        <span>目標まで あと {fmt(Math.max(0, remaining))} kg</span>
+        <span>{t('goal.remaining', { n: fmt(Math.max(0, remaining)) })}</span>
         <span className={s.pct}>{fmtPercent(progress)}</span>
       </div>
 
-      <Meter value={progress} label="目標体重までの進捗" size="card" tinted animated />
+      <Meter value={progress} label={t('goal.progressBar')} size="card" tinted animated />
 
       <div className={s.foot}>
-        <span>開始 {fmt(stats.startWeight)}kg</span>
-        <span>目標 {fmt(target)}kg</span>
+        <span>{t('goal.start', { n: fmt(stats.startWeight) })}</span>
+        <span>{t('goal.target', { n: fmt(target) })}</span>
       </div>
 
       <div className={s.eta}>
         <div className={s.etaRow}>
-          <span>現在のペース（直近28日）</span>
+          <span>{t('goal.pace')}</span>
           <span>
-            <b>{fmtDelta(pace, 2)}</b>
-            {' kg/週'}
+            <Strong text={t('goal.perWeek')} values={[fmtDelta(pace, 2)]} />
           </span>
         </div>
 
         <div className={s.etaRow}>
-          <span>このペースでの到達</span>
+          <span>{t('goal.eta')}</span>
           <span>
             {projection.etaDate && projection.etaDays != null ? (
               <>
-                <b>{formatYMD(projection.etaDate)}</b>
-                {`（${formatRelativeDays(projection.etaDays)}）`}
+                <b>{formatYMD(t, projection.etaDate)}</b>
+                {`（${formatRelativeDays(t, projection.etaDays)}）`}
               </>
             ) : (
-              <b>まだ予測できません</b>
+              <b>{t('goal.noEta')}</b>
             )}
           </span>
         </div>
 
         {settings.targetDate && projection.requiredPerWeek != null && (
           <div className={s.etaRow}>
-            <span>{formatYMD(settings.targetDate)}までに必要なペース</span>
+            <span>{t('goal.requiredPace', { date: formatYMD(t, settings.targetDate) })}</span>
             <span>
               <b>{fmtDelta(projection.requiredPerWeek, 2)}</b>
-              {' kg/週'}
+              {t('goal.perWeek')}
             </span>
           </div>
         )}
 
         {settings.targetBodyFat != null && stats.currentBodyFat != null && (
           <div className={s.etaRow}>
-            <span>体脂肪率</span>
+            <span>{t('common.bodyFat')}</span>
             <span>
-              {`${fmt(stats.currentBodyFat)}% → 目標 `}
-              <b>{fmt(settings.targetBodyFat)}%</b>
+              <Strong
+                text={t('goal.bodyFatProgress', { current: fmt(stats.currentBodyFat) })}
+                values={[`${fmt(settings.targetBodyFat)}%`]}
+              />
             </span>
           </div>
         )}
 
         {settings.heightCm != null && stats.bmi != null && (
           <div className={s.etaRow}>
-            <span>BMI（身長 {fmt(settings.heightCm, 0)}cm）</span>
+            <span>{t('goal.bmi', { height: fmt(settings.heightCm, 0) })}</span>
             <span>
               <b>{fmt(stats.bmi)}</b>
             </span>
@@ -187,7 +187,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
       </div>
 
       {settings.targetDate && diffDays(settings.targetDate, todayISO()) <= 0 && (
-        <p className={ui.note}>目標日を過ぎています。次の期限を決め直しましょう。</p>
+        <p className={ui.note}>{t('goal.datePassed')}</p>
       )}
 
       {editing && editor}
@@ -198,7 +198,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
           expanded={editing}
           onClick={() => setEditing((v) => !v)}
         >
-          {editing ? '閉じる' : '目標を変更'}
+          {editing ? t('common.close') : t('goal.change')}
         </Button>
       </div>
     </section>

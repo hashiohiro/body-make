@@ -1,4 +1,5 @@
 import { NumericInput } from '../NumericInput';
+import { Strong } from '../Strong';
 import { describeKey } from '../../lib/check';
 import { MINUTES_PER_SET_RANGE, SESSION_MINUTES_RANGE } from '../../lib/storage';
 import type { CheckSettings, Exercise } from '../../types';
@@ -7,6 +8,7 @@ import { Pill } from '../Pill';
 import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   checks: CheckSettings;
@@ -32,50 +34,49 @@ export function CheckSettingsForm({
   onUpdate,
   onUnsuppress,
 }: Props) {
+  const t = useT();
   return (
     <>
       <section className={ui.card}>
         <div className={ui.formRow}>
-          <label id="check-enabled">レビューを表示する</label>
+          <label id="check-enabled">{t('checks.show')}</label>
           <Pill
             pressed={checks.enabled}
-            label="レビューを表示する"
+            label={t('checks.show')}
             onClick={() => onUpdate({ enabled: !checks.enabled })}
           >
-            {checks.enabled ? 'オン' : 'オフ'}
+            {checks.enabled ? t('settings.on') : t('settings.off')}
           </Pill>
         </div>
         <p className={ui.note}>
-          オンにすると、記録画面にレビューが出ます。
-          <b>種目に「軸荷重種目」を入れていないと判定は当たりません</b>
-          （マイ種目 &gt; その種目 &gt; レビューの値）。
+          <Strong text={t('checks.showNote')} values={[t('checks.needAxial')]} />
           <br />
-          見るのは<b>記録した日付だけ</b>です。疲労の量は持ちません。
+          <Strong text={t('checks.datesOnlyNote')} values={[t('checks.datesOnly')]} />
         </p>
       </section>
 
       {checks.enabled && (
         <>
           <section className={ui.card}>
-            <CardHeader title="セッションの長さ" />
+            <CardHeader title={t('checks.sessionLength')} />
 
             <div className={s.checkFields}>
               <label className={s.newField}>
-                上限（分）
-                <small>空欄なら見ない</small>
+                {t('checks.limitMinutes')}
+                <small>{t('checks.limitHint')}</small>
                 <NumericInput
                   id="check-session-minutes"
                   value={checks.sessionMinutes}
                   min={SESSION_MINUTES_RANGE[0]}
                   max={SESSION_MINUTES_RANGE[1]}
                   step={5}
-                  placeholder="見ない"
+                  placeholder={t('checks.noLimit')}
                   onCommit={(v) => onUpdate({ sessionMinutes: v })}
                 />
               </label>
               <label className={s.newField}>
-                1セットあたり（分）
-                <small>種目ごとに上書きできます</small>
+                {t('exSettings.minutesPerSet')}
+                <small>{t('checks.perSetHint')}</small>
                 <NumericInput
                   id="check-minutes-per-set"
                   value={checks.minutesPerSet}
@@ -88,40 +89,38 @@ export function CheckSettingsForm({
             </div>
 
             {/* 80 文字以内。何をどう数えるか → だからこの出し方、だけを言う */}
-            <p className={ui.note}>
-              時間はセット数×1セットの時間で見積もります。休憩が大半を占めるので、回数は掛けません。
-            </p>
+            <p className={ui.note}>{t('checks.timeNote')}</p>
           </section>
 
           <section className={ui.card}>
-            <CardHeader title="許容済み" hint={<>{suppressed.length}件</>} />
+            <CardHeader
+              title={t('checks.suppressed')}
+              hint={<>{t('settings.count', { n: suppressed.length })}</>}
+            />
 
             {suppressed.length === 0 ? (
               <p className={ui.emptyState}>
-                まだありません。
+                {t('checks.noneYet')}
                 <br />
-                指摘の「許容する」を押すと、ここに溜まります。
+                {t('checks.noneYetHint')}
               </p>
             ) : (
               suppressed.map((key) => (
                 <div key={key} className={s.suppressRow}>
-                  <span className={s.suppressName}>{describeKey(key, exercises)}</span>
+                  <span className={s.suppressName}>{describeKey(t, key, exercises)}</span>
                   <Button
                     tone="ghost"
                     size="sub"
-                    label={`${describeKey(key, exercises)}の許容を取り消す`}
+                    label={t('checks.unsuppressOf', { name: describeKey(t, key, exercises) })}
                     onClick={() => onUnsuppress(key)}
                   >
-                    戻す
+                    {t('checks.undo')}
                   </Button>
                 </div>
               ))
             )}
 
-            <p className={ui.note}>
-              許容した指摘は出なくなります。意図して受け入れたものが毎回出続けると、
-              全体を読まなくなるためです。ここから戻せます。
-            </p>
+            <p className={ui.note}>{t('checks.suppressNote')}</p>
           </section>
         </>
       )}

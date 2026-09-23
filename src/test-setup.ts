@@ -21,3 +21,17 @@ import 'fake-indexeddb/auto';
 if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = function scrollIntoView() {};
 }
+
+/**
+ * 端末の言語を日本語に固定する。
+ *
+ * 既定の表示言語は「端末に合わせる」（`Settings.locale` の `system`）で、
+ * jsdom の `navigator.language` は英語。**そのままだと画面が英語で描かれ**、
+ * 日本語で書いてある既存のテストが全部落ちる。
+ *
+ * ここで固定するのは「テストは日本語の端末で走る」という前提を 1 か所に置くため。
+ * 英語で出ることを確かめたいテストは、その場で言語を名指しする。
+ */
+if (typeof navigator !== 'undefined') {
+  Object.defineProperty(navigator, 'language', { value: 'ja-JP', configurable: true });
+}

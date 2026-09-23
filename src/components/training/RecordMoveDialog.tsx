@@ -4,9 +4,10 @@ import { ChipGroup } from '../ChipGroup';
 import { Modal } from '../Modal';
 import {
   CATALOG_CHOICES,
-  GROUP_LABELS,
-  LOAD_MODE_LABELS,
+  GROUP_KEYS,
+  LOAD_MODE_KEYS,
   catalogId,
+  exerciseName,
   fromCatalog,
   isListed,
 } from '../../lib/exerciseCatalog';
@@ -26,13 +27,15 @@ import { Tag } from '../Tag';
 import { Pill } from '../Pill';
 import s from './training.module.scss';
 import { useWeightFormat } from '../../hooks/useWeightUnit';
+import { useT } from '../../lib/i18n';
+import type { MessageKey } from '../../lib/i18n';
 
 /** 期間の切り方。既定は全期間（取り違えは最初からのことが多い） */
 const RANGES = [
-  { id: 'all', label: 'すべて' },
-  { id: 'since', label: 'この日以降' },
-  { id: 'between', label: '期間を指定' },
-] as const;
+  { id: 'all', key: 'catalog.all' },
+  { id: 'since', key: 'move.fromDay' },
+  { id: 'between', key: 'move.range' },
+] as const satisfies readonly { id: string; key: MessageKey }[];
 
 type RangeId = (typeof RANGES)[number]['id'];
 
@@ -48,9 +51,9 @@ type RangeId = (typeof RANGES)[number]['id'];
  * 「カタログ」と書くと自作種目がどちらに入るのか読めなくなる。
  */
 const SOURCES = [
-  { id: 'mine', label: 'マイ種目' },
-  { id: 'all', label: 'すべて' },
-] as const;
+  { id: 'mine', key: 'settings.exercises' },
+  { id: 'all', key: 'catalog.all' },
+] as const satisfies readonly { id: string; key: MessageKey }[];
 
 type SourceId = (typeof SOURCES)[number]['id'];
 
@@ -101,6 +104,7 @@ function onlyOf(workouts: Workouts, exerciseId: string, dates: readonly string[]
  * マイ種目にも追加される（記録の行き先になる種目は、実体が要る）。
  */
 export function RecordMoveDialog({ body, from, onClose }: Props) {
+  const t = useT();
   // 挙上量は kg で積んである。出す直前に読む単位へ直す
   const { label: unitLabel, conv } = useWeightFormat();
   const { data, daily, moveRecords } = body;
@@ -132,7 +136,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
         const made = held ?? fromCatalog(c.entry, data.exercises.length + i, c.implement);
         out.push({
           id,
-          name: made.name,
+          name: exerciseName(t, made),
           group: made.group,
           loadMode: made.loadMode,
           mine: held != null,
@@ -152,7 +156,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
       seen.add(e.id);
       out.push({
         id: e.id,
-        name: e.name,
+        name: exerciseName(t, e),
         group: e.group,
         loadMode: e.loadMode,
         mine: true,
@@ -219,7 +223,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
     <Pill
       key={c.id}
       pressed={chosen || toId === c.id}
-      label={`${c.name}へ移行する`}
+      label={t('move.toOf', { name: c.name })}
       onClick={() => setToId(chosen ? null : c.id)}
     >
       {chosen && '✓ '}
@@ -227,14 +231,14 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
       {/* 打った語で当たったなら、その語を添える（カタログと同じ） */}
       {alias != null && <Tag>{alias}</Tag>}
       {/* 探した結果では束ねる見出しが無いので、部位も行に添える（カタログと同じ） */}
-      {searching && !chosen && <Tag>{GROUP_LABELS[c.group]}</Tag>}
+      {searching && !chosen && <Tag>{t(GROUP_KEYS[c.group])}</Tag>}
       {/*
         数え方が違う候補には印を付ける。**選ぶのを止めはしない**——
         器具が違えば数え方も違うのが普通で、それを直すのが移行の目的。
         変わる量は下に数字で出す。
       */}
-      {c.loadMode !== from.loadMode && <Tag>{LOAD_MODE_LABELS[c.loadMode]}</Tag>}
-      {!c.mine && <Tag kind="state">未追加</Tag>}
+      {c.loadMode !== from.loadMode && <Tag>{t(LOAD_MODE_KEYS[c.loadMode])}</Tag>}
+      {!c.mine && <Tag kind="state">{t('exercise.notAdded')}</Tag>}
     </Pill>
   );
 
@@ -253,12 +257,15 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
 
   if (asking && target) {
     return (
-      <Modal open title="移行先に記録がある日" onClose={onClose} onBack={() => setAsking(false)}>
+      <Modal open title={t('move.conflictDays')} onClose={onClose} onBack={() => setAsking(false)}>
         <ChoicePanel
           lead={
             <>
-              「{target.name}」にすでに記録がある日が {plan.conflicts.length}日ぶんあります（
-              {plan.conflicts.map(formatMD).join('・')}）。
+              {t('move.conflictDetail', {
+                name: target.name,
+                n: plan.conflicts.length,
+                dates: plan.conflicts.map(formatMD).join(t('common.listSep')),
+              })}
             </>
           }
           /*
@@ -266,13 +273,15 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
               混ぜると、順番も本数もどちらの日のものか分からなくなる。
             */
           choices={[
-            { label: '上書きする', tone: 'danger', onSelect: () => run('overwrite') },
-            { label: 'その日は移さない', onSelect: () => run('keep') },
+            { label: t('move.overwrite'), tone: 'danger', onSelect: () => run('overwrite') },
+            { label: t('move.skip'), onSelect: () => run('keep') },
           ]}
           note={
             <>
-              上書きすると「{target.name}」のその日の記録は消えます（元に戻せません）。
-              移さない場合、その日は「{from.name}」に残ります。
+              {t('move.overwriteNote', {
+                target: exerciseName(t, target),
+                from: exerciseName(t, from),
+              })}
             </>
           }
           onCancel={onClose}
@@ -284,7 +293,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
   const moving = plan.dates.length + plan.conflicts.length;
 
   return (
-    <Modal open title={`${from.name}の記録を移行する`} onClose={onClose}>
+    <Modal open title={t('move.title', { name: exerciseName(t, from) })} onClose={onClose}>
       <div>
         {/*
           選んだら候補を畳む。**選び終われば読むものではなく**、
@@ -294,7 +303,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
         {picked ? (
           <>
             <div className={s.catalogHead}>
-              <span className={s.pickerLabel}>移行先</span>
+              <span className={s.pickerLabel}>{t('move.target')}</span>
             </div>
             <div className={s.pickerList}>{pill(picked, true)}</div>
           </>
@@ -308,10 +317,10 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
             */}
             <div className={s.filters}>
               <ChipGroup
-                options={SOURCES}
+                options={SOURCES.map((o) => ({ id: o.id, label: t(o.key) }))}
                 value={source}
                 onChange={setSource}
-                label="候補"
+                label={t('move.pickLabel')}
                 showLabel
                 tight
               />
@@ -320,31 +329,33 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
             {/* 選ぶ面はどこも同じ組み（検索・部位チップ・部位ごとの見出し） */}
             <ExercisePickList
               items={candidates}
-              heading="移行先"
+              heading={t('move.target')}
               renderItem={(c, searching, alias) => pill(c, false, searching, alias)}
             />
           </>
         )}
 
         {picked && !picked.mine && (
-          <p className={ui.note}>
-            「{picked.name}」はマイ種目にありません。移すとマイ種目にも追加されます
-            （記録の行き先になる種目は実体が要ります）。
-          </p>
+          <p className={ui.note}>{t('move.willAdd', { name: picked.name })}</p>
         )}
 
-        <div className={s.pickerLabel}>期間</div>
-        <ChipGroup options={RANGES} value={rangeId} onChange={setRangeId} label="移す期間" />
+        <div className={s.pickerLabel}>{t('table.period')}</div>
+        <ChipGroup
+          options={RANGES.map((o) => ({ id: o.id, label: t(o.key) }))}
+          value={rangeId}
+          onChange={setRangeId}
+          label={t('move.period')}
+        />
 
         {rangeId !== 'all' && (
           <div className={ui.formRow}>
-            <label htmlFor="move-since">開始日</label>
+            <label htmlFor="move-since">{t('move.from')}</label>
             <DateField id="move-since" value={since} onChange={setSince} />
           </div>
         )}
         {rangeId === 'between' && (
           <div className={ui.formRow}>
-            <label htmlFor="move-until">終了日</label>
+            <label htmlFor="move-until">{t('move.to')}</label>
             <DateField id="move-until" value={until} onChange={setUntil} />
           </div>
         )}
@@ -357,7 +368,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
         {target && (
           <div className={s.presetBody}>
             <div className={s.groupSummary}>
-              <span>移行する記録</span>
+              <span>{t('move.records')}</span>
               <span className={s.boardValue}>
                 {moving}日ぶん
                 {moving > 0 &&
@@ -368,7 +379,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
             </div>
             {totals && (
               <div className={s.groupSummary}>
-                <span>挙上量の通算</span>
+                <span>{t('move.totalVolume')}</span>
                 <span className={s.boardValue}>
                   {fmtVolume(conv(totals.before))} {unitLabel} → {fmtVolume(conv(totals.after))}{' '}
                   {unitLabel}
@@ -377,20 +388,19 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
             )}
             {totals && Math.round(totals.before) !== Math.round(totals.after) && (
               <p className={ui.note}>
-                打った重量は変わりません。数え方が違うので、挙上量と推定1RM が移行先の性質で
-                計算し直されます（{LOAD_MODE_LABELS[from.loadMode]} →{' '}
-                {LOAD_MODE_LABELS[target.loadMode]}）。
+                {t('move.recalcNote', {
+                  from: t(LOAD_MODE_KEYS[from.loadMode]),
+                  to: t(LOAD_MODE_KEYS[target.loadMode]),
+                })}
               </p>
             )}
             {plan.conflicts.length > 0 && (
-              <p className={ui.note}>
-                移行先に記録がある日が {plan.conflicts.length}日あります。扱いは次の面で選びます。
-              </p>
+              <p className={ui.note}>{t('move.conflictNote', { n: plan.conflicts.length })}</p>
             )}
           </div>
         )}
 
-        {needsDate && <p className={ui.note}>移行する期間の日付を入れてください。</p>}
+        {needsDate && <p className={ui.note}>{t('move.needDates')}</p>}
 
         <div className={ui.btnRow}>
           <Button
@@ -398,7 +408,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
             disabled={target == null || needsDate || moving === 0}
             onClick={submit}
           >
-            移行
+            {t('move.do')}
           </Button>
         </div>
       </div>

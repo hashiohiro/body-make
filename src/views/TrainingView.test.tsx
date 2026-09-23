@@ -19,18 +19,23 @@ import { EnergyBalanceChart } from '../components/charts/EnergyBalanceChart';
 import { WeeklyCompositionChart } from '../components/charts/WeeklyCompositionChart';
 import { GoalsView } from './GoalsView';
 import { RecordsView } from './RecordsView';
+import { ja } from '../lib/i18n/ja';
+import { makeT } from '../lib/i18n';
+
+/** テストは日本語で読む（`src/test-setup.ts` と同じ前提） */
+const jaT = makeT('ja');
 import {
   SETTINGS_SECTIONS,
   SettingsView,
   TRAINING_PAGES,
-  settingsSectionTitle,
-  settingsTitle,
+  settingsSectionKey,
+  settingsTitleKey,
 } from './SettingsView';
 import { HomeView } from './HomeView';
 import { TrainingView } from './TrainingView';
 import { useBodyData } from '../hooks/useBodyData';
 import { useTheme } from '../hooks/useTheme';
-import { formatMD, startOfWeek, todayISO, weekdayJa } from '../lib/date';
+import { formatMD, startOfWeek, todayISO, weekdayLabel } from '../lib/date';
 import { CATALOG, fromCatalog } from '../lib/exerciseCatalog';
 import type { AppData, Domain, Exercise, ThemePref, WeekPoint } from '../types';
 import type { EnergyPoint } from '../lib/energy';
@@ -288,7 +293,7 @@ describe('トレ画面', () => {
 
     // 「設定から追加してください」だけを出す行き止まりにしない
     expect(screen.getByText(/マイ種目がまだ空です/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '＋ カタログから選ぶ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'カタログから選ぶ' }));
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
     fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     // その日に入ったので、カタログの一覧からは消える
@@ -315,7 +320,7 @@ describe('トレ画面', () => {
     expect(rows).toHaveLength(1);
 
     typeSet(rows[0]!, '60', '10');
-    fireEvent.click(screen.getByText('＋ セットを追加'));
+    fireEvent.click(screen.getByText('セットを追加'));
 
     // 直前のセットが複製されるので、入力は差分だけで済む
     rows = setRows();
@@ -443,7 +448,7 @@ describe('トレ画面', () => {
     const dialog = () => document.querySelector('dialog[open]') as HTMLElement;
     expect(dialog().className).toMatch(/tall/);
 
-    fireEvent.click(screen.getByText('＋ セットを追加'));
+    fireEvent.click(screen.getByText('セットを追加'));
     expect(dialog().className).toMatch(/tall/);
 
     fireEvent.click(
@@ -463,7 +468,7 @@ describe('トレ画面', () => {
     expand('スクワット');
 
     typeSet(setRows()[0]!, '60', '5');
-    fireEvent.click(screen.getByText('＋ セットを追加'));
+    fireEvent.click(screen.getByText('セットを追加'));
     typeSet(setRows()[1]!, '100', '5');
 
     // 60×5 + 100×5 = 800 kg。軽い側を勝手に外したりしない
@@ -489,7 +494,7 @@ describe('トレ画面', () => {
     expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(1);
 
     // そのまま打ち直せる
-    fireEvent.click(screen.getByText('＋ セットを追加'));
+    fireEvent.click(screen.getByText('セットを追加'));
     expect(setRows().length).toBe(1);
   });
 
@@ -592,7 +597,7 @@ describe('トレ画面', () => {
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     expand('ベンチプレス');
 
-    fireEvent.click(screen.getByText('＋ セットを追加'));
+    fireEvent.click(screen.getByText('セットを追加'));
     expect(setRows().length).toBe(2);
 
     // 空欄は「まだ打っていない」であって「消してよい」ではない
@@ -746,7 +751,7 @@ describe('トレ画面', () => {
     expect(screen.queryByLabelText('1セット目の重量')).toBeNull();
 
     // ベルトで足す人のために、その種目のカードから開ける
-    fireEvent.click(screen.getByRole('button', { name: '＋ 加重' }));
+    fireEvent.click(screen.getByRole('button', { name: '加重' }));
     // 自重種目の欄は「追加重量」。足される側があることを読み上げにも出す
     expect(screen.getByLabelText(/1セット目の追加重量/)).toBeTruthy();
   });
@@ -778,7 +783,7 @@ describe('トレ画面', () => {
     expect(screen.queryByLabelText('1セット目の重量')).toBeNull();
 
     // プレートを持って行う人はいるので、開く手段は残す
-    fireEvent.click(screen.getByRole('button', { name: '＋ 加重' }));
+    fireEvent.click(screen.getByRole('button', { name: '加重' }));
     expect(screen.getByLabelText(/1セット目の重量/)).toBeTruthy();
   });
 
@@ -867,7 +872,7 @@ describe('種目管理（設定タブ）', () => {
    */
   it('開いている種目を複製して、別の種目として作れる', async () => {
     render(<ManagerHarness />);
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     fireEvent.click(screen.getByText('＋ 懸垂'));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
@@ -916,7 +921,7 @@ describe('種目管理（設定タブ）', () => {
    */
   it('複製した種目も、記録が無ければ確認せずに消える', async () => {
     render(<ManagerHarness />);
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     fireEvent.click(screen.getByText('＋ 懸垂'));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     fireEvent.click(screen.getByRole('button', { name: '懸垂の設定' }));
@@ -935,7 +940,7 @@ describe('種目管理（設定タブ）', () => {
   /* 深い面なので「‹ 戻る」で元の設定に戻る（閉じるとダイアログごと消える） */
   it('複製はやめて元の設定に戻れる', async () => {
     render(<ManagerHarness />);
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     fireEvent.click(screen.getByText('＋ 懸垂'));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
@@ -951,9 +956,9 @@ describe('種目管理（設定タブ）', () => {
   it('初期状態は空で、追加したぶんだけ増える', () => {
     render(<ManagerHarness />);
     expect(managerRows()).toHaveLength(0);
-    expect(screen.getByText(/マイ種目はまだ空です/)).toBeTruthy();
+    expect(screen.getByText(/マイ種目がまだ空です/)).toBeTruthy();
 
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     // 器具を選べる種目は、バーベル版とダンベル版が別の行として並ぶ
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
     expect(managerRows()).toHaveLength(1);
@@ -1017,7 +1022,7 @@ describe('種目管理（設定タブ）', () => {
 
   it('カタログを器具と部位の2軸で絞り込める', () => {
     render(<ManagerHarness />);
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     expect(screen.getByText(/^＋ スクワット/)).toBeTruthy();
 
     // 器具と部位のチップは出しっぱなし。開く操作はいらない
@@ -1046,7 +1051,7 @@ describe('種目管理（設定タブ）', () => {
 
   it('計算方法は設定のさらに内側に畳む', () => {
     render(<ManagerHarness />);
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
     fireEvent.click(screen.getByText('閉じる'));
     // 目標が抜けたので、「設定」は詳細をそのまま開く
@@ -1063,7 +1068,7 @@ describe('種目管理（設定タブ）', () => {
 
   it('主部位を補助部位と同じ部位に変えたら、補助から落とす', () => {
     render(<ManagerHarness />);
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
     fireEvent.click(screen.getByText('閉じる'));
 
@@ -1081,7 +1086,7 @@ describe('種目管理（設定タブ）', () => {
 
   it('一覧は部位ごとに並べ、上下の並び替えは持たない', () => {
     render(<ManagerHarness />);
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
     fireEvent.click(screen.getByText(/^＋ スクワット/));
     fireEvent.click(screen.getByText('閉じる'));
@@ -1098,7 +1103,7 @@ describe('種目管理（設定タブ）', () => {
 
   it('記録の無い種目は確認せずに削除する', () => {
     render(<ManagerHarness />);
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
     fireEvent.click(screen.getByText(/^＋ スクワット/));
     expect(managerRows()).toHaveLength(2);
@@ -1160,7 +1165,7 @@ describe('設定（カテゴリ別の画面遷移）', () => {
 
     // 一覧の時点では中身のフォームは出ていない
     expect(screen.queryByLabelText('テーマ')).toBeNull();
-    SETTINGS_SECTIONS.forEach((sec) => expect(screen.getByText(sec.label)).toBeTruthy());
+    SETTINGS_SECTIONS.forEach((sec) => expect(screen.getByText(ja[sec.key])).toBeTruthy());
 
     fireEvent.click(screen.getByText('一般'));
     expect(screen.getByLabelText('テーマ')).toBeTruthy();
@@ -1191,17 +1196,17 @@ describe('設定（カテゴリ別の画面遷移）', () => {
     // プリセットと週メニューはまだ 0 件（レビューは 0 なら何も出さない）
     expect(screen.getAllByText('0件')).toHaveLength(2);
     // 一覧の時点では中身は出ていない
-    expect(screen.queryByText('＋ マイ種目に追加')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'マイ種目に追加' })).toBeNull();
 
     fireEvent.click(screen.getByText('マイ種目'));
-    expect(screen.getByText('＋ マイ種目に追加')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'マイ種目に追加' })).toBeTruthy();
   });
 
   it('マイ種目は種目の追加と詳細設定を扱う（目標はここに置かない）', () => {
     seedExercises('ex_bench');
     render(<SettingsHarness section="training" page="exercises" />);
 
-    expect(screen.getByText('＋ マイ種目に追加')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'マイ種目に追加' })).toBeTruthy();
     expect(screen.queryByLabelText(/ベンチプレス.*の目標の種類/)).toBeNull();
 
     // 行の「設定」は詳細設定を直接開く（目標の 1 段下に埋もれていない）
@@ -1269,20 +1274,21 @@ describe('設定（カテゴリ別の画面遷移）', () => {
   });
 
   it('遷移先のタイトルは URL のセクション名から引ける', () => {
-    expect(settingsSectionTitle('general')).toBe('一般');
-    expect(settingsSectionTitle('training')).toBe('トレーニング');
-    expect(settingsSectionTitle('unknown')).toBeNull();
+    // **返すのはキー。**ここは画面ではないので、文言を引くのは呼び出し側（`App`）
+    expect(settingsSectionKey('general')).toBe('settings.general');
+    expect(settingsSectionKey('training')).toBe('nav.training');
+    expect(settingsSectionKey('unknown')).toBeNull();
     // 体組成のカテゴリは腹囲だけ。目標体重と身長は目標タブのまま
-    expect(settingsSectionTitle('body')).toBe('体組成');
+    expect(settingsSectionKey('body')).toBe('nav.body');
 
     // セクションの中の画面まで含めた見出し（`#settings/training/presets`）
-    expect(settingsTitle('training', 'presets')).toBe('プリセット');
-    expect(settingsTitle('training', 'exercises')).toBe('マイ種目');
+    expect(settingsTitleKey('training', 'presets')).toBe('settings.presets');
+    expect(settingsTitleKey('training', 'exercises')).toBe('settings.exercises');
     // 知らない画面はセクションの見出しに落とす（URL を直接開かれても壊れない）
-    expect(settingsTitle('training', 'unknown')).toBe('トレーニング');
-    expect(settingsTitle('training', null)).toBe('トレーニング');
-    expect(settingsTitle('general', 'presets')).toBe('一般');
-    expect(settingsTitle(null, null)).toBeNull();
+    expect(settingsTitleKey('training', 'unknown')).toBe('nav.training');
+    expect(settingsTitleKey('training', null)).toBe('nav.training');
+    expect(settingsTitleKey('general', 'presets')).toBe('settings.general');
+    expect(settingsTitleKey(null, null)).toBeNull();
   });
 });
 
@@ -1695,6 +1701,7 @@ describe('推移の横軸目盛り', () => {
     targetBodyFat: null,
     targetDate: null,
     theme: 'system' as const,
+    locale: 'system' as const,
     waistEnabled: true,
     inputWeightUnit: 'kg' as const,
     displayWeightUnit: 'kg' as const,
@@ -2089,7 +2096,7 @@ describe('記録が消えることの案内', () => {
     seedDays(40);
     render(<HomeHarness />);
     expect(backupNotice()).toBeTruthy();
-    expect(screen.getByText(/まだ一度も書き出していません/)).toBeTruthy();
+    expect(screen.getByText(/この端末のブラウザにだけあります/)).toBeTruthy();
   });
 
   /*
@@ -2109,7 +2116,7 @@ describe('記録が消えることの案内', () => {
     render(<HomeHarness />);
     expect(backupNotice()).toBeTruthy();
     // 失う量そのものを言う（通算ではなく、書き出してから増えたぶん）
-    expect(screen.getByText(/40日ぶん記録しています/)).toBeTruthy();
+    expect(screen.getByText(/40日ぶん/)).toBeTruthy();
   });
 
   it('閉じたら 30 日は出ない', () => {
@@ -2339,7 +2346,7 @@ describe('種目の目標', () => {
       [],
     );
 
-    const [goal] = exerciseGoals(sessions, [bench]);
+    const [goal] = exerciseGoals(jaT, sessions, [bench]);
     // 推定1RM は 80 × (1 + 5/40) = 90 だが、判定に使うのは実際に挙げた 80kg
     expect(goal!.current).toBe(80);
     expect(goal!.baseline).toBe(60);
@@ -2368,7 +2375,7 @@ describe('種目の目標', () => {
       [],
     );
 
-    const [goal] = exerciseGoals(sessions, [bench]);
+    const [goal] = exerciseGoals(jaT, sessions, [bench]);
     expect(goal!.reached).toBe(true);
     expect(goal!.progress).toBe(1);
   });
@@ -2387,7 +2394,7 @@ describe('種目の目標', () => {
       [],
     );
 
-    const [goal] = exerciseGoals(sessions, [bench]);
+    const [goal] = exerciseGoals(jaT, sessions, [bench]);
     // 開始値はまだ出せない（3 セッション必要）が、到達したという事実は出せる
     expect(goal!.baseline).toBeNull();
     expect(goal!.reached).toBe(true);
@@ -2400,7 +2407,7 @@ describe('種目の目標', () => {
       CATALOG.find((c) => c.id === 'ex_bench')!,
       0,
     );
-    expect(exerciseGoals([], [bench])).toEqual([]);
+    expect(exerciseGoals(jaT, [], [bench])).toEqual([]);
   });
 });
 
@@ -2431,7 +2438,7 @@ describe('目標の種類', () => {
       [],
     );
 
-    const [goal] = exerciseGoals(sessions, [pullup]);
+    const [goal] = exerciseGoals(jaT, sessions, [pullup]);
     expect(goal!.type).toBe('reps');
     expect(goal!.unit).toBe('回');
     expect(goal!.current).toBe(7); // セット内の最大レップ
@@ -2484,7 +2491,7 @@ describe('重量の数え方', () => {
       [],
     );
 
-    const [goal] = exerciseGoals(sessions, [plank]);
+    const [goal] = exerciseGoals(jaT, sessions, [plank]);
     expect(goal!.unit).toBe('秒');
     expect(goal!.current).toBe(75);
     expect(goal!.progress).toBeCloseTo((75 - 30) / (120 - 30), 6);
@@ -2513,7 +2520,7 @@ describe('目標と負荷の数え方', () => {
       [],
     );
 
-    const [goal] = exerciseGoals(sessions, [curl]);
+    const [goal] = exerciseGoals(jaT, sessions, [curl]);
     // 打った数字は 25。有効重量の 50 と比べない
     expect(goal!.current).toBe(25);
     expect(goal!.baseline).toBe(20);
@@ -3861,7 +3868,7 @@ describe('目標画面', () => {
     // 目標はカードから直接足す。部位を開く必要はない（部位は量の話）
     expect(screen.getByText(/まだ目標がありません/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '種目の目標を追加' }));
     fireEvent.click(screen.getByRole('button', { name: /^ベンチプレス/ }));
     fireEvent.change(goalField(/ベンチプレス.*の目標$/), { target: { value: '100' } });
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
@@ -3930,7 +3937,7 @@ describe('目標画面', () => {
       [/^ベンチプレス/, /^ベンチプレス.*の目標$/],
       [/^カール/, /^カール.*の目標$/],
     ] as const) {
-      fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
+      fireEvent.click(screen.getByRole('button', { name: '種目の目標を追加' }));
       fireEvent.click(screen.getByRole('button', { name }));
       fireEvent.change(goalField(label), { target: { value: '100' } });
       fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
@@ -3997,7 +4004,7 @@ describe('目標画面', () => {
     expect(bar.getAttribute('aria-valuenow')).toBe(`${Math.round((2 / 12) * 100)}`);
 
     // 種目の目標は、部位を開かずにカードから足せる
-    fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '種目の目標を追加' }));
     fireEvent.click(screen.getByRole('button', { name: /^ベンチプレス/ }));
     fireEvent.change(goalField(/ベンチプレス.*の目標$/), { target: { value: '100' } });
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
@@ -4186,7 +4193,7 @@ describe('プリセット（種目の組み合わせ）', () => {
 
     // 消えるのは前の中身なので、先に伝える。やめたら何も変わらない
     expect(
-      topDialog().getByRole('heading', { name: '同じ名前のプリセットがあります' }),
+      topDialog().getByRole('heading', { name: '同じ名前のプリセットがあります。' }),
     ).toBeTruthy();
     decline();
     let stored = await storedData();
@@ -4407,7 +4414,7 @@ describe('レビュー（記録画面）', () => {
       '金',
       '土',
     ]);
-    expect(screen.getByTitle(new RegExp(`脚 ${weekdayJa(today)} 12セット`))).toBeTruthy();
+    expect(screen.getByTitle(new RegExp(`脚 ${weekdayLabel(jaT, today)} 12セット`))).toBeTruthy();
   });
 
   it('種目を置くと、今日の負荷・前日までの疲れ・見積もり時間が出る', () => {
@@ -4532,8 +4539,8 @@ describe('プリセット（設定から見る・編集する）', () => {
     render(<PresetHarness />);
     expect(screen.getByText(/まだプリセットがありません/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
-    fireEvent.change(screen.getByLabelText('新しいプリセットの名前'), {
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットを作る' }));
+    fireEvent.change(screen.getByLabelText('プリセットの名前'), {
       target: { value: '押す日' },
     });
 
@@ -4563,9 +4570,9 @@ describe('プリセット（設定から見る・編集する）', () => {
     });
     render(<PresetHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットを作る' }));
     fireEvent.click(screen.getByText('＋ スクワット'));
-    const field = screen.getByLabelText('新しいプリセットの名前');
+    const field = screen.getByLabelText('プリセットの名前');
 
     // 直したい相手が一覧に見えているので、上書きではなく決定させない
     fireEvent.change(field, { target: { value: '押す日' } });
@@ -4585,7 +4592,7 @@ describe('プリセット（設定から見る・編集する）', () => {
     seedPresets();
     render(<PresetHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットを作る' }));
     const dialog = () => within(document.querySelector('dialog')!);
 
     // 入っている種目も ✓ で残す。消すと後ろが詰まって、押す場所が動く
@@ -4612,15 +4619,15 @@ describe('プリセット（設定から見る・編集する）', () => {
     seedPresets();
     render(<PresetHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
-    fireEvent.change(screen.getByLabelText('新しいプリセットの名前'), {
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットを作る' }));
+    fireEvent.change(screen.getByLabelText('プリセットの名前'), {
       target: { value: '押す日' },
     });
 
     // マイ種目に無い種目を入れたくなったとき、ここで行き止まらせない
     // （作りかけは画面を離れると消えるので、マイ種目の画面へ往復させられない）
     expect(screen.queryByText('＋ ディップス')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '＋ カタログから足す' }));
+    fireEvent.click(screen.getByRole('button', { name: 'カタログから選ぶ' }));
 
     /*
      * **カタログから選んだ種目は、マイ種目とこの組み合わせの両方に入る。**
@@ -4642,14 +4649,14 @@ describe('プリセット（設定から見る・編集する）', () => {
   it('マイ種目が空でも、カタログからプリセットを作れる', async () => {
     render(<PresetHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットを作る' }));
     expect(screen.getByText(/マイ種目がまだ空です/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ カタログから足す' }));
+    fireEvent.click(screen.getByRole('button', { name: 'カタログから選ぶ' }));
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
     fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
 
-    fireEvent.change(screen.getByLabelText('新しいプリセットの名前'), {
+    fireEvent.change(screen.getByLabelText('プリセットの名前'), {
       target: { value: '押す日' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'このプリセットを作る' }));
@@ -4663,15 +4670,15 @@ describe('プリセット（設定から見る・編集する）', () => {
   it('プリセットを作りながら、カタログにない種目も作れる', async () => {
     render(<PresetHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
-    fireEvent.click(screen.getByRole('button', { name: '＋ カタログから足す' }));
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットを作る' }));
+    fireEvent.click(screen.getByRole('button', { name: 'カタログから選ぶ' }));
 
     expect(screen.getByText('カタログにない種目を作る')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('名前'), { target: { value: '謎のマシン' } });
     fireEvent.click(screen.getByRole('button', { name: '追加' }));
     fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
 
-    fireEvent.change(screen.getByLabelText('新しいプリセットの名前'), {
+    fireEvent.change(screen.getByLabelText('プリセットの名前'), {
       target: { value: '押す日' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'このプリセットを作る' }));
@@ -4685,8 +4692,8 @@ describe('プリセット（設定から見る・編集する）', () => {
     seedPresets();
     render(<PresetHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
-    fireEvent.change(screen.getByLabelText('新しいプリセットの名前'), {
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットを作る' }));
+    fireEvent.change(screen.getByLabelText('プリセットの名前'), {
       target: { value: '押す日' },
     });
     fireEvent.click(screen.getByText('＋ ベンチプレス（バーベル）'));
@@ -5080,7 +5087,7 @@ describe('モーダル', () => {
     render(<Harness />);
     openPicker();
     // 種目が無いときのカタログは、開いているときだけ置く形
-    fireEvent.click(screen.getByRole('button', { name: '＋ カタログから選ぶ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'カタログから選ぶ' }));
     expect(document.body.style.position).toBe('fixed');
 
     cleanup();
@@ -5096,7 +5103,7 @@ describe('種目の目標を決める', () => {
 
   /** 種目の目標のカードから、種目を選んで目標を決める */
   function openEditor(exercise: RegExp = /^ベンチプレス/) {
-    fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '種目の目標を追加' }));
     fireEvent.click(screen.getByRole('button', { name: exercise }));
   }
 
@@ -5149,7 +5156,7 @@ describe('種目の目標を決める', () => {
     // 挙上量に切り替えると、また数値を決める形に戻る
     fireEvent.click(types.getByRole('button', { name: '挙上量' }));
     expect(goalField(/ベンチプレス.*の目標$/).closest('[aria-hidden="true"]')).toBeNull();
-    expect(screen.getByText(/総挙上量（有効重量 × レップ数の合計）/)).toBeTruthy();
+    expect(screen.getByText(/総挙上量（有効重量 × レップ数）/)).toBeTruthy();
   });
 
   it('秒で数える種目には、重量の目標を出さない', () => {
@@ -5250,7 +5257,7 @@ describe('種目の表示 / 非表示', () => {
     expect(screen.getByLabelText('スクワットを表示に戻す')).toBeTruthy();
 
     // カタログには印つきで出る。押せば表示に戻る
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
     expect(dialog.getByText('＋ スクワット').textContent).toContain('非表示');
     // 実体がまだ無い種目には印が付かない（初めて入れる）
@@ -5282,7 +5289,7 @@ describe('種目の表示 / 非表示', () => {
     });
     render(<ManagerHarness />);
 
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
     expect(dialog.getByText('＋ スクワット').textContent).toContain('記録あり');
     // 伏せたわけではないので、そちらの印は出さない
@@ -5376,7 +5383,7 @@ describe('種目の表示 / 非表示', () => {
     seedHidden(['ex_lat_pulldown'], 'ex_lat_pulldown');
     render(<ManagerHarness usage={new Map([['ex_lat_pulldown', 5]])} />);
 
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     fireEvent.click(screen.getByText('＋ ラットプルダウン'));
 
     // 二重にならず、非表示の欄からも出る
@@ -5398,7 +5405,7 @@ describe('種目の表示 / 非表示', () => {
     seedHidden(['ex_squat'], 'ex_lat_pulldown', 'ex_squat');
     render(<PresetHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットを作る' }));
     expect(screen.getByText('＋ ラットプルダウン')).toBeTruthy();
     expect(screen.queryByText('＋ スクワット')).toBeNull();
   });
@@ -5483,7 +5490,7 @@ describe('有酸素', () => {
     // カードと、打っている面の両方に出る
     expect(screen.getAllByText(/2\s*本/)).toHaveLength(2);
     expect(screen.queryByText(/2\s*セット/)).toBeNull();
-    expect(screen.getByRole('button', { name: '＋ 本を追加' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '本を追加' })).toBeTruthy();
   });
 
   it('秒を分に直しても長い小数にならない（打ち直しても同じ秒に戻る）', () => {
@@ -5508,7 +5515,7 @@ describe('有酸素', () => {
     // 残るのは入力欄 2 つだけ。足す・消す・何本目か はどれも要らない
     expect(screen.getByLabelText('1セット目の時間')).toBeTruthy();
     expect(screen.getByLabelText('1セット目の距離')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: '＋ 本を追加' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '本を追加' })).toBeNull();
     expect(screen.queryByRole('button', { name: '1セット目を削除' })).toBeNull();
     expect(screen.queryByText(/1\s*本/)).toBeNull();
     expect(screen.getAllByText(/5200\s*m/)).toHaveLength(2);
@@ -5594,7 +5601,7 @@ describe('有酸素', () => {
     render(<GoalsHarness />);
 
     // 目標は種目のカードから。部位（量）の面は通らない
-    fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '種目の目標を追加' }));
     fireEvent.click(screen.getByText('ランニング'));
 
     const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
@@ -6204,7 +6211,7 @@ describe('種目の絞り込み（部位）', () => {
     seedMany();
     render(<PresetHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ プリセットを作る' }));
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットを作る' }));
     const dialog = () => within(document.querySelector('dialog[open]') as HTMLElement);
 
     fireEvent.click(dialog().getByRole('button', { name: '種目を検索' }));
@@ -6223,7 +6230,7 @@ describe('種目の絞り込み（部位）', () => {
     seedMany();
     render(<GoalsHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '＋ 種目の目標を追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '種目の目標を追加' }));
     const dialog = () => within(document.querySelector('dialog[open]') as HTMLElement);
 
     fireEvent.click(dialog().getByRole('button', { name: '種目を検索' }));
@@ -6265,7 +6272,7 @@ describe('種目の絞り込み（部位）', () => {
   it('カタログでも同じように探せる', () => {
     seedMany();
     render(<ManagerHarness />);
-    fireEvent.click(screen.getByText('＋ マイ種目に追加'));
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
     const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
 
     fireEvent.click(dialog.getByRole('button', { name: '種目を検索' }));
@@ -6770,7 +6777,7 @@ describe('自重種目の計算が読めること', () => {
 
     // 20 × 8 = 160。0 kg にはしない
     expect(screen.getAllByText(/160 kg/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/自重ぶんを 0 として/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/自重ぶんを 0 で数えて/).length).toBeGreaterThan(0);
   });
 
   /* 体重を入れれば、同じ記録が本来の負荷で数え直される */
@@ -6780,7 +6787,7 @@ describe('自重種目の計算が読めること', () => {
 
     // (75 × 0.65 + 20) × 8 = 550
     expect(screen.getAllByText(/550 kg/).length).toBeGreaterThan(0);
-    expect(screen.queryAllByText(/自重ぶんを 0 として/)).toHaveLength(0);
+    expect(screen.queryAllByText(/自重ぶんを 0 で数えて/)).toHaveLength(0);
   });
 
   /* 体重を必要としない種目（standard）には内訳を出さない */
@@ -7031,10 +7038,10 @@ describe('プリセットと週メニューの分かれ方', () => {
     render(<PresetHarness />);
 
     fireEvent.click(screen.getByRole('button', { name: '胸の日を編集' }));
-    expect(screen.queryByRole('button', { name: '＋ 曜日' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '曜日' })).toBeNull();
     expect(screen.queryByRole('group', { name: /の曜日/ })).toBeNull();
     // 既定のセットのほうは残る（曜日と違って、置き場所が 1 つの任意設定）
-    expect(screen.getByRole('button', { name: '＋ 既定のセット' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '既定のセット' })).toBeTruthy();
   });
 
   /**
@@ -7181,7 +7188,7 @@ describe('プリセットと週メニューの分かれ方', () => {
     render(<WeekHarness />);
 
     fireEvent.click(screen.getAllByRole('button', { name: /曜日を決める/ })[1]!);
-    fireEvent.click(screen.getByRole('button', { name: 'プリセットから選ぶ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットから入れる' }));
     fireEvent.click(screen.getByRole('button', { name: '胸の日を月曜日にする' }));
 
     const saved = await storedData();
@@ -7203,7 +7210,7 @@ describe('プリセットと週メニューの分かれ方', () => {
     // 種目を選ぶ面（重ねて開いている）だけを閉じる
     const closes = screen.getAllByRole('button', { name: '閉じる' });
     fireEvent.click(closes[closes.length - 1]!);
-    fireEvent.change(screen.getByLabelText('新しいプリセットの名前'), {
+    fireEvent.change(screen.getByLabelText('プリセットの名前'), {
       target: { value: '水曜の日' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'このプリセットを作る' }));

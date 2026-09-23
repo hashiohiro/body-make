@@ -1,4 +1,4 @@
-import { GROUP_LABELS, goalTypeLabel } from '../../lib/exerciseCatalog';
+import { GROUP_KEYS, exerciseName, goalTypeLabel } from '../../lib/exerciseCatalog';
 import { ExerciseTotals } from './ExerciseTotals';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { Exercise, ExercisePoint } from '../../types';
@@ -6,6 +6,7 @@ import ui from '../../styles/ui.module.scss';
 import { MiniButton } from '../MiniButton';
 import { Tag } from '../Tag';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   exercise: Exercise;
@@ -38,29 +39,37 @@ export function ExerciseCard({
   onOpenDetail,
   onOpenGoal,
 }: Props) {
+  const t = useT();
+
   return (
     <section className={ui.card} id={`ex-card-${exercise.id}`}>
       <div className={s.exHead}>
-        <span className={s.exName}>{exercise.name}</span>
-        <Tag>{GROUP_LABELS[exercise.group]}</Tag>
+        <span className={s.exName}>{exerciseName(t, exercise)}</span>
+        <Tag>{t(GROUP_KEYS[exercise.group])}</Tag>
         {/*
           マイ種目に入れていない種目。**記録としては他と同じに数える**が、
           次に選ぶ場面（マイ種目から選ぶ・プリセット・目標）には出てこない。
           出しておかないと、次の日に探して見つからないことになる。
         */}
-        {exercise.shelf === 'adhoc' && <Tag kind="state">未追加</Tag>}
+        {exercise.shelf === 'adhoc' && <Tag kind="state">{t('exercise.notAdded')}</Tag>}
         {/* この種目をどうしたいか（維持 / 重量↑ / 挙上量↑ / 回数↑）。打ちながら分かるように */}
         {exercise.goal && (
-          <Tag kind="chosen">{goalTypeLabel(exercise.goal.type, exercise.repUnit, true)}</Tag>
+          <Tag kind="chosen">{goalTypeLabel(t, exercise.goal.type, exercise.repUnit, true)}</Tag>
         )}
         <span className={s.exHeadBtns}>
           {/* 並びはやった順。掴むと、その日の種目だけが小さな一覧に畳まれる */}
           {onMove && (
-            <MiniButton label={`${exercise.name}の順番を変える`} onClick={onMove}>
+            <MiniButton
+              label={t('exercise.reorderOf', { name: exerciseName(t, exercise) })}
+              onClick={onMove}
+            >
               ⇅
             </MiniButton>
           )}
-          <MiniButton label={`${exercise.name}をこの日から外す`} onClick={onRemove}>
+          <MiniButton
+            label={t('exercise.removeFromDay', { name: exerciseName(t, exercise) })}
+            onClick={onRemove}
+          >
             ×
           </MiniButton>
         </span>
@@ -87,18 +96,18 @@ export function ExerciseCard({
         <button
           type="button"
           className={`${ui.detailBtn} ${s.editBtn}`}
-          aria-label={`${exercise.name}のセットを編集`}
+          aria-label={t('exercise.editSetsOf', { name: exerciseName(t, exercise) })}
           onClick={onEdit}
         >
-          編集
+          {t('common.edit')}
         </button>
         <button
           type="button"
           className={ui.detailBtn}
-          aria-label={`${exercise.name}の推移を見る`}
+          aria-label={t('common.trendOf', { name: exerciseName(t, exercise) })}
           onClick={onOpenDetail}
         >
-          推移を見る
+          {t('common.viewTrend')}
         </button>
         {/*
           打っている最中に「この種目はどこを目指しているか」を決め直したくなる。
@@ -108,11 +117,13 @@ export function ExerciseCard({
           type="button"
           className={ui.detailBtn}
           aria-label={
-            exercise.goal ? `${exercise.name}の目標を変える` : `${exercise.name}の目標を決める`
+            exercise.goal
+              ? t('exGoal.changeOf', { name: exerciseName(t, exercise) })
+              : t('exercise.setGoalOf', { name: exerciseName(t, exercise) })
           }
           onClick={onOpenGoal}
         >
-          目標
+          {t('common.goal')}
         </button>
       </div>
     </section>

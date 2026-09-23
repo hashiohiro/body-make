@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { WEEKDAY_CHOICES, defaultSetsFor, orderForDate, weekdaysLabel } from './preset';
+import { defaultSetsFor, orderForDate, weekdayChoices, weekdaysLabel } from './preset';
+import { makeT } from './i18n';
+
+const t = makeT('ja');
 import { sanitizeData } from './storage';
 import type { Preset } from '../types';
 
@@ -18,11 +21,19 @@ const preset = (id: string, weekdays: Preset['weekdays']): Preset => ({
  */
 describe('プリセットの曜日', () => {
   it('日曜 = 0 の並び', () => {
-    expect(WEEKDAY_CHOICES.map((c) => c.label)).toEqual(['日', '月', '火', '水', '木', '金', '土']);
-    expect(weekdaysLabel([1])).toBe('月');
+    expect(weekdayChoices(t).map((c) => c.label)).toEqual([
+      '日',
+      '月',
+      '火',
+      '水',
+      '木',
+      '金',
+      '土',
+    ]);
+    expect(weekdaysLabel(t, [1])).toBe('月');
     // 複数なら中黒でつなぐ
-    expect(weekdaysLabel([1, 4])).toBe('月・木');
-    expect(weekdaysLabel([])).toBeNull();
+    expect(weekdaysLabel(t, [1, 4])).toBe('月・木');
+    expect(weekdaysLabel(t, [])).toBeNull();
   });
 
   /* 2026-09-21 は月曜 */

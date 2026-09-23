@@ -1,6 +1,8 @@
 import { GROUP_COLORS } from '../../../lib/exerciseCatalog';
 import type { MuscleGroup } from '../../../types';
 import s from './weekPlan.module.scss';
+import { useT } from '../../../lib/i18n';
+import type { MessageKey } from '../../../lib/i18n';
 
 interface Props {
   /**
@@ -106,9 +108,9 @@ const BACK: Partial<Record<MuscleGroup, Shape[]>> = {
   legs: FRONT.legs!,
 };
 
-const VIEWS = [
-  { id: 'front', label: '前', shapes: FRONT },
-  { id: 'back', label: '後', shapes: BACK },
+const VIEWS: { id: string; key: MessageKey; shapes: Partial<Record<MuscleGroup, Shape[]>> }[] = [
+  { id: 'front', key: 'bodyMap.front', shapes: FRONT },
+  { id: 'back', key: 'bodyMap.back', shapes: BACK },
 ];
 
 const points = (shape: Shape) => shape.map(([x, y]) => `${x},${y}`).join(' ');
@@ -134,6 +136,7 @@ const fillOf = (group: MuscleGroup, ratio: number) =>
  * 二重に読まれるだけなので、図ぜんたいに名前を付けて 1 つの絵として扱う。
  */
 export function BodyMap({ tint, label }: Props) {
+  const t = useT();
   return (
     <div className={s.bodyMap} role="img" aria-label={label}>
       <div className={s.figures}>
@@ -162,7 +165,7 @@ export function BodyMap({ tint, label }: Props) {
                 </g>
               ))}
             </svg>
-            <figcaption className={s.figureLabel}>{view.label}</figcaption>
+            <figcaption className={s.figureLabel}>{t(view.key)}</figcaption>
           </figure>
         ))}
       </div>

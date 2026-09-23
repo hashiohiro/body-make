@@ -20,6 +20,7 @@ import {
 import { buildCheckHistory } from '../lib/check';
 import { newId } from '../lib/id';
 import { moveRecords as moveWorkoutRecords, planMove } from '../lib/move';
+import { useT } from '../lib/i18n';
 import type { OnConflict } from '../lib/move';
 import type { ImportPayload } from '../lib/io';
 import type {
@@ -177,6 +178,7 @@ export interface BodyData {
  * 記録が無い状態と見分けがつかなくなる。
  */
 export function useBodyData(initial: AppData): BodyData {
+  const t = useT();
   /*
    * いまの日付。前面に戻るたびに読み直す（`useToday`）。
    * ここで受け取るのは、日が変わったときに導出を作り直すため。
@@ -229,7 +231,7 @@ export function useBodyData(initial: AppData): BodyData {
       cache.current = createDeriveCache();
       derivedFor.current = today;
     }
-    return deriveAll(data, cache.current);
+    return deriveAll(t, data, cache.current);
   }, [data, today]);
   const {
     daily,

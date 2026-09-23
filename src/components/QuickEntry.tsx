@@ -3,8 +3,10 @@ import { fmt } from '../lib/format';
 import { BODYFAT_RANGE, WAIST_RANGE, WEIGHT_RANGE } from '../lib/storage';
 import type { DailyPoint, Entries, SlotId } from '../types';
 import type { MeasurementField } from '../hooks/useBodyData';
+import type { MessageKey } from '../lib/i18n';
 import { NumberField } from './NumberField';
 import { CardHeader } from './CardHeader';
+import { useT } from '../lib/i18n';
 import { MiniButton } from './MiniButton';
 import ui from '../styles/ui.module.scss';
 import s from './QuickEntry.module.scss';
@@ -25,9 +27,9 @@ interface Props {
   onOpenTrend?: (() => void) | undefined;
 }
 
-const SLOTS: { id: SlotId; label: string; icon: string }[] = [
-  { id: 'am', label: '朝', icon: '☀️' },
-  { id: 'pm', label: '夜', icon: '🌙' },
+const SLOTS: { id: SlotId; key: MessageKey; icon: string }[] = [
+  { id: 'am', key: 'records.slotAm', icon: '☀️' },
+  { id: 'pm', key: 'records.slotPm', icon: '🌙' },
 ];
 
 /** 直近で記録された値。未入力欄の ± の起点にして、初回のタップ数を減らす */
@@ -53,6 +55,7 @@ function lastKnown(
  * 置き場所はヘッダに 1 つ。カードには入力欄だけを残す。
  */
 export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpenTrend }: Props) {
+  const t = useT();
   const entry = entries[date] ?? emptyDay();
   const avgWeight = dayAverageWeight(entry);
   const avgBodyFat = dayAverageBodyFat(entry);
@@ -60,7 +63,7 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
 
   return (
     <section className={ui.card}>
-      <CardHeader title="体組成" />
+      <CardHeader title={t('nav.body')} />
 
       <div className={s.slots}>
         {SLOTS.map((slot) => {
@@ -74,10 +77,10 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
             <div key={slot.id} className={s.slot}>
               <div className={s.slotHead}>
                 <span aria-hidden="true">{slot.icon}</span>
-                {slot.label}
+                {t(slot.key)}
                 {canCopy && (
                   <MiniButton
-                    label={`${slot.label}に前回値を入れる`}
+                    label={t('records.fillLastValue', { slot: t(slot.key) })}
                     onClick={() => {
                       onValue(date, slot.id, 'weight', prevWeight);
                       if (prevBodyFat != null) onValue(date, slot.id, 'bodyFat', prevBodyFat);
@@ -87,13 +90,13 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
                       }
                     }}
                   >
-                    前回値
+                    {t('records.lastValue')}
                   </MiniButton>
                 )}
               </div>
 
               <NumberField
-                label="体重 kg"
+                label={t('records.fieldWeight')}
                 value={measurement.weight}
                 fallback={prevWeight}
                 step={0.1}
@@ -102,7 +105,7 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
                 onCommit={(v) => onValue(date, slot.id, 'weight', v)}
               />
               <NumberField
-                label="体脂肪率 %"
+                label={t('records.fieldBodyFat')}
                 value={measurement.bodyFat}
                 fallback={prevBodyFat}
                 step={0.1}
@@ -112,7 +115,7 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
               />
               {waistEnabled && (
                 <NumberField
-                  label="腹囲 cm"
+                  label={t('records.fieldWaist')}
                   value={measurement.waist}
                   fallback={prevWaist}
                   step={0.1}
@@ -127,7 +130,7 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
       </div>
 
       <div className={s.summary}>
-        <span>この日の平均</span>
+        <span>{t('records.dayAverage')}</span>
         <b>
           {fmt(avgWeight)} kg / {fmt(avgBodyFat)} %{waistEnabled && <> / {fmt(avgWaist)} cm</>}
         </b>
@@ -136,7 +139,7 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
       {onOpenTrend && (
         <div className={ui.detailRow}>
           <button type="button" className={ui.detailBtn} onClick={onOpenTrend}>
-            推移を見る
+            {t('common.viewTrend')}
           </button>
         </div>
       )}

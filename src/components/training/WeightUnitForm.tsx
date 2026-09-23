@@ -1,8 +1,10 @@
 import { Segmented } from '../Segmented';
+import { Strong } from '../Strong';
 import { WEIGHT_UNIT_OPTIONS } from '../../lib/weight';
 import type { Settings } from '../../types';
 import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   settings: Settings;
@@ -20,34 +22,34 @@ interface Props {
  * 打つときと読むときの見え方だけで、過去の記録は 1 件も書き換わらない。
  */
 export function WeightUnitForm({ settings, onUpdate }: Props) {
+  const t = useT();
   return (
     <>
       <section className={ui.card}>
-        <CardHeader title="入力" />
+        <CardHeader title={t('unitForm.input')} />
         <Segmented
-          label="重量を打つときの単位"
+          label={t('unitForm.inputHint')}
           value={settings.inputWeightUnit}
-          options={WEIGHT_UNIT_OPTIONS}
+          options={WEIGHT_UNIT_OPTIONS.map((o) => ({ id: o.id, label: t(o.key) }))}
           onChange={(inputWeightUnit) => onUpdate({ inputWeightUnit })}
         />
         <p className={ui.note}>
-          セットの重量欄の既定です。記録画面の重量欄の見出しから
-          <b>その場で切り替えられます</b>（そちらはこの設定を書き換えません）。
+          <Strong text={t('unitForm.inputNote')} values={[t('unitForm.inputNoteStrong')]} />
         </p>
       </section>
 
       <section className={ui.card}>
-        <CardHeader title="表示" />
+        <CardHeader title={t('settings.display')} />
         <Segmented
-          label="重量を読むときの単位"
+          label={t('unitForm.displayHint')}
           value={settings.displayWeightUnit}
-          options={WEIGHT_UNIT_OPTIONS}
+          options={WEIGHT_UNIT_OPTIONS.map((o) => ({ id: o.id, label: t(o.key) }))}
           onChange={(displayWeightUnit) => onUpdate({ displayWeightUnit })}
         />
         <p className={ui.note}>
-          最高重量・推定1RM・挙上量・目標の出し方が変わります。
+          {t('unitForm.displayNote')}
           <br />
-          記録はどちらを選んでもキログラムで保存されるので、切り替えても過去の記録は変わりません。
+          {t('unitForm.storedNote')}
         </p>
       </section>
     </>

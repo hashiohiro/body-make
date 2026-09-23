@@ -8,6 +8,7 @@ import ui from '../../styles/ui.module.scss';
 import { Button } from '../Button';
 import { NameEntryRow } from '../NameEntryRow';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 export interface PresetOption extends Preset {
   /** その組み合わせでやる部位の読み。名前だけでは中身が思い出せない */
@@ -46,6 +47,7 @@ interface Props {
  * そこまで持たせると、記録するアプリではなく計画を配るアプリになる（設計 §1.1）。
  */
 export function PresetCard({ presets, currentIds, currentName, applied, onSave, onUpdate }: Props) {
+  const t = useT();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [ask, confirmDialog] = useConfirm();
@@ -58,24 +60,24 @@ export function PresetCard({ presets, currentIds, currentName, applied, onSave, 
 
   return (
     <section className={ui.card}>
-      <CardHeader title="プリセット" />
+      <CardHeader title={t('settings.presets')} />
 
       {!composing ? (
         <p className={ui.emptyState}>
-          種目を入れると、いまの組み合わせに名前を付けて残せます。
+          {t('preset.saveHint')}
           <br />
-          保存したものは ＋ の「プリセットから入れる」から呼び出せます。
+          {t('preset.saveHintLoad')}
         </p>
       ) : alreadySaved && !changed ? (
-        <p className={ui.emptyState}>この組み合わせは保存済みです。</p>
+        <p className={ui.emptyState}>{t('preset.alreadySaved')}</p>
       ) : saving ? (
         <NameEntryRow
           value={name}
           onChange={setName}
-          label="プリセットの名前"
-          placeholder="プリセット名"
-          commitLabel="この名前で保存"
-          cancelLabel="保存をやめる"
+          label={t('preset.nameLabel')}
+          placeholder={t('preset.nameLabel')}
+          commitLabel={t('preset.saveWithName')}
+          cancelLabel={t('preset.cancelSave')}
           disabled={name.trim() === ''}
           onCancel={() => setSaving(false)}
           onCommit={() => {
@@ -94,10 +96,10 @@ export function PresetCard({ presets, currentIds, currentName, applied, onSave, 
               return;
             }
             ask({
-              title: '同じ名前のプリセットがあります',
+              title: t('preset.nameTaken'),
               subject: trimmed,
-              note: `中身をいまの組み合わせ（${currentIds.length}種目）に置き換えます。前の組み合わせは戻せません。`,
-              confirmLabel: 'この組み合わせで上書き',
+              note: t('preset.overwriteNote', { n: currentIds.length }),
+              confirmLabel: t('preset.overwrite'),
               destructive: true,
               onConfirm: save,
             });
@@ -105,7 +107,7 @@ export function PresetCard({ presets, currentIds, currentName, applied, onSave, 
         />
       ) : (
         <>
-          <p className={s.presetSaveLabel}>いまの組み合わせ（{currentIds.length}種目）</p>
+          <p className={s.presetSaveLabel}>{t('preset.current', { n: currentIds.length })}</p>
 
           {/*
             **押す言葉に結果を書く。**記号（＋ や ↻）では、保存なのか
@@ -121,7 +123,7 @@ export function PresetCard({ presets, currentIds, currentName, applied, onSave, 
                 tone="primary"
                 onClick={() => onUpdate({ ...applied, exerciseIds: [...currentIds] })}
               >
-                「{applied.name}」を更新
+                {t('preset.updateNamed', { name: applied.name })}
               </Button>
             )}
             <Button
@@ -132,7 +134,7 @@ export function PresetCard({ presets, currentIds, currentName, applied, onSave, 
                 setSaving(true);
               }}
             >
-              {changed ? '別の名前で保存' : 'プリセットに保存'}
+              {changed ? t('preset.saveAsOther') : t('preset.save')}
             </Button>
           </div>
         </>

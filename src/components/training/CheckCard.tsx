@@ -5,6 +5,7 @@ import type { CheckSettings, Exercise, SessionExercise } from '../../types';
 import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   date: string;
@@ -44,10 +45,11 @@ export function CheckCard({
   suppressed,
   onSuppress,
 }: Props) {
+  const t = useT();
   const byId = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
 
   const warnings = useMemo(
-    () => visibleWarnings(checkDay({ date, entries }, exercises, history, checks), suppressed),
+    () => visibleWarnings(checkDay(t, { date, entries }, exercises, history, checks), suppressed),
     [date, entries, exercises, history, checks, suppressed],
   );
 
@@ -75,7 +77,10 @@ export function CheckCard({
       */}
       {warnings.length > 0 && (
         <section className={ui.card}>
-          <CardHeader title="レビュー" hint={<>{warnings.length}件</>} />
+          <CardHeader
+            title={t('check.title')}
+            hint={<>{t('settings.count', { n: warnings.length })}</>}
+          />
 
           <CheckWarnings warnings={warnings} onSuppress={onSuppress} />
         </section>
@@ -87,8 +92,8 @@ export function CheckCard({
         カードにはしない（1 行のために枠を作ると、種目カードがそのぶん下へ流れる）。
       */}
       <p className={s.checkTime}>
-        見積もり時間 {time.total}分
-        {checks.sessionMinutes != null && ` / 上限 ${checks.sessionMinutes}分`}
+        {t('check.estimate', { n: time.total })}
+        {checks.sessionMinutes != null && t('check.limit', { n: checks.sessionMinutes })}
       </p>
     </>
   );

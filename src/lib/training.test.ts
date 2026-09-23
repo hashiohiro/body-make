@@ -15,6 +15,7 @@ import {
   summarizeSets,
 } from './training';
 import { DATA_VERSION, sanitizeData, sanitizeWorkouts } from './storage';
+import { makeT } from './i18n';
 import type {
   CardioSet,
   DailyPoint,
@@ -23,6 +24,8 @@ import type {
   SessionSet,
   WorkSet,
 } from '../types';
+
+const t = makeT('ja');
 
 /* ---------------- helpers ---------------- */
 
@@ -308,7 +311,7 @@ describe('主指標と履歴', () => {
       entry(sets([40, 10], [60, 10], [60, 10], [60, 9])),
       null,
     );
-    expect(summarizeSets(point)).toBe('10 × 40kg / 10,10,9 × 60kg');
+    expect(summarizeSets(t, point)).toBe('10 × 40kg / 10,10,9 × 60kg');
   });
 });
 
@@ -637,9 +640,9 @@ describe('有酸素', () => {
 
   it('まとめは合計で書く（セットの並びを出さない）', () => {
     const p = buildExercisePoint(run, entry(bouts([5000, 1800]), 'ex_running'), null);
-    expect(summarizeSets(p)).toBe('5000m / 30分 / 166.7m/分');
+    expect(summarizeSets(t, p)).toBe('5000m / 30分 / 166.7m/分');
     const r = buildExercisePoint(rope, entry(bouts([null, 1200]), 'ex_jump_rope'), null);
-    expect(summarizeSets(r)).toBe('20分');
+    expect(summarizeSets(t, r)).toBe('20分');
   });
 
   it('保存も m と 秒のまま往復する（120 分のライドが消えない）', () => {

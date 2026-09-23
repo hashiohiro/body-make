@@ -3,12 +3,13 @@ import { CatalogPicker } from './CatalogPicker';
 import { CustomExerciseForm } from './CustomExerciseForm';
 import { ExercisePickList } from './ExercisePickList';
 import { Modal } from '../Modal';
-import { GROUP_LABELS, isListed } from '../../lib/exerciseCatalog';
+import { GROUP_KEYS, exerciseName, isListed } from '../../lib/exerciseCatalog';
 import type { Exercise } from '../../types';
 import { Button } from '../Button';
 import { Pill } from '../Pill';
 import { Tag } from '../Tag';
 import ui from '../../styles/ui.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   /** マイ種目ぜんぶ。入っているものは ✓ で出す */
@@ -51,6 +52,7 @@ export function PickDialog({
   onAddExercises,
   onClose,
 }: Props) {
+  const t = useT();
   /*
    * カタログはダイアログを重ねず、**同じダイアログの面を差し替える**。
    * 同じ作業（この組み合わせの中身を決める）の続きなので、閉じたら元の面に戻る。
@@ -62,7 +64,13 @@ export function PickDialog({
 
   if (catalog) {
     return (
-      <Modal open title="カタログから足す" tall onClose={onClose} onBack={() => setCatalog(false)}>
+      <Modal
+        open
+        title={t('picker.fromCatalog')}
+        tall
+        onClose={onClose}
+        onBack={() => setCatalog(false)}
+      >
         <div>
           {/*
             **カタログから選んだ種目は、マイ種目とこの組み合わせの両方に入る。**
@@ -70,7 +78,7 @@ export function PickDialog({
             入れ終わった種目は消さずに ✓ で残す（消えると入ったのか分からない）。
           */}
           {/* 黙って増やさない。マイ種目にも入ることは、押す前に書いておく */}
-          <p className={ui.note}>選んだ種目はマイ種目にも追加され、この組み合わせに入ります。</p>
+          <p className={ui.note}>{t('pick.keepsNote')}</p>
 
           <CatalogPicker
             exercises={items}
@@ -87,7 +95,7 @@ export function PickDialog({
   }
 
   return (
-    <Modal open title={`${label}に種目を足す`} tall onClose={onClose}>
+    <Modal open title={t('pick.addTo', { label })} tall onClose={onClose}>
       <div>
         {choices.length === 0 ? (
           /*
@@ -96,15 +104,15 @@ export function PickDialog({
            * 先に設定のマイ種目へ行かせていた（そこから戻る道が無かった）。
            */
           <p className={ui.emptyState}>
-            マイ種目がまだ空です。
+            {t('common.noExercises')}
             <br />
-            カタログから選ぶと、マイ種目とこの組み合わせの両方に入ります。
+            {t('pick.emptyHint')}
           </p>
         ) : (
           /* 選ぶ面はどこも同じ組み（検索・部位チップ・部位ごとの見出し） */
           <ExercisePickList
             items={choices}
-            heading="マイ種目"
+            heading={t('settings.exercises')}
             renderItem={(e, searching) => {
               const used = selected.has(e.id);
               return (
@@ -122,9 +130,9 @@ export function PickDialog({
                   }
                 >
                   {used ? '✓ ' : '＋ '}
-                  {e.name}
+                  {exerciseName(t, e)}
                   {/* 束ねる見出しが無いので、探した結果では部位も行に添える */}
-                  {searching && <Tag>{GROUP_LABELS[e.group]}</Tag>}
+                  {searching && <Tag>{t(GROUP_KEYS[e.group])}</Tag>}
                 </Pill>
               );
             }}
@@ -138,11 +146,12 @@ export function PickDialog({
             記録画面のピッカーと同じで、入口だけ出して管理の場所は動かさない。
           */}
           <Button
+            adds
             tone={choices.length === 0 ? 'primary' : undefined}
             size="sub"
             onClick={() => setCatalog(true)}
           >
-            ＋ カタログから足す
+            {t('picker.fromCatalog')}
           </Button>
         </div>
       </div>

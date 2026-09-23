@@ -13,6 +13,7 @@ import { CardHeader } from '../CardHeader';
 import { Button } from '../Button';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   presets: readonly Preset[];
@@ -47,6 +48,7 @@ export function PresetManager({
   onRemove,
   onAddExercises,
 }: Props) {
+  const t = useT();
   const [creating, setCreating] = useState(false);
   /** 開いているプリセット。中身は書き換わるので id から毎回引き直す */
   const [openId, setOpenId] = useState<string | null>(null);
@@ -72,28 +74,35 @@ export function PresetManager({
       key={preset.id}
       name={preset.name}
       // 曜日を決めた人にだけ出る札。決めていなければ何も増えない
-      tag={weekdaysLabel(preset.weekdays)}
-      factLeft={`${preset.exerciseIds.length}種目 · ${groupsOf(exercises, preset.exerciseIds)}`}
+      tag={weekdaysLabel(t, preset.weekdays)}
+      factLeft={`${t('training.exercises', { n: preset.exerciseIds.length })} · ${groupsOf(t, exercises, preset.exerciseIds)}`}
       actions={
         <>
-          <MiniButton label={`${preset.name}を編集`} onClick={() => setOpenId(preset.id)}>
-            編集
+          <MiniButton
+            label={t('preset.editOf', { name: preset.name })}
+            onClick={() => setOpenId(preset.id)}
+          >
+            {t('common.edit')}
           </MiniButton>
           {/*
             伏せる／戻す。**押す前に一覧で読める位置に置く**（マイ種目と同じ並び）。
             確認は挟まない——失うものが無く、同じボタンで元に戻る。
           */}
           <MiniButton
-            label={preset.hidden ? `${preset.name}を表示に戻す` : `${preset.name}を非表示にする`}
+            label={
+              preset.hidden
+                ? t('manage.unhideOf', { name: preset.name })
+                : t('manage.hideOf', { name: preset.name })
+            }
             onClick={() => onUpdate({ ...preset, hidden: !preset.hidden })}
           >
-            {preset.hidden ? '表示に戻す' : '非表示'}
+            {preset.hidden ? t('manage.unhide') : t('manage.hidden')}
           </MiniButton>
           <MiniButton
-            label={`${preset.name}を削除`}
-            onClick={() => ask(removePresetRequest(preset, () => onRemove(preset.id)))}
+            label={t('manage.deleteOf', { name: preset.name })}
+            onClick={() => ask(removePresetRequest(t, preset, () => onRemove(preset.id)))}
           >
-            削除
+            {t('settings.delete')}
           </MiniButton>
         </>
       }
@@ -102,7 +111,10 @@ export function PresetManager({
 
   return (
     <section className={ui.card}>
-      <CardHeader title="プリセット" hint={<>{presets.length}件</>} />
+      <CardHeader
+        title={t('settings.presets')}
+        hint={<>{t('settings.count', { n: presets.length })}</>}
+      />
 
       {/* 作るのは一番上。溜まるほど、下に置くとスクロールを強いることになる */}
       <div className={ui.btnRow}>
@@ -114,7 +126,7 @@ export function PresetManager({
           tone={presets.length === 0 ? 'primary' : undefined}
           onClick={() => setCreating(true)}
         >
-          ＋ プリセットを作る
+          {t('preset.createTitle')}
         </Button>
       </div>
 
@@ -125,9 +137,9 @@ export function PresetManager({
       <div className={s.presetList}>
         {presets.length === 0 ? (
           <p className={ui.emptyState}>
-            まだプリセットがありません。
+            {t('preset.managerEmpty')}
             <br />
-            ここで作るか、記録画面で種目を入れて、いまの組み合わせに名前を付けて残せます。
+            {t('preset.managerEmptyHint')}
           </p>
         ) : (
           shown.map(row)
@@ -135,7 +147,7 @@ export function PresetManager({
 
         {hidden.length > 0 && (
           <>
-            <div className={s.manageGroup}>非表示</div>
+            <div className={s.manageGroup}>{t('manage.hidden')}</div>
             {hidden.map(row)}
           </>
         )}
@@ -163,7 +175,7 @@ export function PresetManager({
         <PresetCreateDialog
           exercises={exercises}
           presets={presets}
-          title="プリセットを作る"
+          title={t('preset.createTitle')}
           onCreate={onCreate}
           onAddExercises={onAddExercises}
           onClose={() => setCreating(false)}

@@ -11,6 +11,8 @@ import type { WeightUnit } from '../../lib/weight';
 import type { CardioSet, RepUnit, SessionSet, SetPoint, WorkSet } from '../../types';
 import type { SetField } from '../../hooks/useBodyData';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
+import type { MessageKey } from '../../lib/i18n';
 
 interface NumberCellProps {
   value: number | null;
@@ -47,9 +49,9 @@ function NumberCell({ value, fallback, min, max, integer, ariaLabel, onCommit }:
 }
 
 /** 1 つ目の欄が何を指すか。読み上げとテストがこの名前で引く */
-const FIELD_NOUNS: Record<RepUnit, string> = {
-  reps: '回数',
-  seconds: '秒数',
+const FIELD_KEYS: Record<RepUnit, MessageKey> = {
+  reps: 'set.reps',
+  seconds: 'set.seconds',
 };
 
 interface Props {
@@ -111,6 +113,7 @@ export function SetRow({
   onRemove,
   rowClass,
 }: Props) {
+  const t = useT();
   const role = point?.role ?? 'work';
   // 器はこの行の描き方そのものを変える。種目が決めるので set 側の形は見ない
   const bout = set as CardioSet;
@@ -137,7 +140,7 @@ export function SetRow({
             fallback={fallbackReps}
             min={DURATION_SEC_RANGE[0] / 60}
             max={DURATION_SEC_RANGE[1] / 60}
-            ariaLabel={`${index + 1}セット目の時間`}
+            ariaLabel={t('setRow.duration', { n: index + 1 })}
             // 打つのは分、持つのは秒。90 秒を 1.5 と書けて、丸めも起きない
             onCommit={(v) => onValue('seconds', v == null ? null : Math.round(v * 60))}
           />
@@ -153,7 +156,7 @@ export function SetRow({
             integer
             min={DISTANCE_M_RANGE[0]}
             max={DISTANCE_M_RANGE[1]}
-            ariaLabel={`${index + 1}セット目の距離`}
+            ariaLabel={t('setRow.distance', { n: index + 1 })}
             onCommit={(v) => onValue('meters', v)}
           />
         </>
@@ -166,7 +169,7 @@ export function SetRow({
             // 値域は単位ごとに違う（3 分プランクも入る）
             min={repRangeOf(repUnit)[0]}
             max={repRangeOf(repUnit)[1]}
-            ariaLabel={`${index + 1}セット目の${FIELD_NOUNS[repUnit]}`}
+            ariaLabel={t('setRow.field', { n: index + 1, field: t(FIELD_KEYS[repUnit]) })}
             onCommit={(v) => onValue('reps', v)}
           />
 
@@ -197,9 +200,17 @@ export function SetRow({
                   fallback={fromKgForField(fallbackWeight, weightUnit)}
                   min={rangeIn(SET_WEIGHT_RANGE, weightUnit)[0]}
                   max={rangeIn(SET_WEIGHT_RANGE, weightUnit)[1]}
-                  ariaLabel={`${index + 1}セット目の${
-                    baseWeight == null ? '重量' : '追加重量'
-                  }（${WEIGHT_UNIT_LABEL[weightUnit]}）`}
+                  ariaLabel={
+                    baseWeight == null
+                      ? t('setRow.weight', {
+                          n: index + 1,
+                          unit: WEIGHT_UNIT_LABEL[weightUnit],
+                        })
+                      : t('setRow.addedWeight', {
+                          n: index + 1,
+                          unit: WEIGHT_UNIT_LABEL[weightUnit],
+                        })
+                  }
                   onCommit={(v) => onValue('weight', toKgOrNull(v, weightUnit))}
                 />
               </span>
@@ -214,7 +225,7 @@ export function SetRow({
           <button
             type="button"
             className={s.rowBtn}
-            aria-label={`${index + 1}セット目を削除`}
+            aria-label={t('setRow.remove', { n: index + 1 })}
             onClick={onRemove}
           >
             ×

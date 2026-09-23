@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Button } from './Button';
 import ui from '../styles/ui.module.scss';
 import s from './ChoicePanel.module.scss';
+import { useT } from '../lib/i18n';
 
 /** 選べる答え 1 つ。**押す言葉に結果を書く。** */
 export interface Choice {
@@ -30,7 +31,7 @@ interface Props {
   choices: readonly Choice[];
   /** 答えの下に置く一行。**どちらを選んでも起きること**を書く */
   note?: ReactNode;
-  /** 何も選ばずにやめる。別の行に置く（答えと並べると 3 択に見える） */
+  /** 何も選ばずに{t('common.stop')}。別の行に置く（答えと並べると 3 択に見える） */
   onCancel?: (() => void) | undefined;
   cancelLabel?: string | undefined;
 }
@@ -53,8 +54,13 @@ export function ChoicePanel({
   choices,
   note,
   onCancel,
-  cancelLabel = 'やめる',
+  /**
+   * やめるの語。**既定をここに書かない**——引数の既定値はフックの外なので、
+   * 言語が配られる前に文字列が決まってしまう（呼ばれ方は `t('common.stop')`）。
+   */
+  cancelLabel,
 }: Props) {
+  const t = useT();
   return (
     <div>
       {subject != null && <p className={s.subject}>{subject}</p>}
@@ -73,7 +79,7 @@ export function ChoicePanel({
       {onCancel && (
         <div className={ui.btnRow}>
           <Button tone="ghost" onClick={onCancel}>
-            {cancelLabel}
+            {cancelLabel ?? t('common.stop')}
           </Button>
         </div>
       )}

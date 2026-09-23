@@ -1,6 +1,7 @@
 import type { Warning } from '../../lib/check';
 import { Button } from '../Button';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   warnings: readonly Warning[];
@@ -24,6 +25,7 @@ interface Props {
  * 読まずに消すのがいちばん速い操作になってしまう。
  */
 export function CheckWarnings({ warnings, onSuppress }: Props) {
+  const t = useT();
   if (warnings.length === 0) return null;
 
   return (
@@ -38,16 +40,16 @@ export function CheckWarnings({ warnings, onSuppress }: Props) {
               指摘を出しておいて消し方を書かないのは、読む側に判定の再現を強いる。
               条件形（〜なら）にしてあるのは、やるかどうかを決めるのが本人だから。
             */}
-            <small className={s.warnFix}>改善するなら {w.fix}</small>
+            <small className={s.warnFix}>{t('warn.improve', { fix: w.fix })}</small>
           </div>
           {onSuppress && (
             <Button
               tone="ghost"
               size="sub"
-              label={`${w.message}を許容済みにする`}
+              label={t('warn.suppressOf', { message: w.message })}
               onClick={() => onSuppress(w.key)}
             >
-              許容する
+              {t('warn.suppress')}
             </Button>
           )}
         </li>

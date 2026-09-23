@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import s from './Modal.module.scss';
+import { useT } from '../lib/i18n';
 
 interface Props {
   open: boolean;
@@ -68,6 +69,7 @@ function unlockScroll() {
  * フォーカストラップ・Esc・背面の不活性化はブラウザに任せる（依存を足さない）。
  */
 export function Modal({ open, title, onClose, onBack, tall, children }: Props) {
+  const t = useT();
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -175,14 +177,14 @@ export function Modal({ open, title, onClose, onBack, tall, children }: Props) {
       <div className={s.head}>
         {onBack && (
           <button type="button" className={s.back} onClick={onBack}>
-            ‹ 戻る
+            ‹ {t('common.back')}
           </button>
         )}
         <h2 className={s.title} id={titleId}>
           {title}
         </h2>
         <button type="button" className={s.close} onClick={onClose}>
-          閉じる
+          {t('common.close')}
         </button>
       </div>
       <div className={`${s.body} ${tall ? s.bodyTall : ''}`}>{open && children}</div>

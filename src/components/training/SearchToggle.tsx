@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { onEnter } from '../../lib/keys';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   query: string;
@@ -25,6 +26,7 @@ interface Props {
  * （`design-training.md` の「3 段は作らない」）。同じ面のまま入れ替える。
  */
 export function SearchToggle({ query, onQuery, label }: Props) {
+  const t = useT();
   // 外から語を持って開かれることもある（面を差し替えても続きから探せるように）
   const [open, setOpen] = useState(query !== '');
   const ref = useRef<HTMLInputElement>(null);
@@ -73,7 +75,12 @@ export function SearchToggle({ query, onQuery, label }: Props) {
         「語を消す」と「検索をやめる」が同じ形で並ぶと、押す前に区別が付かない。
         語だけ消しても一覧は全件に戻るので、結果は同じところに着く。
       */}
-      <button type="button" className={s.searchClose} aria-label="検索をやめる" onClick={close}>
+      <button
+        type="button"
+        className={s.searchClose}
+        aria-label={t('search.close')}
+        onClick={close}
+      >
         ×
       </button>
     </span>

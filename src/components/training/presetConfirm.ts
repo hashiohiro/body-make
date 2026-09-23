@@ -1,20 +1,23 @@
 import type { ConfirmRequest } from '../ConfirmDialog';
 import type { Preset } from '../../types';
+import type { T } from '../../lib/i18n';
 
 /**
  * プリセットを削除する前の問い。
  *
  * **記録画面（`PresetCard`）と設定（`PresetManager`）で同じものを出す。**
+ *
+ * `t` は引数で受ける。ここは部品ではないのでフックを呼べない。
  * `confirm()` の頃は同じ文が 2 か所に別々に書かれていて、片方を直すともう片方が
  * 古くなる状態だった。同じ操作が面によって違う言い方で聞いてくるのもおかしい。
  */
-export function removePresetRequest(preset: Preset, onRemove: () => void): ConfirmRequest {
+export function removePresetRequest(t: T, preset: Preset, onRemove: () => void): ConfirmRequest {
   return {
-    title: 'プリセットを削除しますか？',
+    title: t('preset.deleteTitle'),
     subject: preset.name,
     // 記録は消えない。消えるのは「付けた名前」と「組み合わせ」だけ
-    note: '記録は消えません。付けた名前と組み合わせは戻せません。',
-    confirmLabel: '削除',
+    note: t('preset.deleteNote'),
+    confirmLabel: t('settings.delete'),
     destructive: true,
     onConfirm: onRemove,
   };
@@ -28,15 +31,16 @@ export function removePresetRequest(preset: Preset, onRemove: () => void): Confi
  * 押しても何も起きない ✓ が残っていた（理由はコードのコメントにしか無かった）。
  */
 export function dropLastExerciseRequest(
+  t: T,
   preset: Preset,
   exerciseName: string,
   onRemove: () => void,
 ): ConfirmRequest {
   return {
-    title: 'プリセットごと削除しますか？',
+    title: t('preset.deleteLastTitle'),
     subject: preset.name,
-    note: `「${exerciseName}」を外すと種目が無くなります。記録は消えません。`,
-    confirmLabel: 'プリセットごと削除',
+    note: t('preset.deleteLastNote', { name: exerciseName }),
+    confirmLabel: t('preset.deleteLastConfirm'),
     destructive: true,
     onConfirm: onRemove,
   };

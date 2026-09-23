@@ -1,6 +1,7 @@
 import { DateField } from './DateField';
 import { addDays } from '../lib/date';
 import { Button } from './Button';
+import { useT } from '../lib/i18n';
 import s from './DateNav.module.scss';
 
 interface Props {
@@ -26,13 +27,15 @@ interface Props {
  * どちらの入力カードにも同じ 4 部品が載っていた。
  */
 export function DateNav({ date, today, onChange }: Props) {
+  const t = useT();
+
   return (
     <div className={s.row}>
       <button
         type="button"
         className={s.nav}
         onClick={() => onChange(addDays(date, -1))}
-        aria-label="前の日"
+        aria-label={t('records.prevDay')}
       >
         ‹
       </button>
@@ -44,13 +47,18 @@ export function DateNav({ date, today, onChange }: Props) {
 
         空にはできない。見ている日が無い状態は作れない。
       */}
-      <DateField className={s.dateInput} value={date} label="記録する日付" onChange={onChange} />
+      <DateField
+        className={s.dateInput}
+        value={date}
+        label={t('records.date')}
+        onChange={onChange}
+      />
 
       <button
         type="button"
         className={s.nav}
         onClick={() => onChange(addDays(date, 1))}
-        aria-label="次の日"
+        aria-label={t('records.nextDay')}
       >
         ›
       </button>
@@ -58,7 +66,7 @@ export function DateNav({ date, today, onChange }: Props) {
       {/* 今日を見ているときは押しても何も起きない。無効のまま置かず、消す */}
       {date !== today && (
         <Button size="sub" onClick={() => onChange(today)} className={s.today}>
-          今日
+          {t('common.today')}
         </Button>
       )}
     </div>

@@ -1,11 +1,13 @@
-import { GROUP_COLORS, GROUP_LABELS } from '../../../lib/exerciseCatalog';
-import { RECOVERY_RULE } from '../../../lib/check';
+import { GROUP_COLORS, GROUP_KEYS } from '../../../lib/exerciseCatalog';
+import { recoveryRule } from '../../../lib/check';
 import { recoveryRows } from '../../../lib/weekPlan';
 import { formatSets } from '../../../lib/training';
 import type { CSSProperties } from 'react';
 import type { MuscleGroup } from '../../../types';
 import ui from '../../../styles/ui.module.scss';
 import s from './weekPlan.module.scss';
+import { useT } from '../../../lib/i18n';
+import type { T } from '../../../lib/i18n';
 
 interface Props {
   /** 並びぶんの部位別セット数。**並びの意味は呼ぶ側が決める** */
@@ -56,6 +58,7 @@ const stripes = (color: string) =>
  * **採点はしない。**詰まっている日に柄が重なるだけで、点も達成率も出さない。
  */
 export function RecoveryGrid({ days, labels, wrap, caption, all, skip }: Props) {
+  const t = useT();
   const rows = recoveryRows(days, { wrap: wrap ?? true, all: all ?? false, skip: skip ?? 0 });
   if (rows.length === 0) return null;
 
@@ -70,11 +73,11 @@ export function RecoveryGrid({ days, labels, wrap, caption, all, skip }: Props) 
       <div className={s.legend}>
         <span className={s.legendItem}>
           <span className={s.swatch} style={{ backgroundColor: fill('var(--ink-2)', 1) }} />
-          やる日
+          {t('recoveryGrid.doDay')}
         </span>
         <span className={s.legendItem}>
           <span className={s.swatch} style={{ backgroundImage: stripes('var(--ink-2)') }} />
-          回復中
+          {t('recoveryGrid.recoveringLegend')}
         </span>
         <span className={s.legendItem}>
           <span
@@ -84,14 +87,14 @@ export function RecoveryGrid({ days, labels, wrap, caption, all, skip }: Props) 
               backgroundImage: stripes('var(--ink-2)'),
             }}
           />
-          回復中にやる日
+          {t('recoveryGrid.overlap')}
         </span>
       </div>
 
       <table className={s.recovery}>
         <thead>
           <tr>
-            <th scope="col">部位</th>
+            <th scope="col">{t('group.label')}</th>
             {labels.map((text, i) => (
               <th key={i} scope="col">
                 {text}
@@ -102,14 +105,18 @@ export function RecoveryGrid({ days, labels, wrap, caption, all, skip }: Props) 
         <tbody>
           {rows.map((row) => (
             <tr key={row.group}>
-              <th scope="row">{GROUP_LABELS[row.group]}</th>
+              <th scope="row">{t(GROUP_KEYS[row.group])}</th>
               {row.cells.map((cell, at) => {
                 const color = GROUP_COLORS[row.group];
                 const style: CSSProperties = {};
                 if (cell.sets > 0) style.backgroundColor = fill(color, cell.sets / row.max);
                 if (cell.recovering) style.backgroundImage = stripes(color);
                 return (
-                  <td key={at} style={style} title={cellTitle(row.group, labels[at] ?? '', cell)}>
+                  <td
+                    key={at}
+                    style={style}
+                    title={cellTitle(t, row.group, labels[at] ?? '', cell)}
+                  >
                     {cell.sets > 0 ? formatSets(cell.sets) : ''}
                   </td>
                 );
@@ -123,19 +130,31 @@ export function RecoveryGrid({ days, labels, wrap, caption, all, skip }: Props) 
         規則だけを 1 行で。詰まっている場所は上の図が出しているので、
         「胸が月→火で中0日」のように組み合わせごとに並べる必要はない。
       */}
-      <p className={ui.note}>間隔の目安：{RECOVERY_RULE}</p>
+      <p className={ui.note}>
+        {t('recoveryGrid.rule')}
+        {recoveryRule(t)}
+      </p>
     </div>
   );
 }
 
-/** そのマスが何を言っているか。柄だけでは読めない人にも、触れば出る */
+/**
+ * そのマスが何を言っているか。柄だけでは読めない人にも、触れば出る。
+ * `t` は引数で受ける——ここは部品ではないのでフックを呼べない。
+ */
 function cellTitle(
+  t: T,
   group: MuscleGroup,
   label: string,
   cell: { sets: number; recovering: boolean },
 ): string {
-  const where = `${GROUP_LABELS[group]} ${label}`;
-  if (cell.sets === 0) return cell.recovering ? `${where} 回復中` : `${where} 空き`;
-  const load = `${formatSets(cell.sets)}セット`;
-  return cell.recovering ? `${where} ${load}（回復中に置いています）` : `${where} ${load}`;
+  const where = `${t(GROUP_KEYS[group])} ${label}`;
+  if (cell.sets === 0)
+    return cell.recovering
+      ? t('recoveryGrid.recovering', { where })
+      : t('recoveryGrid.free', { where });
+  const load = t('common.sets', { n: formatSets(cell.sets) });
+  return cell.recovering
+    ? t('recoveryGrid.onRecovery', { where, load })
+    : t('recoveryGrid.plain', { where, load });
 }

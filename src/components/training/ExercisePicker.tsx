@@ -5,7 +5,7 @@ import { CustomExerciseForm } from './CustomExerciseForm';
 import { ExercisePickList } from './ExercisePickList';
 import { Modal } from '../Modal';
 import { useFabPosition } from './useFabPosition';
-import { GROUP_LABELS, isListed } from '../../lib/exerciseCatalog';
+import { GROUP_KEYS, exerciseName, isListed } from '../../lib/exerciseCatalog';
 import type { PresetOption } from './PresetCard';
 import type { Exercise } from '../../types';
 import { Button } from '../Button';
@@ -14,6 +14,8 @@ import { Pill } from '../Pill';
 import { Tag } from '../Tag';
 
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
+import type { MessageKey } from '../../lib/i18n';
 
 interface Props {
   exercises: readonly Exercise[];
@@ -42,12 +44,12 @@ interface Props {
 /** ＋ を押して最初に出る面と、そこから開く面 */
 type Panel = 'menu' | 'exercises' | 'presets' | 'catalog' | 'keep';
 
-const TITLES: Record<Panel, string> = {
-  menu: '種目を追加',
-  exercises: 'マイ種目から選ぶ',
-  presets: 'プリセットから入れる',
-  catalog: 'カタログから選ぶ',
-  keep: 'マイ種目にも追加しますか？',
+const TITLE_KEYS: Record<Panel, MessageKey> = {
+  menu: 'picker.menu',
+  exercises: 'picker.fromMine',
+  presets: 'picker.fromPresets',
+  catalog: 'picker.fromCatalog',
+  keep: 'picker.keepTitle',
 };
 
 /**
@@ -74,6 +76,7 @@ export function ExercisePicker({
   onAddPreset,
   onAddFromCatalog,
 }: Props) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   // 置き場所は動かせる。記録している最中に、指の下や読みたい行を塞ぐことがある
   const fab = useFabPosition();
@@ -120,10 +123,10 @@ export function ExercisePicker({
         onClick={() => onToggle(e.id)}
       >
         {used ? '✓ ' : '＋ '}
-        {e.name}
+        {exerciseName(t, e)}
         {/* 束ねる見出しが無いので、探した結果では部位も行に添える */}
-        {searching && <Tag>{GROUP_LABELS[e.group]}</Tag>}
-        {adhoc && <Tag kind="state">未追加</Tag>}
+        {searching && <Tag>{t(GROUP_KEYS[e.group])}</Tag>}
+        {adhoc && <Tag kind="state">{t('exercise.notAdded')}</Tag>}
       </Pill>
     );
   };
@@ -134,7 +137,7 @@ export function ExercisePicker({
       key={preset.id}
       type="button"
       className={s.presetPick}
-      aria-label={`${preset.name}をこの日に入れる`}
+      aria-label={t('picker.applyPreset', { name: preset.name })}
       onClick={() => {
         onAddPreset(preset);
         close();
@@ -142,7 +145,9 @@ export function ExercisePicker({
     >
       <span className={s.presetName}>{preset.name}</span>
       <span className={s.presetGroups}>{preset.groupsLabel}</span>
-      <span className={s.presetCount}>{preset.exerciseIds.length}種目</span>
+      <span className={s.presetCount}>
+        {t('training.exercises', { n: preset.exerciseIds.length })}
+      </span>
     </button>
   );
 
@@ -167,7 +172,7 @@ export function ExercisePicker({
       <button
         type="button"
         className={s.fab}
-        aria-label="種目を追加"
+        aria-label={t('picker.menu')}
         style={fab.style}
         onPointerDown={fab.onPointerDown}
         onPointerMove={fab.onPointerMove}
@@ -180,7 +185,7 @@ export function ExercisePicker({
 
       <Modal
         open={open}
-        title={TITLES[panel]}
+        title={t(TITLE_KEYS[panel])}
         /*
           一覧を出す面は高さを固定する。絞り込みや検索で件数が減るたびに縮むと、
           下から出るシートなので上の縁が下がって、読んでいた結果が下へ逃げていく。
@@ -200,13 +205,17 @@ export function ExercisePicker({
       >
         {panel === 'menu' ? (
           <div className={s.menu}>
-            {menuItem('exercises', 'マイ種目から選ぶ', `いつもの種目（${choices.length}件）`)}
+            {menuItem(
+              'exercises',
+              t('picker.fromMine'),
+              t('picker.mineHint', { n: choices.length }),
+            )}
             {menuItem(
               'presets',
-              'プリセットから入れる',
-              `保存した組み合わせ（${presets.length}件）`,
+              t('picker.fromPresets'),
+              t('picker.presetsHint', { n: presets.length }),
             )}
-            {menuItem('catalog', 'カタログから選ぶ', 'マイ種目に無い種目を、この日に足す')}
+            {menuItem('catalog', t('picker.fromCatalog'), t('picker.catalogHint'))}
           </div>
         ) : panel === 'catalog' ? (
           <div>
@@ -238,9 +247,7 @@ export function ExercisePicker({
               }}
             />
 
-            <p className={ui.note}>
-              削除と種目ごとの設定は、設定 &gt; トレーニング &gt; マイ種目 でまとめて行えます。
-            </p>
+            <p className={ui.note}>{t('picker.manageNote')}</p>
           </div>
         ) : panel === 'keep' ? (
           /*
@@ -249,10 +256,10 @@ export function ExercisePicker({
            * 読み取らせることになる。押す言葉に結果を書く。
            */
           <ChoicePanel
-            subject={pending?.name}
+            subject={pending ? exerciseName(t, pending) : undefined}
             choices={[
               {
-                label: 'マイ種目に追加',
+                label: t('manage.add'),
                 tone: 'primary',
                 onSelect: () => {
                   if (pending) onAddFromCatalog(pending, true);
@@ -261,7 +268,7 @@ export function ExercisePicker({
                 },
               },
               {
-                label: 'この日だけ',
+                label: t('picker.keepNo'),
                 onSelect: () => {
                   if (pending) onAddFromCatalog(pending, false);
                   setPending(null);
@@ -269,14 +276,14 @@ export function ExercisePicker({
                 },
               },
             ]}
-            note="どちらでも、この日には入ります。"
+            note={t('picker.keepNote')}
           />
         ) : panel === 'presets' ? (
           presets.length === 0 && todayMenu == null ? (
             <p className={ui.emptyState}>
-              保存した組み合わせはまだありません。
+              {t('picker.noPresets')}
               <br />
-              種目を入れたあと、記録画面の「プリセット」から名前を付けて残せます。
+              {t('picker.noPresetsHint')}
             </p>
           ) : (
             <div>
@@ -286,13 +293,13 @@ export function ExercisePicker({
               */}
               {todayMenu && (
                 <>
-                  <p className={ui.sectionLabel}>今日のメニュー</p>
+                  <p className={ui.sectionLabel}>{t('picker.todayMenu')}</p>
                   {presetRow(todayMenu)}
                 </>
               )}
               {presets.length > 0 && (
                 <>
-                  {todayMenu && <p className={ui.sectionLabel}>プリセット</p>}
+                  {todayMenu && <p className={ui.sectionLabel}>{t('settings.presets')}</p>}
                   {presets.map(presetRow)}
                 </>
               )}
@@ -305,19 +312,19 @@ export function ExercisePicker({
            */
           <div>
             <p className={ui.emptyState}>
-              マイ種目がまだ空です。
+              {t('common.noExercises')}
               <br />
-              カタログから、自分がやる種目を選んでください。
+              {t('picker.noExercisesHint')}
             </p>
             <div className={ui.btnRow}>
-              <Button tone="primary" onClick={() => setPanel('catalog')}>
-                ＋ カタログから選ぶ
+              <Button adds tone="primary" onClick={() => setPanel('catalog')}>
+                {t('picker.fromCatalog')}
               </Button>
             </div>
           </div>
         ) : (
           /* 選ぶ面はどこも同じ組み（検索・部位チップ・部位ごとの見出し） */
-          <ExercisePickList items={choices} heading="マイ種目" renderItem={pill} />
+          <ExercisePickList items={choices} heading={t('settings.exercises')} renderItem={pill} />
         )}
       </Modal>
     </>

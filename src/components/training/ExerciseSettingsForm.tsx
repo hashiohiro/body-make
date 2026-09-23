@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import {
   EXERCISE_GROUP_ORDER,
-  GROUP_LABELS,
+  GROUP_KEYS,
   GROUP_ORDER,
   isCardio,
   SUB_GROUP_WEIGHT,
@@ -15,6 +15,7 @@ import { Select } from '../Select';
 import { Pill } from '../Pill';
 import { Button } from '../Button';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   exercise: Exercise;
@@ -29,6 +30,7 @@ interface Props {
  * 直したくなったときにもう一方の画面を探しに行くことになる。
  */
 export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
+  const t = useT();
   // 計算の仕方は、カタログから入れれば埋まっている。開いた瞬間に並べず、もう一段畳む
   const [calc, setCalc] = useState(false);
   // 構成チェックの値も同じ扱い。触らなくても記録は取れる
@@ -45,10 +47,10 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
     <div className={s.newForm}>
       {/* フォーム次第で主働筋が変わる種目（ディップスなど）があるので、部位も変えられる */}
       <label className={s.newField}>
-        部位
+        {t('group.label')}
         <Select
           value={ex.group}
-          options={EXERCISE_GROUP_ORDER.map((g) => ({ id: g, label: GROUP_LABELS[g] }))}
+          options={EXERCISE_GROUP_ORDER.map((g) => ({ id: g, label: t(GROUP_KEYS[g]) }))}
           onChange={(group) => {
             // 新しい主部位が補助部位に残っていると、その部位を二重に数える。
             // 保存時のサニタイズは読み込みでしか走らないので、ここで落とす
@@ -62,7 +64,7 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
       </label>
 
       <div className={s.newField}>
-        補助的に使う部位
+        {t('exSettings.subGroups')}
         <div className={s.pickerList}>
           {GROUP_ORDER.filter((g) => g !== ex.group).map((g) => {
             const on = ex.subGroups.some((x) => x.group === g);
@@ -79,7 +81,7 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
                   })
                 }
               >
-                {GROUP_LABELS[g]}
+                {t(GROUP_KEYS[g])}
               </Pill>
             );
           })}
@@ -91,14 +93,14 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
           */}
         {ex.subGroups.map((sub) => (
           <div key={sub.group} className={s.subWeightRow}>
-            <span className={s.subWeightName}>{GROUP_LABELS[sub.group]}</span>
+            <span className={s.subWeightName}>{t(GROUP_KEYS[sub.group])}</span>
             <div className={s.pickerList}>
               {subWeightOptions(sub.weight).map((w) => (
                 <Pill
                   key={w}
                   small
                   pressed={sub.weight === w}
-                  label={`${GROUP_LABELS[sub.group]}を${w}で数える`}
+                  label={t('exSettings.subWeightOf', { name: t(GROUP_KEYS[sub.group]), w })}
                   onClick={() =>
                     onUpdate({
                       ...ex,
@@ -114,9 +116,7 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
             </div>
           </div>
         ))}
-        <small>
-          主部位を1としたときの割合。ベンチが胸1・肩0.5・腕0.5なら、3セットで 胸3・肩1.5・腕1.5
-        </small>
+        <small>{t('exSettings.subGroupsNote')}</small>
       </div>
 
       {/*
@@ -125,7 +125,7 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
           「決めなければいけない項目」に見えるので、もう一段畳む
         */}
       <Button tone="ghost" size="sub" expanded={calc} onClick={() => setCalc((v) => !v)}>
-        {calc ? '計算方法を閉じる' : '計算方法を変える'}
+        {calc ? t('exSettings.closeCalc') : t('exSettings.openCalc')}
       </Button>
 
       {calc && (
@@ -137,21 +137,19 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
             走る人がインターバルもやる、という切り替えがここで済む
           */}
           <label className={s.newField}>
-            {isCardio(ex.group) ? '本数' : 'セット'}
+            {isCardio(ex.group) ? t('metric.bouts') : t('metric.setsUnit')}
             <Select
               value={ex.repeated ? 'many' : 'one'}
               options={[
                 {
                   id: 'many',
-                  label: isCardio(ex.group)
-                    ? '分けて記録する（インターバル）'
-                    : '複数セットで記録する',
+                  label: isCardio(ex.group) ? t('exSettings.interval') : t('exSettings.multiSet'),
                 },
-                { id: 'one', label: '1回で完結する' },
+                { id: 'one', label: t('exSettings.single') },
               ]}
               onChange={(mode) => onUpdate({ ...ex, repeated: mode === 'many' })}
             />
-            <small>1回で完結する種目は、行を足すボタンを出しません</small>
+            <small>{t('exSettings.singleNote')}</small>
           </label>
         </>
       )}
@@ -162,38 +160,34 @@ export function ExerciseSettingsForm({ exercise: ex, onUpdate }: Props) {
         記録そのものには一切効かないので、計算方法と同じくもう一段畳む。
       */}
       <Button tone="ghost" size="sub" expanded={check} onClick={() => setCheck((v) => !v)}>
-        {check ? 'レビューの値を閉じる' : 'レビューの値を変える'}
+        {check ? t('exSettings.closeCheck') : t('exSettings.openCheck')}
       </Button>
 
       {check && (
         <>
           <div className={s.newField}>
-            この種目の性質
+            {t('exSettings.nature')}
             <div className={s.pickerList}>
               <Pill pressed={ex.axial} onClick={() => onUpdate({ ...ex, axial: !ex.axial })}>
-                {ex.axial ? '✓ ' : ''}軸荷重種目
+                {ex.axial ? '✓ ' : ''}
+                {t('exSettings.axial')}
               </Pill>
             </div>
-            <small>
-              背骨に荷重を通す種目（デッドリフト・スクワット・RDLなど）。連日になったときに知らせます
-            </small>
+            <small>{t('exSettings.axialNote')}</small>
           </div>
 
           <label className={s.newField} htmlFor={`${fieldId}-minutes`}>
-            1セットあたりの時間（分）
+            {t('exSettings.minutesPerSet')}
             <NumericInput
               id={`${fieldId}-minutes`}
               value={ex.minutesPerSet}
               min={MINUTES_PER_SET_RANGE[0]}
               max={MINUTES_PER_SET_RANGE[1]}
               step={0.5}
-              placeholder="既定値を使う"
+              placeholder={t('exSettings.useDefault')}
               onCommit={(v) => onUpdate({ ...ex, minutesPerSet: v })}
             />
-            <small>
-              空欄なら設定の既定値。休憩の長い高重量種目だけ入れます。
-              ラック確保やプレートの付け替えもここに含めます（基本時間は別に持ちません）
-            </small>
+            <small>{t('exSettings.minutesNote')}</small>
           </label>
         </>
       )}

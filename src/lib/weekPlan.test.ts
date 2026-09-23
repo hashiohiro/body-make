@@ -8,8 +8,11 @@ import {
   weekLoad,
 } from './weekPlan';
 import { CATALOG, fromCatalog } from './exerciseCatalog';
-import { RECOVERY_RULE } from './check';
+import { recoveryRule } from './check';
 import type { GroupGoals, MuscleGroup, Preset, Weekday } from '../types';
+import { makeT } from './i18n';
+
+const t = makeT('ja');
 
 const ex = (id: string, order = 0) =>
   fromCatalog(
@@ -110,7 +113,7 @@ describe('曜日', () => {
  */
 describe('間隔の目安の文', () => {
   it('閾値の段ごとに、範囲と中◯日を書く', () => {
-    expect(RECOVERY_RULE).toBe('1〜5セットは中0日、6〜10セットは中1日、11セット以上は中2日');
+    expect(recoveryRule(t)).toBe('1〜5セットは中0日、6〜10セットは中1日、11セット以上は中2日');
   });
 });
 

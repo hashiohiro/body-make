@@ -5,13 +5,15 @@ import { TrainingCharts } from '../components/training/TrainingCharts';
 import { addDays, isoToTime, todayISO } from '../lib/date';
 import type { BodyData } from '../hooks/useBodyData';
 import type { Domain } from '../types';
+import { useT } from '../lib/i18n';
+import type { MessageKey } from '../lib/i18n';
 
 type RangeId = '30' | '90' | 'all';
 
-const RANGES: { id: RangeId; label: string; days: number | null }[] = [
-  { id: '30', label: '30日', days: 30 },
-  { id: '90', label: '90日', days: 90 },
-  { id: 'all', label: '全期間', days: null },
+const RANGES: { id: RangeId; key: MessageKey; days: number | null }[] = [
+  { id: '30', key: 'range.30', days: 30 },
+  { id: '90', key: 'range.90', days: 90 },
+  { id: 'all', key: 'range.all', days: null },
 ];
 
 interface Props {
@@ -27,6 +29,7 @@ interface Props {
  * 中身は体組成／トレーニングの切り替えに従う。
  */
 export function ChartsView({ body, domain: mode, exerciseId }: Props) {
+  const t = useT();
   const { daily, weeks, sessions, data } = body;
   const [range, setRange] = useState<RangeId>('all');
 
@@ -49,7 +52,12 @@ export function ChartsView({ body, domain: mode, exerciseId }: Props) {
   return (
     <>
       {/* フィルタはすべてのグラフに効く 1 行としてカードの外に置く */}
-      <ChipGroup options={RANGES} value={range} onChange={setRange} label="表示期間" />
+      <ChipGroup
+        options={RANGES.map((r) => ({ id: r.id, label: t(r.key) }))}
+        value={range}
+        onChange={setRange}
+        label={t('range.label')}
+      />
 
       {mode === 'training' && (
         <TrainingCharts

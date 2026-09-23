@@ -1,3 +1,4 @@
+import { exerciseName } from '../../lib/exerciseCatalog';
 import { useState } from 'react';
 import { OrderList } from './OrderList';
 import { PickDialog } from './PickDialog';
@@ -8,6 +9,7 @@ import { Button } from '../Button';
 import { NameEntryRow } from '../NameEntryRow';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   /** マイ種目。プリセットに足せるのはここにある種目だけ */
@@ -38,6 +40,7 @@ export function PresetCreateDialog({
   onAddExercises,
   onClose,
 }: Props) {
+  const t = useT();
   const [name, setName] = useState('');
   const [ids, setIds] = useState<string[]>([]);
   /** 掴んでいる種目。置くまで並びは変えない */
@@ -46,22 +49,27 @@ export function PresetCreateDialog({
   const [picking, setPicking] = useState(true);
 
   const byId = new Map(exercises.map((e) => [e.id, e]));
+  /** 種目 ID から、いまの言語で読む名前。消えた種目は括弧つきの札で出す */
+  const nameOf = (id: string) => {
+    const found = byId.get(id);
+    return found ? exerciseName(t, found) : `（${t('rule.deletedExercise')}）`;
+  };
   const trimmed = name.trim().slice(0, PRESET_NAME_MAX);
   const taken = presets.some((p) => p.name === trimmed);
 
   return (
     <Modal open title={title} onClose={onClose}>
       {/* 押せない理由は**確定ボタンの上**。押したあとの位置に置かない */}
-      {taken && <p className={ui.note}>同じ名前のプリセットがあります。</p>}
-      {ids.length === 0 && <p className={ui.note}>種目を 1 つ以上入れてください。</p>}
+      {taken && <p className={ui.note}>{t('preset.nameTaken')}</p>}
+      {ids.length === 0 && <p className={ui.note}>{t('preset.needExercise')}</p>}
 
       <NameEntryRow
         value={name}
         onChange={setName}
-        label="新しいプリセットの名前"
-        placeholder="プリセット名"
-        commitLabel="このプリセットを作る"
-        cancelLabel="作るのをやめる"
+        label={t('preset.nameLabel')}
+        placeholder={t('preset.nameLabel')}
+        commitLabel={t('preset.create')}
+        cancelLabel={t('preset.cancelCreate')}
         disabled={trimmed === '' || taken || ids.length === 0}
         onCommit={() => {
           onCreate(name, ids);
@@ -75,11 +83,11 @@ export function PresetCreateDialog({
         <OrderList
           entries={ids.map((id) => ({
             id,
-            name: byId.get(id)?.name ?? '（削除された種目）',
+            name: nameOf(id),
             group: byId.get(id)?.group ?? null,
           }))}
           movingId={moving}
-          label="新しいプリセット"
+          label={t('preset.newTitle')}
           onGrab={setMoving}
           onCancel={() => setMoving(null)}
           onReorder={(next) => {
@@ -94,7 +102,7 @@ export function PresetCreateDialog({
           <PickDialog
             items={exercises}
             selected={new Set(ids)}
-            label="新しいプリセット"
+            label={t('preset.newTitle')}
             onToggle={(id) => setIds(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id])}
             /*
               カタログから足した種目は、**マイ種目とこの組み合わせの両方へ入れる。**
@@ -111,12 +119,8 @@ export function PresetCreateDialog({
 
         {moving == null && (
           <div className={ui.btnRow}>
-            <Button
-              size="sub"
-              label="新しいプリセットに種目を足す"
-              onClick={() => setPicking(true)}
-            >
-              ＋ 種目を足す
+            <Button adds size="sub" label={t('preset.addToNew')} onClick={() => setPicking(true)}>
+              {t('picker.menu')}
             </Button>
           </div>
         )}

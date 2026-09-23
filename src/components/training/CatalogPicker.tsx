@@ -2,8 +2,8 @@ import { useState } from 'react';
 import {
   CATALOG_CHOICES,
   EXERCISE_GROUP_ORDER,
-  GROUP_LABELS,
-  IMPLEMENT_LABELS,
+  GROUP_KEYS,
+  catalogFullName,
   catalogId,
   fromCatalog,
   isCatalogCandidate,
@@ -16,6 +16,8 @@ import ui from '../../styles/ui.module.scss';
 import { Tag } from '../Tag';
 import { Pill } from '../Pill';
 import s from './training.module.scss';
+import { useT } from '../../lib/i18n';
+import type { MessageKey } from '../../lib/i18n';
 
 /**
  * カタログの絞り込み。器具を選べる種目は、選んだ器具で登録される。
@@ -26,11 +28,11 @@ import s from './training.module.scss';
  */
 type CatalogFilter = 'all' | 'barbell' | 'dumbbell' | 'bodyweight';
 
-const CATALOG_FILTERS: { id: CatalogFilter; label: string }[] = [
-  { id: 'all', label: 'すべて' },
-  { id: 'barbell', label: 'バーベル・マシン' },
-  { id: 'dumbbell', label: 'ダンベル' },
-  { id: 'bodyweight', label: '自重' },
+const CATALOG_FILTERS: { id: CatalogFilter; key: MessageKey }[] = [
+  { id: 'all', key: 'catalog.all' },
+  { id: 'barbell', key: 'catalog.barbell' },
+  { id: 'dumbbell', key: 'catalog.dumbbell' },
+  { id: 'bodyweight', key: 'catalog.bodyweight' },
 ];
 
 function matchesFilter({ entry, implement }: CatalogChoice, filter: CatalogFilter): boolean {
@@ -81,6 +83,7 @@ interface Props {
  * 初めて記録タブを開いた人が「設定から追加してください」で行き止まる。
  */
 export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
+  const t = useT();
   /*
    * 器具の絞り込みだけをここで持つ。**部位と検索は `ExercisePickList` が持っている**
    * （選ぶ面はどこも同じ組みなので、そこに寄せた）。
@@ -130,8 +133,7 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
         }
       >
         {picked ? '✓ ' : '＋ '}
-        {c.entry.name}
-        {c.entry.implements && `（${IMPLEMENT_LABELS[c.implement]}）`}
+        {catalogFullName(t.locale, c.entry, c.implement)}
         {/*
           **打った語で当たったなら、その語を添える。**
           「プッシュダウン」で探して「トライセプスプレスダウン」が出ると、
@@ -139,9 +141,9 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
           登録されるのは**正式名のまま**——手元の一覧で名前が揺れないように。
         */}
         {alias != null && <Tag>{alias}</Tag>}
-        {searching && <Tag>{GROUP_LABELS[c.entry.group]}</Tag>}
-        {shelf === 'hidden' && <Tag>非表示</Tag>}
-        {shelf === 'adhoc' && <Tag>記録あり</Tag>}
+        {searching && <Tag>{t(GROUP_KEYS[c.entry.group])}</Tag>}
+        {shelf === 'hidden' && <Tag>{t('manage.hidden')}</Tag>}
+        {shelf === 'adhoc' && <Tag>{t('catalog.hasRecords')}</Tag>}
       </Pill>
     );
   };
@@ -152,7 +154,7 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
    */
   const items = notAdded.map((c) => ({
     id: catalogId(c.entry, c.implement),
-    name: `${c.entry.name}${c.entry.implements ? `（${IMPLEMENT_LABELS[c.implement]}）` : ''}`,
+    name: catalogFullName(t.locale, c.entry, c.implement),
     group: c.entry.group,
     // 呼び方の揺れで「無い」と思われないように、別名でも拾えるようにする
     aliases: c.entry.aliases,
@@ -164,28 +166,22 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
       {/* 選ぶ面はどこも同じ組み。器具の絞り込みだけがカタログ固有なので、そこを渡す */}
       <ExercisePickList
         items={items}
-        heading="カタログ"
+        heading={t('catalog.title')}
         threshold={0}
         // 部位チップは器具で絞る前の分類から出す（切り替えでチップが消えないように）
         groups={EXERCISE_GROUP_ORDER}
         filters={
           /* ダンベルに切り替えて追加すれば、バーベル版と別種目として両方持てる */
           <ChipGroup
-            options={CATALOG_FILTERS}
+            options={CATALOG_FILTERS.map((f) => ({ id: f.id, label: t(f.key) }))}
             value={filter}
             onChange={setFilter}
-            label="器具"
+            label={t('catalog.equipment')}
             showLabel
             tight
           />
         }
-        empty={
-          <p className={ui.note}>
-            {filtered
-              ? 'このフィルターに合う種目はありません。'
-              : 'カタログの種目はすべて追加済みです。'}
-          </p>
-        }
+        empty={<p className={ui.note}>{filtered ? t('catalog.noMatch') : t('catalog.allAdded')}</p>}
         renderItem={(item, searching, alias) => pill(item.choice, searching, alias)}
       />
     </div>
