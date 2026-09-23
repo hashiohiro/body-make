@@ -8,6 +8,7 @@ const preset = (id: string, weekdays: Preset['weekdays']): Preset => ({
   name: id,
   exerciseIds: ['ex_bench'],
   weekdays,
+  hidden: false,
   defaults: {},
 });
 
@@ -154,6 +155,14 @@ describe('既定のセット', () => {
     const p = load([{ id: 'p1', name: '胸の日', exerciseIds: ['ex_bench'] }]);
     expect(p?.defaults).toEqual({});
   });
+
+  /* 伏せてあるかは後から足した項目。持たないバックアップは「表示」で読む */
+  it('伏せてあるかを持たないバックアップは、表示として読む', () => {
+    expect(load([{ id: 'p1', name: '胸の日', exerciseIds: ['ex_bench'] }])?.hidden).toBe(false);
+    expect(
+      load([{ id: 'p1', name: '胸の日', exerciseIds: ['ex_bench'], hidden: true }])?.hidden,
+    ).toBe(true);
+  });
 });
 
 describe('既定のセットの引き当て', () => {
@@ -162,6 +171,7 @@ describe('既定のセットの引き当て', () => {
     name: id,
     exerciseIds: ['ex_bench'],
     weekdays,
+    hidden: false,
     defaults: { ex_bench: [{ weight, reps: 5 }] },
   });
 
@@ -178,5 +188,18 @@ describe('既定のセットの引き当て', () => {
   it('曜日が合うものが無ければ、一覧の並び順', () => {
     const list = [withDefaults('a', [], 60), withDefaults('b', [3], 100)];
     expect(defaultSetsFor(list, 'ex_bench', '2026-09-21')).toEqual([{ weight: 60, reps: 5 }]);
+  });
+
+  /*
+   * 伏せたものは目安も出さない。呼び出せないプリセットの数字が欄に薄く出ると、
+   * どこから来た値なのか辿れない。
+   */
+  it('伏せたプリセットは見ない', () => {
+    const hiddenOne = { ...withDefaults('a', [], 60), hidden: true };
+    expect(defaultSetsFor([hiddenOne], 'ex_bench', '2026-09-21')).toBeNull();
+    // 伏せていないものがあれば、そちらが出る
+    expect(
+      defaultSetsFor([hiddenOne, withDefaults('b', [], 80)], 'ex_bench', '2026-09-21'),
+    ).toEqual([{ weight: 80, reps: 5 }]);
   });
 });

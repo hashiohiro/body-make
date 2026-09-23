@@ -44,7 +44,12 @@ export function defaultSetsFor(
   exerciseId: string,
   date: string,
 ): SessionSet[] | null {
-  for (const preset of orderForDate(presets, date)) {
+  // 伏せたプリセットは目安も出さない。呼び出せないものの数字が欄に出ると、
+  // どこから来た値なのか辿れない（`Preset.hidden`）
+  for (const preset of orderForDate(
+    presets.filter((p) => !p.hidden),
+    date,
+  )) {
     const sets = preset.defaults[exerciseId];
     if (sets && sets.length > 0) return sets;
   }

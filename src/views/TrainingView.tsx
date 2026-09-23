@@ -147,12 +147,21 @@ export function TrainingView({ body, date }: Props) {
    */
   const todayMenu = useMemo(() => {
     const day = weekdayIndex(date) as Weekday;
-    const found = data.presets.find((p) => p.weekdays.includes(day));
+    const found = data.presets.find((p) => p.weekdays.includes(day) && !p.hidden);
     return found ? option(found) : null;
   }, [data.presets, date, option]);
 
-  /** 持っている組み合わせ、ぜんぶ */
-  const presets = useMemo(() => data.presets.map(option), [data.presets, option]);
+  /**
+   * 持っている組み合わせ。**伏せたものは出さない。**
+   *
+   * 外れるのは呼び出しと、帯の「保存済み／未保存」の突き合わせ。
+   * 伏せたものと突き合わせると、呼び出せないのに「保存済み」と出て行き止まりになる。
+   * **名前の重複だけは伏せたものとも見る**（`PresetBlock`）——戻したときにぶつかるため。
+   */
+  const presets = useMemo(
+    () => data.presets.filter((p) => !p.hidden).map(option),
+    [data.presets, option],
+  );
 
   /**
    * ＋ から出す一覧ぶん。**今日のぶんは見出しの下に別に出すので、ここでは繰り返さない。**

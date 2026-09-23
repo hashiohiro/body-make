@@ -181,7 +181,8 @@ export function weekLoad(
   exercises: readonly Exercise[],
   goals: GroupGoals,
 ): WeekLoad {
-  const placed = presets.filter((p) => p.weekdays.length > 0);
+  // 伏せたものは曜日を持ったままでも週から降りる（戻せば曜日つきで戻る）
+  const placed = presets.filter((p) => p.weekdays.length > 0 && !p.hidden);
   const byId = new Map(exercises.map((e) => [e.id, e]));
 
   /** その日に置いてある種目と、打ってある行数（無ければ 0） */

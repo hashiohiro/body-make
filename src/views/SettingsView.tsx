@@ -288,7 +288,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
       exercises: data.exercises.length,
       presets: data.presets.length,
       // 週メニューは「曜日を持つものを並べ直した見え方」なので、数えるのも曜日で
-      week: data.presets.filter((p) => p.weekdays.length > 0).length,
+      week: data.presets.filter((p) => p.weekdays.length > 0 && !p.hidden).length,
       // 件数として意味があるのは「押した許容」の数。閾値は数えても仕方がない
       checks: data.suppressed.length,
       // 件数で語れるものが無い。行には選んでいる単位を出す（下の count のところ）

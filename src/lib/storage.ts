@@ -536,6 +536,8 @@ export function sanitizePresets(
       exerciseIds,
       weekdays: parseWeekdays(o),
       defaults: sanitizeDefaults(o.defaults, exerciseIds, shapes),
+      // 伏せてあるか。古い記録には無いので、既定は「表示」
+      hidden: o.hidden === true,
     });
   }
   return out;

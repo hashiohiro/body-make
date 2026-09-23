@@ -541,6 +541,8 @@ export function useBodyData(initial: AppData): BodyData {
                   exerciseIds: ids,
                   weekdays: [...weekdays].sort((a, b) => a - b),
                   defaults: {},
+                  // 作ったばかりのものを伏せる理由がない
+                  hidden: false,
                 },
               ],
         };
@@ -570,6 +572,8 @@ export function useBodyData(initial: AppData): BodyData {
                 name,
                 exerciseIds: ids,
                 weekdays: preset.weekdays,
+                // 伏せてあるかも渡されたものを通す（曜日は持ったまま、週から降りる）
+                hidden: preset.hidden,
                 // 種目から外したぶんの既定は連れて行かない（参照先のない値を残さない）
                 defaults: Object.fromEntries(
                   Object.entries(preset.defaults).filter(([exerciseId]) =>

@@ -111,21 +111,39 @@ export function PresetBlock({
           <span className={s.presetGroups}>{groupsOf(exercises, preset.exerciseIds)}</span>
           <span className={s.presetCount}>{preset.exerciseIds.length}種目</span>
 
-          <MiniButton
-            label={`${preset.name}の名前を変更`}
-            onClick={() => {
-              setDraft(preset.name);
-              setRenaming(true);
-            }}
-          >
-            ✎
-          </MiniButton>
-          <MiniButton
-            label={`${preset.name}を削除`}
-            onClick={() => ask(removePresetRequest(preset, () => onRemove(preset.id)))}
-          >
-            ×
-          </MiniButton>
+          {/*
+            操作は**1 つの枠にまとめる。**行は 4 列のグリッドで、名前が 2 列ぶんを
+            持っている。ボタンを直に並べると、増えたぶんが次の行へ回り込む
+            （`ExerciseCard` の見出しと同じ作り方にそろえる）。
+          */}
+          <span className={s.presetBtns}>
+            <MiniButton
+              label={`${preset.name}の名前を変更`}
+              onClick={() => {
+                setDraft(preset.name);
+                setRenaming(true);
+              }}
+            >
+              ✎
+            </MiniButton>
+            {/*
+              伏せる／戻す。**削除の隣に置く。**どちらも「もう使わない」ときに探す操作で、
+              違いは戻せるかどうかしかない。並べておけば、消す前に伏せるほうを選べる。
+              確認は挟まない——失うものが無く、同じボタンで元に戻る。
+            */}
+            <MiniButton
+              label={preset.hidden ? `${preset.name}を表示に戻す` : `${preset.name}を非表示にする`}
+              onClick={() => onUpdate({ ...preset, hidden: !preset.hidden })}
+            >
+              {preset.hidden ? '表示に戻す' : '非表示'}
+            </MiniButton>
+            <MiniButton
+              label={`${preset.name}を削除`}
+              onClick={() => ask(removePresetRequest(preset, () => onRemove(preset.id)))}
+            >
+              ×
+            </MiniButton>
+          </span>
         </div>
       )}
 

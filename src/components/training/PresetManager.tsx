@@ -51,6 +51,30 @@ export function PresetManager({
   const [ask, confirmDialog] = useConfirm();
 
   const open = presets.find((p) => p.id === openId) ?? null;
+  /*
+   * 伏せたものは下にまとめる。**消したのではない**ので、一覧から居なくならない
+   * （マイ種目の「非表示」欄と同じ作法）。
+   */
+  const shown = presets.filter((p) => !p.hidden);
+  const hidden = presets.filter((p) => p.hidden);
+
+  const row = (preset: Preset) => (
+    <button
+      key={preset.id}
+      type="button"
+      className={s.presetPick}
+      aria-label={`${preset.name}を編集`}
+      onClick={() => setOpenId(preset.id)}
+    >
+      <span className={s.presetName}>
+        {preset.name}
+        {/* 曜日を決めた人にだけ出る札。決めていなければ何も増えない */}
+        {preset.weekdays.length > 0 && <Tag>{weekdaysLabel(preset.weekdays)}</Tag>}
+      </span>
+      <span className={s.presetGroups}>{groupsOf(exercises, preset.exerciseIds)}</span>
+      <span className={s.presetCount}>{preset.exerciseIds.length}種目</span>
+    </button>
+  );
 
   return (
     <section className={ui.card}>
@@ -77,23 +101,14 @@ export function PresetManager({
           ここで作るか、記録画面で種目を入れて、いまの組み合わせに名前を付けて残せます。
         </p>
       ) : (
-        presets.map((preset) => (
-          <button
-            key={preset.id}
-            type="button"
-            className={s.presetPick}
-            aria-label={`${preset.name}を編集`}
-            onClick={() => setOpenId(preset.id)}
-          >
-            <span className={s.presetName}>
-              {preset.name}
-              {/* 曜日を決めた人にだけ出る札。決めていなければ何も増えない */}
-              {preset.weekdays.length > 0 && <Tag>{weekdaysLabel(preset.weekdays)}</Tag>}
-            </span>
-            <span className={s.presetGroups}>{groupsOf(exercises, preset.exerciseIds)}</span>
-            <span className={s.presetCount}>{preset.exerciseIds.length}種目</span>
-          </button>
-        ))
+        shown.map(row)
+      )}
+
+      {hidden.length > 0 && (
+        <>
+          <div className={s.manageGroup}>非表示</div>
+          {hidden.map(row)}
+        </>
       )}
 
       {/* 押したその場が編集の面。名前・実施順・既定のセット・削除がここに揃う */}

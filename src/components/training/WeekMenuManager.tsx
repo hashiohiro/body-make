@@ -67,7 +67,11 @@ export function WeekMenuManager({
    * 曜日を持つプリセットを日〜土に並べ直して見せているだけ。
    * 月曜のメニューとは「月曜に使っているプリセット」でしかない。
    */
-  const placed = presets.filter((p) => p.weekdays.length > 0);
+  /*
+   * 曜日を持つもの。**伏せたものは降ろす**——曜日は持ったままなので、
+   * 表示に戻せばこの面へそのまま戻る（`Preset.hidden`）。
+   */
+  const placed = presets.filter((p) => p.weekdays.length > 0 && !p.hidden);
   const onDay = (day: Weekday) => placed.filter((p) => p.weekdays.includes(day));
   /** 曜日を持たないもの。ここから曜日に割り当てられる */
   const free = presets.filter((p) => p.weekdays.length === 0);

@@ -4215,6 +4215,7 @@ describe('プリセット（種目の組み合わせ）', () => {
       exerciseIds: ['ex_bench'],
       weekdays: [],
       defaults: {},
+      hidden: false,
     });
   });
 
@@ -4247,6 +4248,7 @@ describe('プリセット（種目の組み合わせ）', () => {
       exerciseIds: [bench.id],
       weekdays: [],
       defaults: {},
+      hidden: false,
     });
   });
 
@@ -4447,6 +4449,36 @@ describe('プリセット（設定から見る・編集する）', () => {
       presets,
     });
   }
+
+  /*
+   * 非表示は**選ぶことをやめる印**で、消すことの代わりではない。
+   * 中身も名前も曜日も残るので、戻せばそのまま使える（`Preset.hidden`）。
+   */
+  it('プリセットを非表示にして、表示に戻せる', async () => {
+    seedPresets({
+      id: 'p1',
+      name: '押す日',
+      exerciseIds: ['ex_bench'],
+      weekdays: [],
+      defaults: {},
+    });
+    render(<PresetHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '押す日を編集' }));
+    fireEvent.click(screen.getByRole('button', { name: '押す日を非表示にする' }));
+
+    // 一覧から消えない。下の「非表示」欄に落ちるだけ
+    expect(screen.getByText('非表示')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '押す日を編集' })).toBeTruthy();
+
+    const hiddenStored = await storedData();
+    expect(hiddenStored.presets[0]?.hidden).toBe(true);
+    // 中身は 1 つも失わない
+    expect(hiddenStored.presets[0]?.exerciseIds).toEqual(['ex_bench']);
+
+    fireEvent.click(screen.getByRole('button', { name: '押す日を表示に戻す' }));
+    expect((await storedData()).presets[0]?.hidden).toBe(false);
+  });
 
   it('空から新しいプリセットを作れる', async () => {
     seedPresets();

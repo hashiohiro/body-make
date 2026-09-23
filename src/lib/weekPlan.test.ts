@@ -188,11 +188,27 @@ describe('週の置きかた', () => {
     name: id,
     exerciseIds: ids,
     weekdays: days,
+    hidden: false,
     defaults: sets
       ? Object.fromEntries(
           ids.map((x) => [x, Array.from({ length: sets }, () => ({ weight: null, reps: null }))]),
         )
       : {},
+  });
+
+  /*
+   * 伏せたものは週から降りる。**曜日は持ったまま**なので、表示に戻せば
+   * この面へそのまま戻る（`Preset.hidden`）。
+   */
+  it('伏せた週メニューは週から降りる', () => {
+    const menus = [menu('m1', [1], [bench.id], 4)];
+    expect(weekLoad(menus, EXERCISES, goals({})).totals.chest).toBe(4);
+
+    const hiddenMenus = [{ ...menus[0]!, hidden: true }];
+    const load = weekLoad(hiddenMenus, EXERCISES, goals({}));
+    expect(load.totals.chest).toBe(0);
+    // 曜日は消していない
+    expect(hiddenMenus[0]!.weekdays).toEqual([1]);
   });
 
   /** 本人が打った数字が勝つ */

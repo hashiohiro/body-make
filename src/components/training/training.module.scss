@@ -1063,6 +1063,18 @@
   color: var(--ink-muted);
 }
 
+/*
+ * 行の操作。**1 マスにまとめて置く。**
+ * 行は 4 列で、名前が 2 列ぶんを取っている。ボタンを直に並べると
+ * 列が足りず、増えたぶんから次の行へ回り込む。
+ */
+.presetBtns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: end;
+}
+
 .presetSave {
   display: flex;
   align-items: center;

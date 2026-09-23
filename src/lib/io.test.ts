@@ -54,6 +54,7 @@ function fullData(): AppData {
         name: '押す日',
         exerciseIds: ['ex_bench'],
         weekdays: [],
+        hidden: false,
         defaults: {},
       },
     ],
