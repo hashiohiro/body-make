@@ -770,6 +770,41 @@ describe('トレ画面', () => {
     expect(screen.queryByRole('button', { name: /加重/ })).toBeNull();
   });
 
+  /*
+   * **持っていない指標を 0 と書かない。**有酸素で 0 kg を出さないのと同じ。
+   * 挙上量が出ないのは「掛ける相手がない」からで、やっていないという意味ではない。
+   */
+  it('秒で数える種目は、0kg ではなく合計の秒数を出す', () => {
+    seedExercises('ex_plank');
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ プランク/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('プランク');
+
+    fireEvent.change(screen.getByLabelText('1セット目の秒数'), { target: { value: '60' } });
+    fireEvent.click(screen.getByRole('button', { name: 'セットを追加' }));
+    fireEvent.change(screen.getByLabelText('2セット目の秒数'), { target: { value: '45' } });
+
+    // 同じ合計はカードとセット入力の両方に出る（ExerciseTotals を共有している）
+    expect(screen.getAllByText('合計 105秒').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/0 kg/)).toBeNull();
+  });
+
+  it('体重を乗せない自重種目は、0kg ではなく合計の回数を出す', () => {
+    seedExercises('ex_leg_raise');
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ レッグレイズ/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('レッグレイズ');
+
+    fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '15' } });
+
+    expect(screen.getAllByText('合計 15回').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/0 kg/)).toBeNull();
+  });
+
   it('器具を使わない種目でも重量を聞かない（クランチ・デッドバグなど）', () => {
     // 体重を挙上量に足さない種目（loadMode は standard）でも、器具は要らない
     seedExercises('ex_crunch');

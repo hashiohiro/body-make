@@ -343,6 +343,7 @@ export const ja = {
   'exercise.removeFromDay': '{name}をこの日から外す',
   'exercise.editSetsOf': '{name}のセットを編集',
   'exercise.setGoalOf': '{name}の目標を決める',
+  'totals.count': '合計 {n}{unit}',
   'totals.cardioSets': '{n}本',
   'totals.minutes': '{n}分',
   'totals.oneRm': '推定1RM {value} {unit}',

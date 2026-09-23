@@ -1,5 +1,5 @@
 import { deltaTone, fmt, fmtDelta, fmtVolume } from '../../lib/format';
-import { isCardio } from '../../lib/exerciseCatalog';
+import { REP_UNIT_KEYS, isCardio } from '../../lib/exerciseCatalog';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { Exercise, ExercisePoint } from '../../types';
 import { useWeightFormat } from '../../hooks/useWeightUnit';
@@ -92,10 +92,26 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
                 {point.measured ? ' *' : ''}
               </span>
             )}
+            {/*
+              **持っていない指標を 0 と書かない。**有酸素で 0 kg を出さないのと同じ理由。
+
+              挙上量が出ないのは 2 通りある。どちらも「掛ける相手がない」で、
+              やっていないという意味ではない。
+                秒で数える種目（プランク）        … 重量 × 秒 は挙上量にならない
+                体重を乗せない自重種目（レッグレイズ）… 重量欄が空なら 0 × 回数
+              代わりに、その種目が実際に持っている量（合計の回数・秒数）を出す。
+              重量を打てば挙上量が出るので、そのときはこれまでどおり。
+            */}
             <b>
-              {fmtVolume(volume)} {unitLabel}
-              {delta != null && (
-                <span className={`${ui.hint} ${TONE_CLASS[tone]}`}> {fmtDelta(delta, 0)}</span>
+              {rawVolume > 0 ? (
+                <>
+                  {fmtVolume(volume)} {unitLabel}
+                  {delta != null && (
+                    <span className={`${ui.hint} ${TONE_CLASS[tone]}`}> {fmtDelta(delta, 0)}</span>
+                  )}
+                </>
+              ) : (
+                t('totals.count', { n: point?.reps ?? 0, unit: t(REP_UNIT_KEYS[exercise.repUnit]) })
               )}
             </b>
           </>

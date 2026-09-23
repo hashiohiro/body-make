@@ -328,6 +328,7 @@ export const en: Record<MessageKey, string> = {
   'exercise.removeFromDay': 'Remove {name} from this day',
   'exercise.editSetsOf': 'Edit sets for {name}',
   'exercise.setGoalOf': 'Set a goal for {name}',
+  'totals.count': '{n} {unit} total',
   'totals.cardioSets': '{n} bouts',
   'totals.minutes': '{n} min',
   'totals.oneRm': 'Est. 1RM {value} {unit}',
