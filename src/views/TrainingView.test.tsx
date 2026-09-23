@@ -4464,11 +4464,9 @@ describe('プリセット（設定から見る・編集する）', () => {
     });
     render(<PresetHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '押す日を編集' }));
     fireEvent.click(screen.getByRole('button', { name: '押す日を非表示にする' }));
 
     // 一覧から消えない。下の「非表示」欄に落ちるだけ
-    expect(screen.getByText('非表示')).toBeTruthy();
     expect(screen.getByRole('button', { name: '押す日を編集' })).toBeTruthy();
 
     const hiddenStored = await storedData();
@@ -4654,7 +4652,7 @@ describe('プリセット（設定から見る・編集する）', () => {
     expect(stored.presets[0]!.exerciseIds).toEqual(['ex_squat', 'ex_bench']);
   });
 
-  /** 一覧は 1 行に畳んである。中身は押して開く */
+  /** 一覧は 1 行に畳んである。中身は「編集」から開く（マイ種目と同じ形） */
   const openPreset = (name: string) =>
     fireEvent.click(screen.getByRole('button', { name: `${name}を編集` }));
 
@@ -4669,8 +4667,8 @@ describe('プリセット（設定から見る・編集する）', () => {
     render(<PresetHarness />);
 
     expect(screen.getByText('押す日')).toBeTruthy();
-    expect(screen.getByText('胸・背中')).toBeTruthy();
-    expect(screen.getByText('2種目')).toBeTruthy();
+    // 事実は 1 行にまとめる（マイ種目の「記録 12日」と同じ位置）
+    expect(screen.getByText('2種目 · 胸・背中')).toBeTruthy();
     // 畳んである間は種目まで出さない（3 つ持つだけで画面が羅列で埋まる）
     expect(screen.queryByText('ベンチプレス（バーベル）')).toBeNull();
 

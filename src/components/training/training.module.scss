@@ -1030,9 +1030,18 @@
 /* ---- プリセット ---- */
 
 /* 名前・部位・種目数と、小さな操作ボタン */
+/* 作る口と一覧のあいだ。ボタンの続きに見えないよう、1 段ぶん空ける */
+.presetList {
+  margin-top: 14px;
+}
+
+/*
+ * プリセットの見出しの行（編集の面）。名前の行と、その下に 部位・件数・名前の変更。
+ * **列は 3 つ。**伏せる・消すは一覧のカードが持つので、ここに並ぶ操作は 1 つだけ。
+ */
 .presetRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 4px 8px;
   padding: 8px 0;
@@ -1047,7 +1056,7 @@
 }
 
 .presetName {
-  grid-column: 1 / -3;
+  grid-column: 1 / -1;
   color: var(--ink);
   font-size: 14px;
   font-weight: 600;
@@ -1061,18 +1070,6 @@
 
 .presetCount {
   color: var(--ink-muted);
-}
-
-/*
- * 行の操作。**1 マスにまとめて置く。**
- * 行は 4 列で、名前が 2 列ぶんを取っている。ボタンを直に並べると
- * 列が足りず、増えたぶんから次の行へ回り込む。
- */
-.presetBtns {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  justify-self: end;
 }
 
 .presetSave {

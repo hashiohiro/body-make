@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { PresetBlock } from './PresetBlock';
+import { ExerciseSummaryCard } from './ExerciseSummaryCard';
+import { MiniButton } from '../MiniButton';
+import { removePresetRequest } from './presetConfirm';
 import { PresetCreateDialog } from './PresetCreateDialog';
 import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
@@ -8,7 +11,6 @@ import { weekdaysLabel } from '../../lib/preset';
 import type { Exercise, Preset } from '../../types';
 import { CardHeader } from '../CardHeader';
 import { Button } from '../Button';
-import { Tag } from '../Tag';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
 
@@ -58,22 +60,44 @@ export function PresetManager({
   const shown = presets.filter((p) => !p.hidden);
   const hidden = presets.filter((p) => p.hidden);
 
+  /*
+   * 1 件ぶんは**マイ種目の一覧と同じ部品**（`ExerciseSummaryCard`）で出す。
+   * 名前 → 事実 → 入口 の 3 段。似た形を別に作ると、あとで片方だけ変わる。
+   *
+   * **行ぜんたいを押させない。**マイ種目に合わせて、何をするかはボタンで選ぶ
+   * （記録画面の呼び出しの面は行ごと押せるままにする。あちらは「入れる」ための面）。
+   */
   const row = (preset: Preset) => (
-    <button
+    <ExerciseSummaryCard
       key={preset.id}
-      type="button"
-      className={s.presetPick}
-      aria-label={`${preset.name}を編集`}
-      onClick={() => setOpenId(preset.id)}
-    >
-      <span className={s.presetName}>
-        {preset.name}
-        {/* 曜日を決めた人にだけ出る札。決めていなければ何も増えない */}
-        {preset.weekdays.length > 0 && <Tag>{weekdaysLabel(preset.weekdays)}</Tag>}
-      </span>
-      <span className={s.presetGroups}>{groupsOf(exercises, preset.exerciseIds)}</span>
-      <span className={s.presetCount}>{preset.exerciseIds.length}種目</span>
-    </button>
+      name={preset.name}
+      // 曜日を決めた人にだけ出る札。決めていなければ何も増えない
+      tag={weekdaysLabel(preset.weekdays)}
+      factLeft={`${preset.exerciseIds.length}種目 · ${groupsOf(exercises, preset.exerciseIds)}`}
+      actions={
+        <>
+          <MiniButton label={`${preset.name}を編集`} onClick={() => setOpenId(preset.id)}>
+            編集
+          </MiniButton>
+          {/*
+            伏せる／戻す。**押す前に一覧で読める位置に置く**（マイ種目と同じ並び）。
+            確認は挟まない——失うものが無く、同じボタンで元に戻る。
+          */}
+          <MiniButton
+            label={preset.hidden ? `${preset.name}を表示に戻す` : `${preset.name}を非表示にする`}
+            onClick={() => onUpdate({ ...preset, hidden: !preset.hidden })}
+          >
+            {preset.hidden ? '表示に戻す' : '非表示'}
+          </MiniButton>
+          <MiniButton
+            label={`${preset.name}を削除`}
+            onClick={() => ask(removePresetRequest(preset, () => onRemove(preset.id)))}
+          >
+            削除
+          </MiniButton>
+        </>
+      }
+    />
   );
 
   return (
@@ -94,24 +118,30 @@ export function PresetManager({
         </Button>
       </div>
 
-      {presets.length === 0 ? (
-        <p className={ui.emptyState}>
-          まだプリセットがありません。
-          <br />
-          ここで作るか、記録画面で種目を入れて、いまの組み合わせに名前を付けて残せます。
-        </p>
-      ) : (
-        shown.map(row)
-      )}
+      {/*
+        作る口と一覧のあいだを空ける。**続きに見せない**——
+        ボタンのすぐ下に 1 件目のカードが来ると、そのカードの操作に見える。
+      */}
+      <div className={s.presetList}>
+        {presets.length === 0 ? (
+          <p className={ui.emptyState}>
+            まだプリセットがありません。
+            <br />
+            ここで作るか、記録画面で種目を入れて、いまの組み合わせに名前を付けて残せます。
+          </p>
+        ) : (
+          shown.map(row)
+        )}
 
-      {hidden.length > 0 && (
-        <>
-          <div className={s.manageGroup}>非表示</div>
-          {hidden.map(row)}
-        </>
-      )}
+        {hidden.length > 0 && (
+          <>
+            <div className={s.manageGroup}>非表示</div>
+            {hidden.map(row)}
+          </>
+        )}
+      </div>
 
-      {/* 押したその場が編集の面。名前・実施順・既定のセット・削除がここに揃う */}
+      {/* 「編集」を押した先。名前・実施順・既定のセットを直す面（伏せる・消すは一覧が持つ） */}
       {open && (
         <Modal open title={open.name} onClose={() => setOpenId(null)}>
           <PresetBlock
