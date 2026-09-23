@@ -21,6 +21,7 @@ import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
 import { Tag } from '../Tag';
 import { MiniButton } from '../MiniButton';
+import { ExerciseSummaryCard } from './ExerciseSummaryCard';
 import { Pill } from '../Pill';
 import s from './training.module.scss';
 import { useGoalUnit } from '../../hooks/useWeightUnit';
@@ -109,62 +110,71 @@ export function ExerciseGoalsCard({
   const pickedExercise = picked ? (byId.get(picked) ?? null) : null;
 
   /**
-   * 目標 1 件の行。**部位ごとに束ねて出す**ので、行の側に部位は書かない
-   * （見出しが言っている）。
+   * 目標 1 件。**マイ種目の一覧と同じカード**（名前 → 事実 → 入口）で出す。
+   * 同じ種目を 2 つの画面で見るのに、違う形で出す理由がない。
+   *
+   * 部位ごとに束ねて出すので、カードの側に部位は書かない（見出しが言っている）。
+   *
+   * **行ぜんたいを押させない。**目標・推移・設定の 3 つに行けるので、
+   * 押す場所で結果が変わる面にすると、何が起きるか読めなくなる。
    */
   const row = (goal: ExerciseGoal) => {
     const exercise = byId.get(goal.exerciseId);
+    const unit = shown(goal.unit);
     return (
-      <button
+      <ExerciseSummaryCard
         key={goal.exerciseId}
-        type="button"
-        className={s.goalRow}
-        aria-label={`${goal.name}の目標`}
-        onClick={() => setOpenId(goal.exerciseId)}
-      >
-        <span className={s.goalRowHead}>
-          <span className={s.goalRowName}>{goal.name}</span>
-          <Tag kind="chosen">{goalTypeLabel(goal.type, exercise?.repUnit ?? 'reps', true)}</Tag>
-          <span className={s.chevron} aria-hidden="true">
-            ›
-          </span>
-        </span>
-
-        {/*
-          いまと目標を並べる。**片方だけでは決めた値に近いのか分からない。**
-          維持は数値を決めないので、目標もバーも出さない（割る相手がない）
-        */}
-        <span className={s.goalRowBody}>
-          {/*
-            前回からの増減はここに足さない。**1 行で動く数字は 1 つにする。**
-            足すと「いま → 目標」の右に別の軸の数字が並び、
-            そのぶん列を広げるとバーが痩せる。伸びの中身は推移が持っている。
-          */}
-          <span className={s.goalRowValue}>
-            {fmt(shown(goal.unit).conv(goal.current), goal.digits)}
-            {goal.target != null &&
-              ` → ${fmt(shown(goal.unit).conv(goal.target), goal.digits)}`}{' '}
-            {shown(goal.unit).label}
-          </span>
-
-          {goal.target == null ? (
-            <span />
-          ) : (
+        name={goal.name}
+        kind={goalTypeLabel(goal.type, exercise?.repUnit ?? 'reps', true)}
+        goal={
+          goal.target == null ? null : `${fmt(unit.conv(goal.target), goal.digits)} ${unit.label}`
+        }
+        /*
+          いまの値。**前回からの増減はここに足さない**——1 行で動く数字は 1 つにする。
+          伸びの中身は推移が持っている。
+        */
+        factLeft={`いま ${fmt(unit.conv(goal.current), goal.digits)} ${unit.label}`}
+        /* 維持は数値を決めないので割合も出ない。それは立て方の札が言っている */
+        factRight={
+          goal.target == null
+            ? '—'
+            : goal.reached
+              ? '到達'
+              : goal.progress == null
+                ? '—'
+                : fmtPercent(goal.progress)
+        }
+        meter={
+          goal.target == null ? null : (
             <Meter value={goal.progress ?? 0} label={`${goal.name}の到達率`} />
-          )}
-
-          {/* 維持は数値を決めないので割合も出ない。それは上の「維持」が言っている */}
-          <span className={s.goalRowPct}>
-            {goal.target == null
-              ? '—'
-              : goal.reached
-                ? '到達'
-                : goal.progress == null
-                  ? '—'
-                  : fmtPercent(goal.progress)}
-          </span>
-        </span>
-      </button>
+          )
+        }
+        actions={
+          <>
+            <MiniButton
+              label={`${goal.name}の目標を変える`}
+              onClick={() => setOpenId(goal.exerciseId)}
+            >
+              目標
+            </MiniButton>
+            <MiniButton
+              label={`${goal.name}の推移を見る`}
+              onClick={() => setTrendOf(goal.exerciseId)}
+            >
+              推移
+            </MiniButton>
+            <MiniButton
+              label={`${goal.name}の設定`}
+              onClick={() => {
+                setOpenId(goal.exerciseId);
+                setSettings(true);
+              }}
+            >
+              設定
+            </MiniButton>
+          </>
+        }
+      />
     );
   };
 
@@ -300,25 +310,11 @@ export function ExerciseGoalsCard({
           {settings ? (
             <ExerciseSettingsForm exercise={openExercise} onUpdate={onUpdate} />
           ) : (
-            <div>
-              <GoalEditor exercise={openExercise} sessions={sessions} onUpdate={onUpdate} />
-
-              {/*
-                入口はマイ種目の行と同じ並び（推移 / 設定）。同じ種目なのに
-                画面によってボタンの名前や数が違うと、どちらで何ができるか覚え直しになる
-              */}
-              <div className={ui.btnRow}>
-                <MiniButton
-                  label={`${openExercise.name}の推移を見る`}
-                  onClick={() => setTrendOf(openExercise.id)}
-                >
-                  推移を見る
-                </MiniButton>
-                <MiniButton label={`${openExercise.name}の設定`} onClick={() => setSettings(true)}>
-                  設定
-                </MiniButton>
-              </div>
-            </div>
+            /*
+              目標を決める面。**入口は持たない**——推移も設定も一覧のカードから開く。
+              同じ操作を 2 か所に置くと、片方だけ直って挙動がずれる。
+            */
+            <GoalEditor exercise={openExercise} sessions={sessions} onUpdate={onUpdate} />
           )}
         </Modal>
       )}

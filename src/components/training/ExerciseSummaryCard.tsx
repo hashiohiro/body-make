@@ -14,6 +14,13 @@ interface Props {
   goal?: string | null;
   /** その画面が持つ事実（記録日数など） */
   factLeft: ReactNode;
+  /**
+   * 右端に振る事実（到達率など）。**器は左右に振り分ける作り**なので、
+   * 渡さなければ左の事実だけが出る。
+   */
+  factRight?: ReactNode;
+  /** 事実と入口のあいだに挟む図（到達のバーなど）。持たない画面では出ない */
+  meter?: ReactNode;
   /** 下に並べる入口。画面ごとに違うのはここだけ */
   actions: ReactNode;
   /** 開いたときのフォーム（目標の編集・種目の詳細設定） */
@@ -40,6 +47,8 @@ export function ExerciseSummaryCard({
   kind,
   goal,
   factLeft,
+  factRight,
+  meter,
   actions,
   children,
 }: Props) {
@@ -54,7 +63,10 @@ export function ExerciseSummaryCard({
 
       <div className={s.goalFoot}>
         <span>{factLeft}</span>
+        {factRight != null && <span>{factRight}</span>}
       </div>
+
+      {meter}
 
       <div className={s.itemActions}>{actions}</div>
 

@@ -17,8 +17,8 @@ import { GroupChips } from './GroupChips';
 import { SearchToggle } from './SearchToggle';
 import { ExerciseSettingsForm } from './ExerciseSettingsForm';
 import { RecordMoveDialog } from './RecordMoveDialog';
-import { GoalEditor } from './GoalEditor';
 import { ExerciseSummaryCard } from './ExerciseSummaryCard';
+import { ExerciseDetailDialog } from './ExerciseDetailDialog';
 import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
 import { CardHeader } from '../CardHeader';
@@ -27,6 +27,7 @@ import ui from '../../styles/ui.module.scss';
 import { MiniButton } from '../MiniButton';
 import s from './training.module.scss';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
+import { todayISO } from '../../lib/date';
 import { WEIGHT_UNIT_LABEL, fromKg } from '../../lib/weight';
 import type { WeightUnit } from '../../lib/weight';
 
@@ -99,8 +100,8 @@ export function ExerciseManager({
   /** 記録の移行を開いているか。種目の設定の面から開く */
   const [moving, setMoving] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  /** 目標を開いている種目。設定（詳細）とは同時に開かない */
-  const [goalOf, setGoalOf] = useState<string | null>(null);
+  /** 推移を開いている種目。**重ねる**——画面ごと移ると、閉じたとき一覧に戻る */
+  const [trendOf, setTrendOf] = useState<string | null>(null);
   const [ask, confirmDialog] = useConfirm();
   /** 写して作っている最中の名前。空でも重複でも作らせない */
   const [copying, setCopying] = useState(false);
@@ -116,12 +117,10 @@ export function ExerciseManager({
   };
   const canCopy = copyName.trim() !== '' && !nameTaken(copyName);
   const openDetail = (ex: Exercise) => {
-    setGoalOf(null);
     setEditing((cur) => (cur === ex.id ? null : ex.id));
   };
 
   const byId = new Map(exercises.map((e) => [e.id, e]));
-  const goalExercise = goalOf ? (byId.get(goalOf) ?? null) : null;
   const settingsExercise = editing ? (byId.get(editing) ?? null) : null;
 
   /**
@@ -226,26 +225,22 @@ export function ExerciseManager({
             <MiniButton label={`${ex.name}を削除`} onClick={() => remove(ex)}>
               削除
             </MiniButton>
+            {/*
+              伏せた種目でも**推移は開ける。**非表示は「選ぶのをやめた」印で、
+              記録はそのまま残っている。読む道が無いほうが不整合になる。
+            */}
+            <span className={s.actionsTail}>
+              <MiniButton label={`${ex.name}の推移を見る`} onClick={() => setTrendOf(ex.id)}>
+                推移
+              </MiniButton>
+            </span>
           </>
         ) : (
           <>
             {/*
-              目標はこの場で決める。目標タブへ連れて行くと、
-              マイ種目を見ていたつもりが別の画面に移っていて、戻り方も分からない。
-              決める道具（GoalEditor）は目標タブと同じものを使う。
+              **目標はここに置かない。**決めるのは目標タブの仕事で、
+              この画面が持つのは種目そのものの手入れ（設定・伏せる・消す）。
             */}
-            <MiniButton
-              pressed={goalOf === ex.id}
-              label={ex.goal ? `${ex.name}の目標を変える` : `${ex.name}の目標を決める`}
-              onClick={() =>
-                setGoalOf((cur) => {
-                  setEditing(null);
-                  return cur === ex.id ? null : ex.id;
-                })
-              }
-            >
-              目標
-            </MiniButton>
             <MiniButton
               pressed={editing === ex.id}
               label={`${ex.name}の設定`}
@@ -262,6 +257,15 @@ export function ExerciseManager({
             <MiniButton label={`${ex.name}を削除`} onClick={() => remove(ex)}>
               削除
             </MiniButton>
+            {/*
+              推移は**この種目をどうするか**ではなく、**過去を読む**ための入口。
+              性格が違うので、右端へ離して置く（`actionsTail`）。
+            */}
+            <span className={s.actionsTail}>
+              <MiniButton label={`${ex.name}の推移を見る`} onClick={() => setTrendOf(ex.id)}>
+                推移
+              </MiniButton>
+            </span>
           </>
         )
       }
@@ -362,14 +366,20 @@ export function ExerciseManager({
       )}
 
       {/*
-        目標と設定は**ダイアログで出す。** 行の中で展開すると、開くたびに下の種目が
+        設定は**ダイアログで出す。** 行の中で展開すると、開くたびに下の種目が
         押し下げられ、次に押したい場所が動く（部位の目標の面と同じ扱いにそろえる）。
       */}
-      {goalExercise && (
-        <Modal open title={`${goalExercise.name}の目標`} onClose={() => setGoalOf(null)}>
-          <GoalEditor exercise={goalExercise} sessions={sessions} onUpdate={onUpdate} />
-        </Modal>
-      )}
+      {/*
+        推移は**ダイアログで重ねる。**目標タブの種目カードと同じ扱いで、
+        閉じれば見ていた一覧の位置に戻る。
+      */}
+      <ExerciseDetailDialog
+        open={trendOf != null}
+        onClose={() => setTrendOf(null)}
+        exercise={exercises.find((e) => e.id === trendOf) ?? null}
+        sessions={sessions}
+        from={sessions[0]?.date ?? todayISO()}
+      />
 
       {settingsExercise && !moving && (
         /*

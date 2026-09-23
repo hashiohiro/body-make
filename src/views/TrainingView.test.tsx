@@ -973,10 +973,15 @@ describe('種目管理（設定タブ）', () => {
     // 目標の値は必ず「目標」と書いてから出す（数字だけだと何の数字か読めない）
     expect(screen.queryByText('100kg')).toBeNull();
 
-    // 入口は下にまとめる（目標画面の「推移を見る／変更」と同じ位置）
-    expect(screen.getByRole('button', { name: /ベンチプレス.*の目標を決める/ })).toBeTruthy();
+    /*
+      入口は下にまとめる。**目標はここに置かない**——決めるのは目標タブの仕事で、
+      この画面が持つのは種目そのものの手入れ（設定・伏せる・消す）と、過去を読む道。
+    */
+    expect(screen.queryByRole('button', { name: /ベンチプレス.*の目標を決める/ })).toBeNull();
     expect(screen.getByRole('button', { name: /ベンチプレス.*の設定/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /ベンチプレス.*を非表示にする/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /ベンチプレス.*を削除/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /ベンチプレス.*の推移を見る/ })).toBeTruthy();
   });
 
   it('目標の値は「目標」と書いてから出す', async () => {
@@ -1203,6 +1208,37 @@ describe('設定（カテゴリ別の画面遷移）', () => {
     fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の設定/ }));
     expect(screen.getByText('補助的に使う部位')).toBeTruthy();
     expect(screen.queryByLabelText(/ベンチプレス.*の目標の種類/)).toBeNull();
+  });
+
+  /*
+   * 同じ種目を 2 つの画面で見るのに、入口が違う理由がない。
+   * マイ種目にも目標タブと同じ並び（目標 / 推移 / 設定）を置く。
+   */
+  it('マイ種目からも推移を開ける', () => {
+    seedData(['ex_bench'], {
+      '2026-03-01': [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+    });
+    render(<SettingsHarness section="training" page="exercises" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移を見る/ }));
+    expect(screen.getByText('元データ')).toBeTruthy();
+  });
+
+  /*
+   * 伏せた種目でも推移は開ける。非表示は「選ぶのをやめた」印で、記録は残っている。
+   * 読む道が無いと、記録があるのに辿り着けない。
+   */
+  it('非表示にした種目からも推移を開ける', () => {
+    seedData(['ex_bench'], {
+      '2026-03-01': [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+    });
+    render(<SettingsHarness section="training" page="exercises" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*を非表示にする/ }));
+    expect(screen.getByRole('button', { name: /ベンチプレス.*を表示に戻す/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移を見る/ }));
+    expect(screen.getByText('元データ')).toBeTruthy();
   });
 
   /*
@@ -3830,20 +3866,29 @@ describe('目標画面', () => {
     fireEvent.change(goalField(/ベンチプレス.*の目標$/), { target: { value: '100' } });
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
-    // 一覧の行には「いま → 目標」を並べる。片方だけでは近いのかどうか読めない
-    const row = screen.getByRole('button', { name: /^ベンチプレス.*の目標$/ });
-    expect(row.textContent).toContain('60.0 → 100.0 kg');
+    /*
+     * 一覧はマイ種目と同じカード（名前 → 事実 → 入口）。
+     * いまの値と目標を両方出す——片方だけでは近いのかどうか読めない。
+     */
+    const card = screen
+      .getByText('ベンチプレス（バーベル）')
+      .closest<HTMLElement>('[class*="_itemCard_"]')!;
+    expect(card.textContent).toContain('いま 60.0 kg');
+    expect(card.textContent).toContain('目標 100.0 kg');
     // 到達率が出せないときも、何の値が出ていないのかは書く（記録が 3 セッション未満）
-    expect(row.textContent).toContain('—');
+    expect(card.textContent).toContain('—');
 
     /*
-     * 行を押すと、その種目の目標を決める面が開く。
+     * 入口はボタンで選ぶ。**行ぜんたいは押させない**——目標・推移・設定の
+     * 3 つに行けるので、押す場所で結果が変わると何が起きるか読めない。
      * 種目そのものの設定は、同じダイアログの面を差し替えて出す
      */
-    fireEvent.click(row);
+    fireEvent.click(within(card).getByRole('button', { name: /の目標を変える$/ }));
     expect(goalField(/ベンチプレス.*の目標$/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の設定/ }));
+    // 設定も一覧のカードから開く（目標の面には入口を置かない）
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    fireEvent.click(within(card).getByRole('button', { name: /の設定$/ }));
     expect(screen.getByText('補助的に使う部位')).toBeTruthy();
 
     // 深い面では、右上に「‹ 戻る」が並ぶ（閉じるとダイアログごと消えてしまう）
@@ -3851,7 +3896,8 @@ describe('目標画面', () => {
     expect(goalField(/ベンチプレス.*の目標$/)).toBeTruthy();
 
     // 推移は重ねて出す。画面ごと移ると、閉じたときに開いていた種目へ戻れない
-    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移を見る/ }));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    fireEvent.click(within(card).getByRole('button', { name: /の推移を見る$/ }));
     expect(screen.getByText('元データ')).toBeTruthy();
 
     // 閉じると、開いていた種目の面がそのまま残っている
@@ -3860,7 +3906,8 @@ describe('目標画面', () => {
     )!;
     fireEvent.click(within(trend).getByRole('button', { name: '閉じる' }));
     expect(screen.queryByText('元データ')).toBeNull();
-    expect(goalField(/ベンチプレス.*の目標$/)).toBeTruthy();
+    // 閉じると、見ていた一覧がそのまま残っている
+    expect(within(card).getByRole('button', { name: /の目標を変える$/ })).toBeTruthy();
   });
 
   /*
@@ -3896,7 +3943,9 @@ describe('目標画面', () => {
     expect(heads).toEqual(['胸', '腕']);
 
     // 見出しが言っているので、行の側に部位は書かない
-    const row = within(card).getByRole('button', { name: /^ベンチプレス.*の目標$/ });
+    const row = within(card)
+      .getByText('ベンチプレス（バーベル）')
+      .closest('[class*="_itemCard_"]')!;
     expect(row.textContent).not.toContain('胸');
   });
 
@@ -4982,7 +5031,11 @@ describe('画面の位置（タブと下位画面）', () => {
     expect(screen.getByLabelText('記録する日付')).toBeTruthy();
   });
 
-  it('マイ種目の目標は、マイ種目のまま決められる', () => {
+  /*
+   * **目標はマイ種目に置かない。**決めるのは目標タブの仕事で、
+   * この画面が持つのは種目そのものの手入れと、過去を読む道。
+   */
+  it('マイ種目には目標の入口を置かない', () => {
     seedExercises('ex_bench');
     render(<App initial={seeded} />);
 
@@ -4990,19 +5043,8 @@ describe('画面の位置（タブと下位画面）', () => {
     fireEvent.click(screen.getByText('トレーニング'));
     fireEvent.click(screen.getByText('マイ種目'));
 
-    // 目標タブへ連れて行かない。見ていた画面のまま、ダイアログで決める
-    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の目標を決める/ }));
-    expect(window.location.hash).toBe('#settings/training/exercises');
-    expect(screen.getByText(/ベンチプレス.*の目標$/)).toBeTruthy(); // ダイアログの見出し
-    expect(goalField(/ベンチプレス.*の目標$/)).toBeTruthy();
-
-    fireEvent.change(goalField(/ベンチプレス.*の目標$/), { target: { value: '100' } });
-    expect(screen.getByText('重量↑')).toBeTruthy();
-    expect(screen.getByText('目標 100kg')).toBeTruthy();
-
-    // 閉じると一覧に戻る（行の中で展開しない）
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expect(goalFields(/ベンチプレス.*の目標$/)).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /ベンチプレス.*の目標を決める/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /ベンチプレス.*の設定/ })).toBeTruthy();
   });
 
   it('目標タブも体組成／トレーニングの切り替えに従う', () => {

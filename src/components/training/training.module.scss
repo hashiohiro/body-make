@@ -765,66 +765,6 @@
   @include tabular;
 }
 
-/*
- * 種目の目標の 1 行。**2 段に分ける。**
- * 名前と立て方は語で読むもの、いま → 目標 と到達率は数で読むもので、
- * 1 行に混ぜると名前が数字に押されて切れる。
- */
-.goalRow {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-  padding: 10px 2px;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  background: none;
-  text-align: left;
-  color: var(--ink);
-
-  &:last-of-type {
-    border-bottom: 0;
-  }
-}
-
-.goalRowHead {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.goalRowName {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 600;
-  @include truncate;
-}
-
-.goalRowBody {
-  display: grid;
-  /* 量の行と同じ組み方。数字の列幅を決めて、余りをぜんぶバーに回す（幅は px で） */
-  grid-template-columns: 112px minmax(0, 1fr) 32px;
-  align-items: center;
-  gap: 8px;
-}
-
-.goalRowValue {
-  overflow: hidden;
-  font-size: 12px;
-  color: var(--ink-2);
-  white-space: nowrap;
-  @include tabular;
-}
-
-/* 出るのは「到達」「84%」「—」まで。それ以上の桁は出ない（到達率は 100% で頭打ち） */
-.goalRowPct {
-  text-align: right;
-  font-size: 11px;
-  white-space: nowrap;
-  color: var(--ink-muted);
-  @include tabular;
-}
-
 .boardValue {
   margin-left: auto;
   text-align: right;
@@ -995,10 +935,25 @@
 /* ---- 目標画面 ---- */
 
 /* 種目カードの下に並べる入口（推移・変更／目標・設定・削除） */
+/*
+ * 一覧の入口。**折り返す。**
+ * マイ種目は 5 つ（目標 / 推移 / 設定 / 非表示 / 削除）並ぶので、
+ * 1 行に収まらない幅では次の行へ回す（はみ出して切れるより読める）。
+ */
 .itemActions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+
+/*
+ * 入口の右端に離して置くもの。**性格の違うものを隣に並べない。**
+ * 設定・非表示・削除は「この種目をどうするか」、推移は「過去を読む」。
+ * 線は引かない——空きで分かれていれば足りる。
+ */
+.actionsTail {
+  margin-left: auto;
 }
 
 /*
