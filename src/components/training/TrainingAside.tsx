@@ -17,8 +17,12 @@ interface Props {
   currentName: string;
   /** その日を作った元のプリセット。呼び出していなければ null */
   applied: PresetOption | null;
+  /** 開いている日の週メニュー。まだ空の日は、一覧の先頭に別枠で出す */
+  todayMenu: PresetOption | null;
   onSave: (name: string, exerciseIds: readonly string[]) => void;
   onUpdate: (preset: Preset) => void;
+  /** 組み合わせをまとめてその日に入れる。まだ空の日にだけ使う */
+  onApplyPreset: (preset: PresetOption) => void;
 }
 
 /**
@@ -30,9 +34,13 @@ interface Props {
  * **帯は入口であると同時に要約。**開かなくても「どこが回復しているか」
  * 「いまの組み合わせが保存済みか」が読める。
  *
- * プリセットの入口が持つのは**保存だけ**。呼び出しは ＋ がやる（同じ一覧を
- * 2 か所に置かない）。代わりに **未保存であることを帯に出して**、
- * 「保存できることに気づけない」（design-training.md §7.2）を受ける。
+ * プリセットの入口は**その日の状態で役割が変わる**。まだ空なら呼び出しの一覧、
+ * 組んであれば保存の面（`PresetCard`）。同時に両方は出ないので、＋ の
+ * 「プリセットから入れる」と一覧が 2 か所に見える瞬間はない。
+ *
+ * 帯の値は**その状態をそのまま言う**。空の日は持っている件数（押す理由がある）、
+ * 組んだあとは保存済みかどうか——「保存できることに気づけない」
+ * （design-training.md §7.2）を受けるのは後者。
  */
 export function TrainingAside({
   date,
@@ -41,19 +49,29 @@ export function TrainingAside({
   currentIds,
   currentName,
   applied,
+  todayMenu,
   onSave,
   onUpdate,
+  onApplyPreset,
 }: Props) {
   const [open, setOpen] = useState<'recovery' | 'presets' | null>(null);
 
   const t = useT();
   const composing = currentIds.length > 0;
   /*
-   * **出すのは保存の状態だけ。**呼び出しは ＋ がやるので、ここに件数を出しても
-   * 押す理由にならない（押した先に一覧は無い）。
+   * **押した先にあるものを言う。**まだ空の日は一覧が出るので件数を、
+   * 組んだあとは保存の面が出るので保存の状態を出す。
+   * 一度は空の日を「—」にしていたが、その頃は押した先に一覧が無かった。
    */
   const unsaved = composing && !presets.some((p) => sameSet(p.exerciseIds, currentIds));
-  const presetValue = !composing ? '—' : unsaved ? t('aside.unsaved') : t('aside.saved');
+  const pickable = presets.length + (todayMenu ? 1 : 0);
+  const presetValue = !composing
+    ? pickable === 0
+      ? '—'
+      : t('settings.count', { n: pickable })
+    : unsaved
+      ? t('aside.unsaved')
+      : t('aside.saved');
 
   return (
     <>
@@ -102,6 +120,11 @@ export function TrainingAside({
             currentIds={currentIds}
             currentName={currentName}
             applied={applied}
+            todayMenu={todayMenu}
+            onApply={(preset) => {
+              onApplyPreset(preset);
+              setOpen(null);
+            }}
             onUpdate={(preset) => {
               onUpdate(preset);
               setOpen(null);

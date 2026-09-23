@@ -3,6 +3,7 @@ import { CheckCard } from '../components/training/CheckCard';
 import { ChipGroup } from '../components/ChipGroup';
 import { ExerciseRipple } from '../components/training/ExerciseRipple';
 import { TrainingAside } from '../components/training/TrainingAside';
+import type { PresetOption } from '../components/training/PresetCard';
 import { ExerciseCard } from '../components/training/ExerciseCard';
 import { ExerciseSetEditor } from '../components/training/ExerciseSetEditor';
 import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialog';
@@ -194,6 +195,25 @@ export function TrainingView({ body, date }: Props) {
    * 保存物を増やさずに済む。日を変えれば忘れる。
    */
   const [appliedAt, setAppliedAt] = useState<{ date: string; id: string } | null>(null);
+
+  /**
+   * プリセットの中身をまとめてその日に入れる。**＋ からも帯からも同じ道を通す。**
+   * 写して 2 つ持つと、既定のセットの扱いや「どこから作った日か」が片方だけ古くなる。
+   */
+  const applyPreset = useCallback(
+    (preset: PresetOption) => {
+      // どこから作った日かを覚える。あとで上書きするときの相手になる
+      setAppliedAt({ date, id: preset.id });
+      // 既定のセットを持つ種目は、その本数ぶん空行を出す（値は空のまま）
+      addDayExercises(
+        date,
+        preset.exerciseIds,
+        Object.fromEntries(Object.entries(preset.defaults).map(([id, sets]) => [id, sets.length])),
+      );
+    },
+    [date, setAppliedAt, addDayExercises],
+  );
+
   const applied =
     appliedAt?.date === date ? (presets.find((p) => p.id === appliedAt.id) ?? null) : null;
 
@@ -306,8 +326,10 @@ export function TrainingView({ body, date }: Props) {
               : ''
           }
           applied={applied}
+          todayMenu={todayMenu}
           onSave={savePreset}
           onUpdate={updatePreset}
+          onApplyPreset={applyPreset}
         />
       )}
 
@@ -404,18 +426,7 @@ export function TrainingView({ body, date }: Props) {
         presets={pickerPresets}
         todayMenu={todayMenu}
         onToggle={toggle}
-        onAddPreset={(preset) => {
-          // どこから作った日かを覚える。あとで上書きするときの相手になる
-          setAppliedAt({ date, id: preset.id });
-          // 既定のセットを持つ種目は、その本数ぶん空行を出す（値は空のまま）
-          addDayExercises(
-            date,
-            preset.exerciseIds,
-            Object.fromEntries(
-              Object.entries(preset.defaults).map(([id, sets]) => [id, sets.length]),
-            ),
-          );
-        }}
+        onAddPreset={applyPreset}
         onAddFromCatalog={addFromCatalog}
       />
 

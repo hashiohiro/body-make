@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PresetRow } from './PresetRow';
 import { Strong } from '../Strong';
 import { PresetBlock } from './PresetBlock';
 import { Modal } from '../Modal';
@@ -259,11 +260,12 @@ export function WeekMenuManager({
           ) : (
             <div>
               {free.map((preset) => (
-                <button
+                <PresetRow
                   key={preset.id}
-                  type="button"
-                  className={s.presetPick}
-                  aria-label={t('week.assignTo', {
+                  name={preset.name}
+                  groups={groupsOf(t, exercises, preset.exerciseIds)}
+                  count={preset.exerciseIds.length}
+                  label={t('week.assignTo', {
                     name: preset.name,
                     day: t(WEEKDAY_KEYS[picking]),
                   })}
@@ -274,15 +276,7 @@ export function WeekMenuManager({
                     });
                     setPicking(null);
                   }}
-                >
-                  <span className={s.presetName}>{preset.name}</span>
-                  <span className={s.presetGroups}>
-                    {groupsOf(t, exercises, preset.exerciseIds)}
-                  </span>
-                  <span className={s.presetCount}>
-                    {t('training.exercises', { n: preset.exerciseIds.length })}
-                  </span>
-                </button>
+                />
               ))}
             </div>
           )}

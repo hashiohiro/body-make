@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PresetRow } from './PresetRow';
 import { CatalogPicker } from './CatalogPicker';
 import { ChoicePanel } from '../ChoicePanel';
 import { CustomExerciseForm } from './CustomExerciseForm';
@@ -133,22 +134,17 @@ export function ExercisePicker({
 
   /** 組み合わせ 1 件ぶんの行。**今日のメニューも、プリセットも同じ見た目・同じ操作** */
   const presetRow = (preset: PresetOption) => (
-    <button
+    <PresetRow
       key={preset.id}
-      type="button"
-      className={s.presetPick}
-      aria-label={t('picker.applyPreset', { name: preset.name })}
+      name={preset.name}
+      groups={preset.groupsLabel}
+      count={preset.exerciseIds.length}
+      label={t('picker.applyPreset', { name: preset.name })}
       onClick={() => {
         onAddPreset(preset);
         close();
       }}
-    >
-      <span className={s.presetName}>{preset.name}</span>
-      <span className={s.presetGroups}>{preset.groupsLabel}</span>
-      <span className={s.presetCount}>
-        {t('training.exercises', { n: preset.exerciseIds.length })}
-      </span>
-    </button>
+    />
   );
 
   const menuItem = (id: Panel, name: string, hint: string) => (

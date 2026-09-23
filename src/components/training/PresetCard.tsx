@@ -1,4 +1,5 @@
 import { sameSet } from '../../lib/array';
+import { PresetRow } from './PresetRow';
 import { useState } from 'react';
 import { PRESET_NAME_MAX } from '../../lib/storage';
 import type { Preset } from '../../types';
@@ -28,17 +29,30 @@ interface Props {
    * 名前を変えた瞬間に別のプリセットが増えていた。
    */
   applied: PresetOption | null;
+  /**
+   * 開いている日の週メニュー。**その日のぶんだけ、1 つ。**
+   * 一覧の先頭に別枠で出す（＋ の「プリセットから入れる」と同じ並べ方）。
+   */
+  todayMenu: PresetOption | null;
   onSave: (name: string, exerciseIds: readonly string[]) => void;
   onUpdate: (preset: Preset) => void;
+  /** 組み合わせをまとめてその日に入れる。**まだ何も入っていない日にだけ出す** */
+  onApply: (preset: PresetOption) => void;
 }
 
 /**
- * いまの組み合わせに名前を付けて残す。**保存だけの面。**
+ * その日のプリセット。**まだ空なら呼び出し、組んであれば保存。**
  *
- * 以前はここに一覧も置いて、呼び出しと削除もできた。ただ**呼び出しは ＋ の
- * 「プリセットから入れる」がやる**ので、同じ一覧が 2 か所にあった。
- * 削除は設定のプリセット画面にある。役割を 1 つずつに割り直して、
- * ここには**ここにしか無い仕事**（いまの日から作る）だけを残す。
+ * 一度は呼び出しを外して保存だけにした（＋ の「プリセットから入れる」と
+ * 同じ一覧が 2 か所になるため）。ただ**プリセットで組む日の動線がいちばん深く**なり、
+ * ＋ → メニュー → プリセット → 選ぶ の 4 タップになっていた。
+ * そのあいだ、この面の「まだ空」の側は説明文が 2 行あるだけで空いていた。
+ *
+ * **状態で役割を分ける。**まだ 1 つも入っていない日は呼び出す以外にすることが無く、
+ * 入っている日は呼び出すと今の組み合わせが混ざる。**同時に両方は出ない**ので、
+ * 一覧が 2 か所に見える瞬間もない。
+ *
+ * 削除は設定のプリセット画面にある。ここには置かない。
  *
  * この面が要る理由は `docs/design-training.md` §7.2——組み合わせを保存できることに
  * 気づけない、という指摘への答えなので、記録している最中に見える場所に置く。
@@ -46,7 +60,16 @@ interface Props {
  * 持つのは種目だけで、重量もレップもセット数も持たない。
  * そこまで持たせると、記録するアプリではなく計画を配るアプリになる（設計 §1.1）。
  */
-export function PresetCard({ presets, currentIds, currentName, applied, onSave, onUpdate }: Props) {
+export function PresetCard({
+  presets,
+  currentIds,
+  currentName,
+  applied,
+  todayMenu,
+  onSave,
+  onUpdate,
+  onApply,
+}: Props) {
   const t = useT();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -58,16 +81,53 @@ export function PresetCard({ presets, currentIds, currentName, applied, onSave, 
   /** 呼び出したあとに中身を変えたか。変えていなければ上書きする意味がない */
   const changed = applied != null && !sameSet(applied.exerciseIds, currentIds);
 
+  /* 行の形は ＋ の一覧・週メニューと同じ部品（`PresetRow`） */
+  const row = (preset: PresetOption) => (
+    <PresetRow
+      key={preset.id}
+      name={preset.name}
+      groups={preset.groupsLabel}
+      count={preset.exerciseIds.length}
+      label={t('picker.applyPreset', { name: preset.name })}
+      onClick={() => onApply(preset)}
+    />
+  );
+
   return (
     <section className={ui.card}>
       <CardHeader title={t('settings.presets')} />
 
       {!composing ? (
-        <p className={ui.emptyState}>
-          {t('preset.saveHint')}
-          <br />
-          {t('preset.saveHintLoad')}
-        </p>
+        /*
+          まだ何も入っていない日。**押せば入る一覧をそのまま出す。**
+          持っていなければ、作り方だけを書く（押せない一覧は出さない）。
+        */
+        presets.length === 0 && todayMenu == null ? (
+          <p className={ui.emptyState}>
+            {t('preset.saveHint')}
+            <br />
+            {t('preset.saveHintLoad')}
+          </p>
+        ) : (
+          <div>
+            {/*
+              今日の曜日に置いているものを先頭に、別枠で出す。
+              **出すだけで判定はしない**——押さなければ何も起きない（§11-3）。
+            */}
+            {todayMenu && (
+              <>
+                <p className={ui.sectionLabel}>{t('picker.todayMenu')}</p>
+                {row(todayMenu)}
+              </>
+            )}
+            {presets.length > 0 && (
+              <>
+                {todayMenu && <p className={ui.sectionLabel}>{t('settings.presets')}</p>}
+                {presets.map(row)}
+              </>
+            )}
+          </div>
+        )
       ) : alreadySaved && !changed ? (
         <p className={ui.emptyState}>{t('preset.alreadySaved')}</p>
       ) : saving ? (

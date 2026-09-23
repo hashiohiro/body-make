@@ -4081,6 +4081,50 @@ describe('プリセット（種目の組み合わせ）', () => {
   });
 
   /*
+   * **まだ空の日は、呼び出しの一覧をそのまま出す。**
+   * ＋ → メニュー → プリセット → 選ぶ の 4 タップが、帯から 2 タップになる。
+   * 一覧と保存は同時に出ないので、＋ の一覧と 2 か所に見える瞬間はない。
+   */
+  it('まだ空の日は、保存したプリセットを一覧から入れられる', async () => {
+    seedExercises('ex_bench', 'ex_pullup');
+    render(<Harness />);
+    addTwo();
+    save('押す日');
+    await remount();
+
+    // まだ何も入れていない日を開く
+    render(<DayHarness day={isoAdd(todayISO(), -1)} />);
+    expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(0);
+
+    openPresets();
+    fireEvent.click(screen.getByRole('button', { name: '押す日をこの日に入れる' }));
+    expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(2);
+  });
+
+  /** 組んである日に一覧は出さない。押すといまの組み合わせに混ざる */
+  it('種目が入っている日は、一覧ではなく保存の面を出す', () => {
+    seedExercises('ex_bench', 'ex_pullup');
+    render(<Harness />);
+    addTwo();
+    save('押す日');
+
+    openPresets();
+    expect(screen.queryByRole('button', { name: '押す日をこの日に入れる' })).toBeNull();
+  });
+
+  /** 帯の値は、押した先にあるものを言う（空の日は件数、組んだあとは保存の状態） */
+  it('空の日は、帯に持っている件数が出る', async () => {
+    seedExercises('ex_bench', 'ex_pullup');
+    render(<Harness />);
+    addTwo();
+    save('押す日');
+    await remount();
+
+    render(<DayHarness day={isoAdd(todayISO(), -1)} />);
+    expect(screen.getByText('1件')).toBeTruthy();
+  });
+
+  /*
    * 帯には要約も出す。開かなくても「まだ残していない」と分かる
    * （ダイアログに畳んだぶん、保存できることに気づけなくなるのを受ける）。
    */
