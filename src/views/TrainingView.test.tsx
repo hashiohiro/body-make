@@ -1136,6 +1136,25 @@ describe('種目管理（設定タブ）', () => {
     expect(screen.queryByLabelText(/を下へ$/)).toBeNull();
   });
 
+  /*
+   * **見出しの中は名前順。**追加順だと、51 種目あるときに、あとから足した 1 件が
+   * どこにいるか分からない（実際に見つけられず「出ていない」と読まれた）。
+   * 読みは持たないので、漢字の名前は仮名のあとにまとまる。
+   */
+  it('部位の中は名前順に並ぶ', () => {
+    render(<ManagerHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
+    // わざと逆の順に足す
+    fireEvent.click(screen.getByText(/^＋ ラットプルダウン/));
+    fireEvent.click(screen.getByText(/^＋ 懸垂/));
+    fireEvent.click(screen.getByText(/^＋ シーテッドロウ/));
+    fireEvent.click(screen.getByText('閉じる'));
+
+    const rows = [...document.querySelectorAll('[class*="exName"]')].map((el) => el.textContent);
+    // 仮名が先、漢字はそのあと
+    expect(rows).toEqual(['シーテッドロウ', 'ラットプルダウン', '懸垂']);
+  });
+
   it('記録の無い種目は確認せずに削除する', () => {
     render(<ManagerHarness />);
     fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
@@ -5345,6 +5364,77 @@ describe('種目の表示 / 非表示', () => {
   });
 
   /*
+   * **自作種目も、手元に無ければカタログに並ぶ。**
+   *
+   * カタログ由来には戻す道が 2 つ（マイ種目の非表示欄／カタログの印）あるのに、
+   * 自作だけ非表示欄しか無かった。伏せると 51 種目の一覧の末尾に落ちて見つからない。
+   * 規則はカタログ由来とまったく同じ（`isCatalogCandidate`）。
+   */
+  it('伏せた自作種目もカタログに出て、押すと表示に戻る', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      exercises: [
+        {
+          id: 'made-up-id',
+          name: '謎のマシン',
+          group: 'legs',
+          subGroups: [],
+          loadMode: 'standard',
+          repUnit: 'reps',
+          bodyweightFactor: null,
+          rmDivisor: 30,
+          goal: null,
+          order: 0,
+          shelf: 'hidden',
+        },
+      ],
+      workouts: {},
+    });
+    render(<ManagerHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
+    const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
+    expect(dialog.getByText('＋ 謎のマシン').textContent).toContain('非表示');
+
+    // 押すと、作り直さずにその種目がそのまま表示に戻る
+    fireEvent.click(dialog.getByText('＋ 謎のマシン'));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expect(screen.getByLabelText('謎のマシンを非表示にする')).toBeTruthy();
+    expect(screen.queryByLabelText('謎のマシンを表示に戻す')).toBeNull();
+  });
+
+  /** マイ種目にあるものは出さない（カタログ由来と同じ扱い） */
+  it('マイ種目にある自作種目は、カタログに出さない', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      exercises: [
+        {
+          id: 'made-up-id',
+          name: '謎のマシン',
+          group: 'legs',
+          subGroups: [],
+          loadMode: 'standard',
+          repUnit: 'reps',
+          bodyweightFactor: null,
+          rmDivisor: 30,
+          goal: null,
+          order: 0,
+          shelf: 'listed',
+        },
+      ],
+      workouts: {},
+    });
+    render(<ManagerHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
+    const dialog = within(document.querySelector('dialog[open]') as HTMLElement);
+    expect(dialog.queryByText('＋ 謎のマシン')).toBeNull();
+  });
+
+  /*
    * カタログに並ぶのは「マイ種目に入っていない」種目だけなので、
    * その中での違いを印にする。押した結果が違う——初めて入れるのか、
    * 記録が繋がるのか、伏せたものが戻るのか。
@@ -5469,6 +5559,42 @@ describe('種目の表示 / 非表示', () => {
     expect(managerRows()).toHaveLength(1);
     expect(hiddenRows()).toHaveLength(0);
     expect(screen.getByText('記録 5日')).toBeTruthy();
+  });
+
+  /*
+   * **記録画面のカタログは全部出す。**マイ種目にあるものも隠さない。
+   *
+   * 隠していたときは、カタログで「ラット」と打っても出なかった——**持っている
+   * からこそ 0 件になる**という読めない挙動で、足すには ‹ で戻って
+   * 「マイ種目から選ぶ」を開き直すことになっていた。
+   * カタログとマイ種目の違いは、中身ではなく広さ（すべて／よく使うもの）。
+   */
+  it('記録画面のカタログには、マイ種目にある種目も印つきで出る', () => {
+    seedExercises('ex_lat_pulldown');
+    render(<Harness />);
+    openCatalog();
+
+    const row = screen.getByText(/^＋ ラットプルダウン/);
+    expect(row.textContent).toContain('マイ種目');
+
+    // 押すと、残すかを聞かずにそのままその日に入る
+    fireEvent.click(row);
+    expect(screen.queryByText(/マイ種目に追加しますか/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expect(document.querySelectorAll('[id^="ex-card-"]')).toHaveLength(1);
+  });
+
+  /*
+   * 設定のマイ種目から開いたときは出さない。**あそこで押した先はマイ種目そのもの**
+   * なので、すでにあるものを並べても押す理由が無い。
+   */
+  it('設定のマイ種目から開いたカタログには、追加済みの種目は出ない', () => {
+    seedExercises('ex_lat_pulldown');
+    render(<ManagerHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'マイ種目に追加' }));
+
+    expect(screen.queryByText(/^＋ ラットプルダウン/)).toBeNull();
+    expect(screen.getByText(/^＋ シーテッドロウ/)).toBeTruthy();
   });
 
   it('記録画面の種目選びに出ない', () => {

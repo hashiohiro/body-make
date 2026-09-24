@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { EXERCISE_GROUP_ORDER, GROUP_KEYS, otherLocaleNames } from '../../lib/exerciseCatalog';
+import {
+  EXERCISE_GROUP_ORDER,
+  GROUP_KEYS,
+  byName,
+  otherLocaleNames,
+} from '../../lib/exerciseCatalog';
 import {
   FILTER_THRESHOLD,
   matchRank,
@@ -95,8 +100,13 @@ export function ExercisePickList<T extends Item>({
   const [query, setQuery] = useState('');
 
   const searching = query.trim() !== '';
+  /*
+    **並びは名前順。**追加順は使う側から見ると意味を持たない並びで、
+    あとから足した 1 件がどこにいるか分からなくなる（見出しの中だけを並べ替える）。
+  */
+  const sorted = byName(t, items);
   // 検索とチップは AND。「腕で絞ってからカールを探す」がそのまま通る
-  const narrowed = items.filter(
+  const narrowed = sorted.filter(
     (e) =>
       matchesGroup(e, group) &&
       matchesQuery(e.name, query, [...(e.aliases ?? []), ...otherLocaleNames(e.id)]),

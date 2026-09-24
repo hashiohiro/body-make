@@ -5,13 +5,15 @@ import {
   GROUP_KEYS,
   catalogFullName,
   catalogId,
+  exerciseName,
   fromCatalog,
   isCatalogCandidate,
+  isFromCatalog,
 } from '../../lib/exerciseCatalog';
 import type { CatalogChoice } from '../../lib/exerciseCatalog';
 import { ChipGroup } from '../ChipGroup';
 import { ExercisePickList } from './ExercisePickList';
-import type { Exercise } from '../../types';
+import type { Exercise, ExerciseGroup } from '../../types';
 import ui from '../../styles/ui.module.scss';
 import { Tag } from '../Tag';
 import { Pill } from '../Pill';
@@ -49,6 +51,17 @@ function matchesFilter({ entry, implement }: CatalogChoice, filter: CatalogFilte
   }
 }
 
+/**
+ * 一覧に並べる 1 行。**カタログの行か、手元に無い自作種目か。**
+ * どちらも同じ見た目で並び、押した結果だけが違う。
+ */
+type Row = {
+  id: string;
+  name: string;
+  group: ExerciseGroup;
+  aliases?: readonly string[] | undefined;
+} & ({ choice: CatalogChoice; exercise?: undefined } | { choice?: undefined; exercise: Exercise });
+
 interface Props {
   exercises: readonly Exercise[];
   onAdd: (exercises: readonly Exercise[]) => void;
@@ -60,6 +73,17 @@ interface Props {
    * 外さないと、入れたはずの種目がもう一度並ぶ。
    */
   usedIds?: ReadonlySet<string> | undefined;
+  /**
+   * マイ種目に入れてある種目も一覧に出すか。**押した先がマイ種目の先にある面だけ真。**
+   *
+   * 記録画面（その日に入る）とプリセットの中身（その組み合わせに入る）では、
+   * すでに持っている種目を押すことに意味がある。隠すと**カタログで「ベンチ」と
+   * 打っても出ない**——持っているからこそ 0 件になる、という読めない挙動になる。
+   *
+   * 設定のマイ種目から開いたときは偽。あそこで押した先はマイ種目そのものなので、
+   * すでにあるものを並べても押す理由が無い。
+   */
+  includeOwned?: boolean | undefined;
   /**
    * すでに足し終えた種目と、その外し方。**2 つで 1 つ。**
    *
@@ -82,7 +106,7 @@ interface Props {
  * マイ種目の置き場所は設定のままだが、入口が設定にしか無いと、
  * 初めて記録タブを開いた人が「設定から追加してください」で行き止まる。
  */
-export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
+export function CatalogPicker({ exercises, onAdd, usedIds, selection, includeOwned }: Props) {
   const t = useT();
   /*
    * 器具の絞り込みだけをここで持つ。**部位と検索は `ExercisePickList` が持っている**
@@ -90,23 +114,29 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
    */
   const [filter, setFilter] = useState<CatalogFilter>('all');
   /*
-   * 伏せてある種目（`hidden`）と、マイ種目に入れていない種目（`adhoc`）を、ここに出す。
-   * 伏せたものを「追加済み」として消すと、戻す道がマイ種目の非表示欄しか無くなる。
-   * 選び直したら表示に戻る（useBodyData.addExercises）。
+   * **カタログは全部出す。**マイ種目に入れてあるものも隠さない。
    *
-   * **3 つとも見分けが付くようにする。**実体がまだ無い（印なし）／その日だけ使った
-   * （記録あり）／一度入れて伏せた（非表示）は別の状態で、押した結果も違う。
+   * 以前はマイ種目にあるものを外していたが、そうすると**カタログで「ベンチ」と
+   * 打っても出ない**——すでに持っているからこそ 0 件になる、という読めない挙動になる。
+   * 足すには ‹ で戻って「マイ種目から選ぶ」を開き直すことになっていた。
+   *
+   * カタログとマイ種目の違いは**中身ではなく広さ**にする（すべて／よく使うもの）。
+   *
+   * **状態は印で見分ける。**押した結果が違う。
+   *   （印なし）… 実体がまだ無い。初めて入れる
+   *   マイ種目  … すでに持っている。そのまま入る（残すかは聞かない）
+   *   記録あり  … その日だけ入れて使った種目（shelf: adhoc）。記録が繋がる
+   *   非表示    … 一度入れて伏せた種目。押すと表示に戻る
    */
-  const known = new Set(exercises.filter((e) => !isCatalogCandidate(e)).map((e) => e.id));
   const byId = new Map(exercises.map((e) => [e.id, e]));
   const notAdded = CATALOG_CHOICES.filter((c) => {
     const id = catalogId(c.entry, c.implement);
+    // その日に入っているものは外す（二重に足す意味が無い）
     if (usedIds?.has(id)) return false;
-    // 足し終えたものは残す（消えると、入ったのかどうかが分からない）
-    if (known.has(id) && !selection?.ids.has(id)) return false;
+    // 押した先がマイ種目そのものの面では、すでにあるものを並べない
+    if (!includeOwned && byId.get(id)?.shelf === 'listed' && !selection?.ids.has(id)) return false;
     return matchesFilter(c, filter);
   });
-  const filtered = filter !== 'all';
 
   /**
    * カタログの 1 件。**束ねた一覧でも、探した結果でも同じものを出す。**
@@ -129,7 +159,16 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
         onClick={() =>
           picked && selection
             ? selection.onToggle(id)
-            : onAdd([fromCatalog(c.entry, exercises.length, c.implement)])
+            : /*
+                すでに持っているものは作り直さない（写すと種目ごとの設定と目標が
+                巻き戻る）。**表示に戻すのは shelf で伝える**——そのまま渡すと、
+                伏せてあるものが伏せたままになる（`useBodyData.addExercises`）。
+              */
+              onAdd([
+                byId.has(id)
+                  ? { ...byId.get(id)!, shelf: 'listed' as const }
+                  : fromCatalog(c.entry, exercises.length, c.implement),
+              ])
         }
       >
         {picked ? '✓ ' : '＋ '}
@@ -142,8 +181,35 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
         */}
         {alias != null && <Tag>{alias}</Tag>}
         {searching && <Tag>{t(GROUP_KEYS[c.entry.group])}</Tag>}
+        {shelf === 'listed' && <Tag>{t('settings.exercises')}</Tag>}
         {shelf === 'hidden' && <Tag>{t('manage.hidden')}</Tag>}
         {shelf === 'adhoc' && <Tag>{t('catalog.hasRecords')}</Tag>}
+      </Pill>
+    );
+  };
+
+  /**
+   * 手元に無い自作種目の 1 件。**カタログの行と同じ見た目**で、押した結果だけが違う。
+   * カタログには元が無いので、作り直さずに**その種目をそのまま表示に戻す**。
+   */
+  const ownPill = (exercise: Exercise, searching: boolean) => {
+    const picked = selection?.ids.has(exercise.id) ?? false;
+    return (
+      <Pill
+        key={exercise.id}
+        pressed={picked}
+        onClick={() =>
+          picked && selection
+            ? selection.onToggle(exercise.id)
+            : onAdd([{ ...exercise, shelf: 'listed' }])
+        }
+      >
+        {picked ? '✓ ' : '＋ '}
+        {exerciseName(t, exercise)}
+        {searching && <Tag>{t(GROUP_KEYS[exercise.group])}</Tag>}
+        {exercise.shelf === 'listed' && <Tag>{t('settings.exercises')}</Tag>}
+        {exercise.shelf === 'hidden' && <Tag>{t('manage.hidden')}</Tag>}
+        {exercise.shelf === 'adhoc' && <Tag>{t('catalog.hasRecords')}</Tag>}
       </Pill>
     );
   };
@@ -152,7 +218,7 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
    * 並べる形にそろえる。`ExercisePickList` は id / name / group しか見ないので、
    * 器具まで展開した行をその形に写して渡す（押したときに元の行へ戻す）。
    */
-  const items = notAdded.map((c) => ({
+  const items: Row[] = notAdded.map((c) => ({
     id: catalogId(c.entry, c.implement),
     name: catalogFullName(t.locale, c.entry, c.implement),
     group: c.entry.group,
@@ -161,11 +227,37 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
     choice: c,
   }));
 
+  /*
+   * **手元に無い自作種目も、ここに出す。**カタログ由来とまったく同じ規則
+   * （`isCatalogCandidate`）で、伏せてあるもの（hidden）と、マイ種目に入れて
+   * いないもの（adhoc）を並べる。
+   *
+   * これが無いと、**自作種目を伏せたときに戻す道がマイ種目の非表示欄しか無くなる。**
+   * カタログ由来には戻す道が 2 つあるのに、自作だけ 1 つという状態だった。
+   *
+   * 器具の絞り込みには乗せない（「すべて」のときだけ出す）。自作種目は器具を
+   * 持たないので、どの籠に入れても根拠が無い——黙って分類するより出さない。
+   */
+  const own: Row[] = exercises
+    .filter(
+      (e) =>
+        !isFromCatalog(e.id) &&
+        (isCatalogCandidate(e) || includeOwned || (selection?.ids.has(e.id) ?? false)) &&
+        !usedIds?.has(e.id) &&
+        (filter === 'all' || (selection?.ids.has(e.id) ?? false)),
+    )
+    .map((e) => ({
+      id: e.id,
+      name: exerciseName(t, e),
+      group: e.group,
+      exercise: e,
+    }));
+
   return (
     <div className={s.pickerGroup}>
       {/* 選ぶ面はどこも同じ組み。器具の絞り込みだけがカタログ固有なので、そこを渡す */}
       <ExercisePickList
-        items={items}
+        items={[...items, ...own]}
         heading={t('catalog.title')}
         threshold={0}
         // 部位チップは器具で絞る前の分類から出す（切り替えでチップが消えないように）
@@ -181,8 +273,10 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selection }: Props) {
             tight
           />
         }
-        empty={<p className={ui.note}>{filtered ? t('catalog.noMatch') : t('catalog.allAdded')}</p>}
-        renderItem={(item, searching, alias) => pill(item.choice, searching, alias)}
+        empty={<p className={ui.note}>{t('catalog.noMatch')}</p>}
+        renderItem={(item, searching, alias) =>
+          item.choice ? pill(item.choice, searching, alias) : ownPill(item.exercise, searching)
+        }
       />
     </div>
   );

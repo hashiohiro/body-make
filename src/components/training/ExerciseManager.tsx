@@ -3,6 +3,7 @@ import {
   EXERCISE_GROUP_ORDER,
   GROUP_KEYS,
   REP_UNIT_KEYS,
+  byName,
   copyOf,
   exerciseName,
   goalTypeLabel,
@@ -144,7 +145,8 @@ export function ExerciseManager({
     setEditing(made.id);
   };
 
-  const sorted = [...exercises].sort((a, b) => a.order - b.order);
+  // 並びは名前順。追加順だと、あとから足した 1 件がどこにいるか分からない
+  const sorted = byName(t, exercises);
   const searching = query.trim() !== '';
   // 検索とチップは AND。「腕で絞ってからカールを探す」がそのまま通る
   const filtered = sorted.filter(

@@ -769,7 +769,7 @@ export const CATALOG: readonly CatalogEntry[] = [
 
   {
     id: 'ex_chest_supported_row',
-    aliases: ['チェストサポートロウ', 'マシンロウ'],
+    aliases: ['チェストサポートロウ', 'マシンロウ', 'インクラインロウ', 'インクラインロー'],
     // 胸をパッドに預けるので、前傾の保持が要らない（＝軸荷重にならない）
     name: 'チェストサポーテッドロウ',
     group: 'back',
@@ -1026,7 +1026,8 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_hip_abduction',
-    aliases: ['ヒップアブダクション'],
+    // 機械の名前で呼ぶ人がいる（アブダクター／アブダクション）
+    aliases: ['ヒップアブダクション', 'ヒップアブダクター', 'アブダクター'],
     name: 'アブダクション',
     group: 'legs',
     loadMode: 'standard',
@@ -1035,7 +1036,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_hip_adduction',
-    aliases: ['ヒップアダクション'],
+    aliases: ['ヒップアダクション', 'ヒップアダクター', 'アダクター'],
     name: 'アダクション',
     group: 'legs',
     loadMode: 'standard',
@@ -2092,6 +2093,23 @@ export function catalogFullName(locale: Locale, entry: CatalogEntry, implement: 
 }
 
 /**
+ * 名前で並べる。**部位の見出しは崩さない**——並べ替えるのは見出しの中だけ。
+ *
+ * 追加順は使う側から見ると意味を持たない並びで、探すのに使えない
+ * （51 種目あると、あとから足した 1 件がどこにいるか分からなくなる）。
+ *
+ * **並べるのは画面に出ている名前そのもの。**読みは持たないので、日本語では
+ * 漢字の名前が末尾にまとまる（照合が漢字を読みで並べないため）。
+ * 読みを持たせるには自作種目でも入力してもらうことになり、
+ * 種目を作るたびに欄が 1 つ増える。
+ */
+export function byName<E extends Pick<Exercise, 'id' | 'name'>>(t: T, list: readonly E[]): E[] {
+  const collator = new Intl.Collator(t.locale);
+  const key = new Map(list.map((e) => [e, exerciseName(t, e)]));
+  return [...list].sort((a, b) => collator.compare(key.get(a)!, key.get(b)!));
+}
+
+/**
  * 探すときに足す語。**もう一方の言語のカタログ名。**
  *
  * 英語で使っていても「ベンチ」で引けるほうが、切り替えた直後に困らない
@@ -2101,6 +2119,11 @@ export function catalogFullName(locale: Locale, entry: CatalogEntry, implement: 
 export function otherLocaleNames(id: string): readonly string[] {
   const found = catalogOf(id);
   return found ? LOCALES.map((l) => catalogFullName(l, found.entry, found.implement)) : [];
+}
+
+/** カタログに元がある種目か。**自作と複製は false**（ID が randomUUID なので繋がらない） */
+export function isFromCatalog(id: string): boolean {
+  return catalogOf(id) != null;
 }
 
 /** 種目 ID からカタログの行と器具を引く。自作・複製は null */

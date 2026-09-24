@@ -81,6 +81,7 @@ export function PickDialog({
           <p className={ui.note}>{t('pick.keepsNote')}</p>
 
           <CatalogPicker
+            includeOwned
             exercises={items}
             onAdd={onAddExercises}
             // 足し終えた種目は ✓ で残す。外し方と組で渡す（片方だけでは意味を持たない）

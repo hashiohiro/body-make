@@ -6,7 +6,7 @@ import { CustomExerciseForm } from './CustomExerciseForm';
 import { ExercisePickList } from './ExercisePickList';
 import { Modal } from '../Modal';
 import { useFabPosition } from './useFabPosition';
-import { GROUP_KEYS, exerciseName, isListed } from '../../lib/exerciseCatalog';
+import { CATALOG_CHOICES, GROUP_KEYS, exerciseName, isListed } from '../../lib/exerciseCatalog';
 import type { PresetOption } from './PresetCard';
 import type { Exercise } from '../../types';
 import { Button } from '../Button';
@@ -96,6 +96,7 @@ export function ExercisePicker({
    * 出さないと、ここで外せず閉じてカードの × を探すことになる。
    */
   const choices = exercises.filter((e) => isListed(e) || usedIds.has(e.id));
+  const byId = new Map(exercises.map((e) => [e.id, e]));
 
   const close = () => {
     setOpen(false);
@@ -211,20 +212,32 @@ export function ExercisePicker({
               t('picker.fromPresets'),
               t('picker.presetsHint', { n: presets.length }),
             )}
-            {menuItem('catalog', t('picker.fromCatalog'), t('picker.catalogHint'))}
+            {menuItem(
+              'catalog',
+              t('picker.fromCatalog'),
+              t('picker.catalogHint', { n: CATALOG_CHOICES.length }),
+            )}
           </div>
         ) : panel === 'catalog' ? (
           <div>
             {/*
               ここで選んだ種目は、**その日に入る**。マイ種目に残すかは
               入れたあとに聞く（設定を先に決めさせると、1 回だけ試したい種目が入れにくい）。
+
+              **すでにマイ種目にあるものには聞かない。**答えがどちらでも結果が同じで、
+              押すたびに意味のない問いが挟まる。
             */}
             <CatalogPicker
+              includeOwned
               exercises={exercises}
               usedIds={usedIds}
               onAdd={(added) => {
                 const [first] = added;
                 if (!first) return;
+                if (byId.get(first.id)?.shelf === 'listed') {
+                  onAddFromCatalog(first, true);
+                  return;
+                }
                 setPending(first);
                 setPanel('keep');
               }}

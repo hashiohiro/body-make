@@ -9,6 +9,7 @@ import { Modal } from '../Modal';
 import {
   EXERCISE_GROUP_ORDER,
   GROUP_KEYS,
+  byName,
   exerciseName,
   goalTypeLabel,
   isListed,
@@ -91,13 +92,10 @@ export function ExerciseGoalsCard({
   const reached = goals.filter((g) => g.reached).length;
 
   /** まだ目標を持たない種目。非表示の種目には足さない（一覧にも出ない） */
-  const withoutGoal = exercises
-    .filter((e) => isListed(e) && e.goal == null)
-    .sort((a, b) => {
-      const ga = order.get(a.group) ?? 99;
-      const gb = order.get(b.group) ?? 99;
-      return ga === gb ? a.order - b.order : ga - gb;
-    });
+  const withoutGoal = byName(
+    t,
+    exercises.filter((e) => isListed(e) && e.goal == null),
+  ).sort((a, b) => (order.get(a.group) ?? 99) - (order.get(b.group) ?? 99));
 
   /*
    * マイ種目が 1 つも無い状態。**ここでは目標を決めようがない。**
