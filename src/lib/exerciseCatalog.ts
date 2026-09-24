@@ -217,6 +217,12 @@ const AXIAL: ReadonlySet<string> = new Set([
   'ex_hip_thrust',
   'ex_shrug',
   'ex_ab_roller',
+  // スミス版も、バーを体に乗せて背骨に荷重が通る点は変わらない
+  'ex_smith_squat',
+  'ex_smith_row',
+  'ex_smith_shrug',
+  'ex_smith_hip_thrust',
+  'ex_smith_ohp',
 ]);
 
 /**
@@ -236,6 +242,9 @@ const MINUTES_PER_SET: Readonly<Record<string, number>> = {
   ex_rack_pull: 4.5,
   ex_sumo_deadlift: 4.5,
   ex_sumo_squat: 4.5,
+  ex_smith_squat: 4.5,
+  ex_smith_bench: 4.5,
+  ex_smith_ohp: 4.5,
   // 有酸素は 1 本がそのままセッションの一部を占める。既定の 3 分では見積もりが崩れる
   ex_running: 30,
   ex_walking: 30,
@@ -489,6 +498,30 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+  /*
+   * スミスマシン版。**軌道が固定されるので、自由重量とは別の種目にする。**
+   * 体幹の関与が減るぶん扱える重量が上がり、混ぜると推移が「その日どちらで
+   * やったか」で上下する（ケーブル版・マシン版を別項目にしているのと同じ理由）。
+   */
+  {
+    id: 'ex_smith_bench',
+    name: 'スミスベンチプレス',
+    group: 'chest',
+    subGroups: ['shoulders', 'arms'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_BENCH,
+  },
+  {
+    id: 'ex_smith_incline_bench',
+    name: 'スミスインクラインベンチプレス',
+    group: 'chest',
+    subGroups: ['shoulders', 'arms'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+
   // 背中
   {
     id: 'ex_deadlift',
@@ -769,7 +802,7 @@ export const CATALOG: readonly CatalogEntry[] = [
 
   {
     id: 'ex_chest_supported_row',
-    aliases: ['チェストサポートロウ', 'マシンロウ', 'インクラインロウ', 'インクラインロー'],
+    aliases: ['チェストサポートロウ', 'マシンロウ'],
     // 胸をパッドに預けるので、前傾の保持が要らない（＝軸荷重にならない）
     name: 'チェストサポーテッドロウ',
     group: 'back',
@@ -787,6 +820,37 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+  {
+    id: 'ex_smith_row',
+    name: 'スミスロウ',
+    group: 'back',
+    subGroups: [['shoulders', 0.25], 'arms'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_smith_shrug',
+    name: 'スミスシュラッグ',
+    group: 'back',
+    subGroups: [['arms', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_incline_row',
+    // 胸をパッドに預ける点はチェストサポーテッドロウと同じだが、
+    // 角度が付くぶん引く向きが変わるので、別の種目として持つ
+    aliases: ['インクラインロー'],
+    name: 'インクラインロウ',
+    group: 'back',
+    subGroups: [['shoulders', 0.25], 'arms'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+
   // 脚
   {
     id: 'ex_squat',
@@ -1043,6 +1107,55 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+  {
+    id: 'ex_smith_squat',
+    name: 'スミススクワット',
+    group: 'legs',
+    subGroups: [['core', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_SQUAT_DEADLIFT,
+  },
+  {
+    id: 'ex_smith_calf_raise',
+    name: 'スミスカーフレイズ',
+    group: 'legs',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_smith_hip_thrust',
+    name: 'スミスヒップスラスト',
+    group: 'legs',
+    subGroups: [['core', 0.25]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_smith_bulgarian_squat',
+    name: 'スミスブルガリアンスクワット',
+    group: 'legs',
+    subGroups: [['core', 0.5]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_copenhagen_plank',
+    aliases: ['コペンハーゲンアダクション'],
+    equipment: 'bodyweight',
+    // 内転筋を支えにして横向きで保つ。数えるのは秒（プランクと同じ）
+    name: 'コペンハーゲンプランク',
+    group: 'legs',
+    subGroups: [['core', 0.5]],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+    repUnit: 'seconds',
+  },
+
   // 肩
   {
     id: 'ex_ohp',
@@ -1237,6 +1350,16 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+  {
+    id: 'ex_smith_ohp',
+    name: 'スミスショルダープレス',
+    group: 'shoulders',
+    subGroups: ['arms'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+
   // 腕
   {
     id: 'ex_curl',
@@ -1453,6 +1576,25 @@ export const CATALOG: readonly CatalogEntry[] = [
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
   },
+  {
+    id: 'ex_forearm_pronation',
+    aliases: ['プロネーター', 'プロネイター', '回内'],
+    name: 'フォアアームプロネーション',
+    group: 'arms',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_forearm_supination',
+    aliases: ['スピネーター', 'スピネイター', '回外'],
+    name: 'フォアアームスピネーション',
+    group: 'arms',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+
   // 体幹
   {
     id: 'ex_hanging_leg_raise',

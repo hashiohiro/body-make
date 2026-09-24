@@ -2,7 +2,7 @@
  * カタログ種目の英名。**ID → 英名の表。**
  *
  * 日本語名は `exerciseCatalog.ts` の `name` がそのまま基準（`docs/design-i18n.md` §4）。
- * 同じ 143 件をもう一度日本語で書かないために、辞書（`ja.ts` / `en.ts`）ではなく
+ * 同じ件数ぶんをもう一度日本語で書かないために、辞書（`ja.ts` / `en.ts`）ではなく
  * ここに置く。**辞書のキーではないので、重複の検査にも掛からない**——
  * 「ケーブルカール」と「カール」のように、語が重なるのが当たり前の一覧だから。
  *
@@ -30,6 +30,8 @@ export const CATALOG_NAMES_EN = {
   ex_clap_pushup: 'Clap Push-Up',
   ex_pullover: 'Dumbbell Pullover',
   ex_cable_crossover: 'Cable Crossover',
+  ex_smith_bench: 'Smith Machine Bench Press',
+  ex_smith_incline_bench: 'Smith Machine Incline Bench Press',
 
   // 背中
   ex_deadlift: 'Deadlift',
@@ -56,6 +58,9 @@ export const CATALOG_NAMES_EN = {
   ex_superman: 'Superman',
   ex_chest_supported_row: 'Chest-Supported Row',
   ex_straight_arm_pulldown: 'Straight-Arm Pulldown',
+  ex_smith_row: 'Smith Machine Row',
+  ex_smith_shrug: 'Smith Machine Shrug',
+  ex_incline_row: 'Incline Row',
 
   // 脚
   ex_squat: 'Squat',
@@ -82,6 +87,11 @@ export const CATALOG_NAMES_EN = {
   ex_good_morning: 'Good Morning',
   ex_hip_abduction: 'Hip Abduction',
   ex_hip_adduction: 'Hip Adduction',
+  ex_smith_squat: 'Smith Machine Squat',
+  ex_smith_calf_raise: 'Smith Machine Calf Raise',
+  ex_smith_hip_thrust: 'Smith Machine Hip Thrust',
+  ex_smith_bulgarian_squat: 'Smith Machine Bulgarian Split Squat',
+  ex_copenhagen_plank: 'Copenhagen Plank',
 
   // 肩
   ex_ohp: 'Shoulder Press',
@@ -100,6 +110,7 @@ export const CATALOG_NAMES_EN = {
   ex_shoulder_tap: 'Shoulder Tap',
   ex_military_press: 'Military Press',
   ex_arnold_press: 'Arnold Press',
+  ex_smith_ohp: 'Smith Machine Shoulder Press',
 
   // 腕
   ex_curl: 'Curl',
@@ -123,6 +134,8 @@ export const CATALOG_NAMES_EN = {
   ex_underhand_inverted_row: 'Underhand Inverted Row',
   ex_concentration_curl: 'Concentration Curl',
   ex_incline_curl: 'Incline Dumbbell Curl',
+  ex_forearm_pronation: 'Forearm Pronation',
+  ex_forearm_supination: 'Forearm Supination',
 
   // 体幹
   ex_hanging_leg_raise: 'Hanging Leg Raise',
