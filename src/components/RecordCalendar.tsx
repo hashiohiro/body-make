@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { addDays, formatMD, formatMDW, fromISO, startOfWeek, todayISO, toISO } from '../lib/date';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { addDays, formatMD, formatMDW, fromISO, startOfWeek, toISO } from '../lib/date';
 import { ChipGroup } from './ChipGroup';
 import { CardHeader } from './CardHeader';
 import { useT } from '../lib/i18n';
@@ -19,6 +19,16 @@ interface Props {
   filled?: ReadonlySet<string> | undefined;
   /** いま開いている日。押した日に移るので、どこにいるかを出す */
   selected: string;
+  /**
+   * いまの日付。**渡された値を使う**（自分では読まない）。
+   *
+   * ヘッダの日付ナビと同じ値にする（`DateNav`）。描画のたびに `todayISO()` を
+   * 呼んでも、再描画が起きなければ値は変わらない——日が変わったことに気づけるのは
+   * 前面に戻ったときに読み直している側（`hooks/useToday`）だけ。
+   * 別々に読むと、ヘッダの「今日」ボタンが消えているのにカレンダーの線は
+   * 前の日に残る、という食い違いが出る。
+   */
+  today: string;
   /** 見出しの右に添える一行。中身は呼び出し側が決める */
   summary: string;
   /** いちばん古い記録。それより前へは戻さない */
@@ -79,12 +89,42 @@ function shiftMonth(iso: string, by: number): string {
  * 記録の有無を同じまるの濃さ違いにしないのも同じ理由で、
  * それをやると「今日はまだ付けていない」が読み取れない。
  */
-export function RecordCalendar({ marked, filled, selected, summary, firstDate, onSelect }: Props) {
-  const today = todayISO();
+export function RecordCalendar({
+  marked,
+  filled,
+  selected,
+  today,
+  summary,
+  firstDate,
+  onSelect,
+}: Props) {
   const t = useT();
   const [rangeId, setRangeId] = useState<RangeId>('two');
-  /** 表示の起点。押した日ではなく、めくった位置を持つ */
-  const [anchor, setAnchor] = useState(today);
+  /** 表示の起点。めくった位置を持つ（‹ › は日を変えずに面だけ動かす） */
+  const [anchor, setAnchor] = useState(selected);
+
+  /**
+   * この面から選んだ日。**自分で選んだぶんは追わない**ための覚え書き。
+   *
+   * 押した日はもう見えているので、面を動かす理由がない。動かすと、2 週表示で
+   * 上の行（古い週）を押した瞬間に**今日が画面の外へ出る**。
+   */
+  const picked = useRef<string | null>(null);
+
+  /*
+   * **外から動いた日を追う。**ヘッダの `前の日` / `次の日` / `今日` を押したら、
+   * カレンダーもその日が入る位置へ移る。
+   *
+   * 以前は起点を「めくった位置」としてだけ持っていたので、`前の日` を 2 週ぶん
+   * 押すと**選んだ日が表示範囲の外へ出て、どこも塗られない**。めくったあとに
+   * `今日` を押しても、今日の週には戻らなかった。
+   *
+   * めくり（‹ ›）は `selected` を変えないので、ここは動かない——見るだけの操作は残る。
+   */
+  useEffect(() => {
+    if (picked.current === selected) return;
+    setAnchor(selected);
+  }, [selected]);
 
   const range = RANGES.find((r) => r.id === rangeId)!;
 
@@ -137,8 +177,8 @@ export function RecordCalendar({ marked, filled, selected, summary, firstDate, o
         label={t('calendar.range')}
         onChange={(id) => {
           setRangeId(id);
-          // 範囲を変えたら、いま見ている日が入る位置に戻す
-          setAnchor(selected > today ? today : selected);
+          // 範囲を変えたら、いま見ている日が入る位置に戻す（めくった位置は捨てる）
+          setAnchor(selected);
         }}
       />
 
@@ -194,7 +234,10 @@ export function RecordCalendar({ marked, filled, selected, summary, firstDate, o
               aria-label={`${formatMDW(t, iso)}${iso === today ? ` ${t('common.today')}` : ''}${
                 has ? ` ${t('calendar.hasRecord')}` : ''
               }`}
-              onClick={() => onSelect(iso)}
+              onClick={() => {
+                picked.current = iso;
+                onSelect(iso);
+              }}
             >
               <span className={s.num}>{Number(iso.slice(8))}</span>
               {has && (

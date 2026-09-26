@@ -271,7 +271,13 @@ function AppShell({ body }: { body: BodyData }) {
           )}
 
           {route.tab === 'records' && (
-            <RecordsView body={body} date={date} onDateChange={setDate} domain={domain} />
+            <RecordsView
+              body={body}
+              date={date}
+              today={today}
+              onDateChange={setDate}
+              domain={domain}
+            />
           )}
 
           {route.tab === 'settings' && (

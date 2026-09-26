@@ -1648,7 +1648,15 @@ describe('体組成の推移を記録から開く', () => {
   function RecordsHarness() {
     const body = useBodyData(seeded);
     const [date, setDate] = useState(todayISO);
-    return <RecordsView body={body} date={date} onDateChange={setDate} domain="body" />;
+    return (
+      <RecordsView
+        body={body}
+        date={date}
+        today={todayISO()}
+        onDateChange={setDate}
+        domain="body"
+      />
+    );
   }
 
   const openDialog = () => document.querySelector<HTMLDialogElement>('dialog[open]');
@@ -1814,7 +1822,15 @@ describe('腹囲の入力', () => {
   function RecordsHarness() {
     const body = useBodyData(seeded);
     const [date, setDate] = useState(todayISO);
-    return <RecordsView body={body} date={date} onDateChange={setDate} domain="body" />;
+    return (
+      <RecordsView
+        body={body}
+        date={date}
+        today={todayISO()}
+        onDateChange={setDate}
+        domain="body"
+      />
+    );
   }
 
   it('オフなら欄が出ない', () => {
@@ -1917,7 +1933,15 @@ describe('記録のカレンダー', () => {
   function CalendarHarness({ domain = 'body' as Domain }) {
     const body = useBodyData(seeded);
     const [date, setDate] = useState(todayISO);
-    return <RecordsView body={body} date={date} onDateChange={setDate} domain={domain} />;
+    return (
+      <RecordsView
+        body={body}
+        date={date}
+        today={todayISO()}
+        onDateChange={setDate}
+        domain={domain}
+      />
+    );
   }
 
   /** カレンダーの日付ボタン。ラベルは `9/1(火)` の形（lib/date の formatMDW） */
@@ -1936,6 +1960,24 @@ describe('記録のカレンダー', () => {
       0,
     );
   const ago = (n: number) => isoAdd(todayISO(), -n);
+
+  /** ヘッダと記録画面を同じ日付でつなぐ（`App` と同じ組み） */
+  function NavHarness() {
+    const body = useBodyData(seeded);
+    const [date, setDate] = useState(todayISO);
+    return (
+      <>
+        <DateNav date={date} today={todayISO()} onChange={setDate} />
+        <RecordsView
+          body={body}
+          date={date}
+          today={todayISO()}
+          onDateChange={setDate}
+          domain="body"
+        />
+      </>
+    );
+  }
 
   it('記録のある日に印が付き、無い日には付かない', () => {
     seedRaw({
@@ -2109,6 +2151,46 @@ describe('記録のカレンダー', () => {
     expect((screen.getAllByLabelText(/体重/)[0] as HTMLInputElement).value).toBe('68.4');
     expect(cell(ago(3))!.getAttribute('aria-current')).toBe('true');
   });
+  /*
+   * **ヘッダで日を動かしたら、カレンダーもその日の位置へ。**
+   *
+   * 起点を「めくった位置」としてだけ持っていたので、`前の日` を 2 週ぶん押すと
+   * 選んだ日が表示範囲の外へ出て、どこも塗られなかった。
+   */
+  it('ヘッダで日を動かすと、表示する週も追う', () => {
+    render(<NavHarness />);
+
+    const back = screen.getByRole('button', { name: '前の日' });
+    for (let i = 0; i < 14; i++) fireEvent.click(back);
+
+    expect(cell(ago(14))!.className).toMatch(/selected/);
+  });
+
+  it('めくったあとに「今日」を押すと、今日の週に戻る', () => {
+    render(<NavHarness />);
+
+    // 1 日戻して「今日」ボタンを出し、カレンダーを 4 週ぶんめくる（2 週表示 × 2 回）
+    fireEvent.click(screen.getByRole('button', { name: '前の日' }));
+    const flip = screen.getByRole('button', { name: '前へ' });
+    fireEvent.click(flip);
+    fireEvent.click(flip);
+    expect(cell(todayISO())).toBeUndefined();
+
+    fireEvent.click(screen.getByRole('button', { name: '今日' }));
+    expect(cell(todayISO())!.className).toMatch(/selected/);
+  });
+
+  /*
+   * **カレンダーの中で選んだ日では、面を動かさない。**押した日はもう見えている。
+   * 動かすと、2 週表示で上の行（先週）を押した瞬間に今日が画面の外へ出る。
+   */
+  it('カレンダーの中で先週の日を押しても、今日は見えたまま', () => {
+    render(<CalendarHarness />);
+
+    fireEvent.click(cell(ago(7))!);
+    expect(cell(ago(7))!.className).toMatch(/selected/);
+    expect(cell(todayISO())).toBeDefined();
+  });
 });
 
 describe('記録が消えることの案内', () => {
@@ -2186,7 +2268,15 @@ describe('記録タブ', () => {
   function RecordsHarness({ domain = 'body' as Domain }) {
     const body = useBodyData(seeded);
     const [date, setDate] = useState(todayISO);
-    return <RecordsView body={body} date={date} onDateChange={setDate} domain={domain} />;
+    return (
+      <RecordsView
+        body={body}
+        date={date}
+        today={todayISO()}
+        onDateChange={setDate}
+        domain={domain}
+      />
+    );
   }
 
   /**

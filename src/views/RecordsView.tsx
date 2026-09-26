@@ -16,6 +16,8 @@ import s from './RecordsView.module.scss';
 interface Props {
   body: BodyData;
   date: string;
+  /** いまの日付。カレンダーの「今日」の線に使う（ヘッダと同じ値／`hooks/useToday`） */
+  today: string;
   onDateChange: (date: string) => void;
   /** 体組成／トレーニングの切り替えはヘッダが持つ */
   domain: Domain;
@@ -33,7 +35,7 @@ const INITIAL_ROWS = 60;
 /** 「もっと見る」1 回ぶん */
 const MORE_ROWS = 180;
 
-export function RecordsView({ body, date, onDateChange, domain }: Props) {
+export function RecordsView({ body, date, today, onDateChange, domain }: Props) {
   const { daily, weeks, data, sessions, stats, trainingStats, setValue } = body;
   const t = useT();
   const [limit, setLimit] = useState(INITIAL_ROWS);
@@ -63,6 +65,7 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
         marked={bodyDates}
         filled={bodyFullDates}
         selected={date}
+        today={today}
         summary={t('records.streakSummary', { best: stats.bestStreak, total: stats.recordedDays })}
         firstDate={stats.first?.date ?? null}
         onSelect={onDateChange}
@@ -72,6 +75,7 @@ export function RecordsView({ body, date, onDateChange, domain }: Props) {
         marked={trainingDates}
         filled={trainingDates}
         selected={date}
+        today={today}
         summary={t('records.trainingSummary', {
           week: trainingStats.thisWeekDays,
           total: trainingStats.sessions,
