@@ -63,12 +63,29 @@ export function DateNav({ date, today, onChange }: Props) {
         ›
       </button>
 
-      {/* 今日を見ているときは押しても何も起きない。無効のまま置かず、消す */}
-      {date !== today && (
-        <Button size="sub" onClick={() => onChange(today)} className={s.today}>
+      {/*
+        **今日を見ているときも場所は空けておく。**
+        押しても何も起きないので消していたが、消すと右の並びが詰まり、
+        **‹ › を連打している指の下でボタンが動く**（1 日ずつ送るのはよくある操作）。
+
+        幅は文字なりに取りたい（言語で「今日」と「Today」のように変わる）ので、
+        枠を決め打ちにせず、ボタンそのものを不可視で置く。
+        `aria-hidden` と `disabled` で、読み上げにもタブ移動にも出さない
+        ——見えないものを押せる的として残さない。
+      */}
+      <span
+        className={`${s.todaySlot} ${date === today ? s.todaySlotEmpty : ''}`}
+        {...(date === today ? { 'aria-hidden': true } : {})}
+      >
+        <Button
+          size="sub"
+          disabled={date === today}
+          onClick={() => onChange(today)}
+          className={s.today}
+        >
           {t('common.today')}
         </Button>
-      )}
+      </span>
     </div>
   );
 }

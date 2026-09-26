@@ -37,6 +37,20 @@
   }
 }
 
+/*
+ * 「今日」の置き場所。**今日を見ているときも幅を残す。**
+ * 消すと右の並びが詰まって、‹ › を連打している指の下でボタンが動く。
+ */
+.todaySlot {
+  display: inline-flex;
+  flex: none;
+}
+
+/* 中身は残したまま消す。`display: none` にすると幅も消える */
+.todaySlotEmpty {
+  visibility: hidden;
+}
+
 .today {
   flex: none;
   min-height: var(--tap-sub);

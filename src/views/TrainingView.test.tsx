@@ -5374,6 +5374,29 @@ describe('日付ナビ', () => {
   });
 
   /*
+   * **消しても場所は空けておく。**詰めると、‹ › を連打している指の下で
+   * ボタンが動く（1 日ずつ送るのはよくある操作）。
+   */
+  it('今日を見ているときも、並びの位置が変わらない', async () => {
+    const { addDays } = await import('../lib/date');
+    const shape = () =>
+      [...document.querySelector('[class*="_row_"]')!.children].map((el) => el.tagName);
+    const slot = () => document.querySelector('[class*="_todaySlot_"]')!;
+
+    render(<DateNav date={addDays(todayISO(), -3)} today={todayISO()} onChange={() => {}} />);
+    const past = shape();
+    expect(slot().getAttribute('aria-hidden')).toBeNull();
+    cleanup();
+
+    render(<DateNav date={todayISO()} today={todayISO()} onChange={() => {}} />);
+    // 並びの数と種類が同じ＝‹ › と日付欄の位置が動かない
+    expect(shape()).toEqual(past);
+    // 見えないものは押せる的にしない（読み上げにもタブ移動にも出さない）
+    expect(slot().getAttribute('aria-hidden')).toBe('true');
+    expect(slot().querySelector('button')!.disabled).toBe(true);
+  });
+
+  /*
    * 先の日も選べる。予定の日に付けておく使い方があるし、
    * 日付をまたいだ深夜に翌日ぶんとして付けることもある。
    */
