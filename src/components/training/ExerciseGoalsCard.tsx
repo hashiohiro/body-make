@@ -82,12 +82,18 @@ export function ExerciseGoalsCard({
   const byId = new Map(exercises.map((e) => [e.id, e]));
   const order = new Map(EXERCISE_GROUP_ORDER.map((g, i) => [g, i]));
 
-  /* 並びは部位の順 → その部位の中はマイ種目の並び。押すたびに順が変わらないように */
+  /*
+   * 並びは部位の順 → その部位の中は名前順。
+   *
+   * 以前は部位の中をマイ種目の `order`（＝追加順）にしていたが、**マイ種目の一覧は
+   * 名前順**なので、同じ種目が 2 つの画面で違う位置に出ていた。探す軸は名前で同じ。
+   */
+  const collator = new Intl.Collator(t.locale);
   const sorted = [...goals].sort((a, b) => {
     const ga = order.get(a.group) ?? 99;
     const gb = order.get(b.group) ?? 99;
     if (ga !== gb) return ga - gb;
-    return (byId.get(a.exerciseId)?.order ?? 0) - (byId.get(b.exerciseId)?.order ?? 0);
+    return collator.compare(a.name, b.name);
   });
   const reached = goals.filter((g) => g.reached).length;
 

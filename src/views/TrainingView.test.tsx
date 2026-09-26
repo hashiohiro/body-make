@@ -5187,6 +5187,96 @@ describe('プリセット（設定から見る・編集する）', () => {
   });
 });
 
+/*
+ * **探す軸が名前の一覧は、ぜんぶ名前順にそろえる。**
+ *
+ * マイ種目・カタログ・プリセットは名前順なのに、目標は追加順、推移は記録の多い順、
+ * 許容済みは許容した順と、画面ごとに違っていた。同じ種目が画面によって別の位置に出る。
+ */
+describe('一覧の並び（名前順にそろえる）', () => {
+  function GoalsHarness() {
+    const body = useBodyData(seeded);
+    return <GoalsView body={body} domain="training" onOpenExercises={() => {}} />;
+  }
+
+  function ChartsHarness() {
+    const body = useBodyData(seeded);
+    return <ChartsView body={body} domain="training" />;
+  }
+
+  /** 胸の 2 種目を**名前の逆順**で持たせる（インクライン… < ベンチプレス） */
+  const seedChest = (workouts: Record<string, unknown> = {}) => {
+    const exercises = ['ex_bench', 'ex_incline_bench'].map((id, i) => ({
+      ...fromCatalog(
+        CATALOG.find((c) => c.id === id)!,
+        i,
+      ),
+      goal: { type: 'weight', value: 100 },
+    }));
+    seedRaw({ version: 7, settings: {}, entries: {}, exercises, workouts });
+  };
+
+  const labels = (pattern: RegExp, suffix: string) =>
+    screen
+      .getAllByRole('button', { name: pattern })
+      .map((b) => b.getAttribute('aria-label')?.replace(suffix, ''));
+
+  it('種目の目標は、部位の中も名前順（マイ種目の追加順ではない）', () => {
+    seedChest();
+    render(<GoalsHarness />);
+
+    expect(labels(/の目標を変える$/, 'の目標を変える')).toEqual([
+      'インクラインベンチプレス（バーベル）',
+      'ベンチプレス（バーベル）',
+    ]);
+  });
+
+  it('推移を見る種目も名前順（記録の多い順ではない）', () => {
+    // ベンチのほうが記録が多い。回数で並べるとベンチが先に来る
+    seedChest({
+      '2026-03-01': [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+      '2026-03-03': [{ exerciseId: 'ex_bench', sets: [{ weight: 62, reps: 10 }] }],
+      '2026-03-05': [
+        { exerciseId: 'ex_bench', sets: [{ weight: 64, reps: 10 }] },
+        { exerciseId: 'ex_incline_bench', sets: [{ weight: 40, reps: 10 }] },
+      ],
+    });
+    render(<ChartsHarness />);
+
+    const names = [...document.querySelectorAll('[class*="_trendName_"]')].map(
+      (el) => el.textContent,
+    );
+    expect(names).toEqual(['インクラインベンチプレス（バーベル）', 'ベンチプレス（バーベル）']);
+  });
+
+  it('許容済みの警告は、出る文言の順に並ぶ', async () => {
+    const { CheckSettingsForm } = await import('../components/training/CheckSettingsForm');
+    const { defaultChecks } = await import('../lib/storage');
+
+    const exercises = ['ex_bench'].map((id, i) =>
+      fromCatalog(
+        CATALOG.find((c) => c.id === id)!,
+        i,
+      ),
+    );
+    // 許容した順は 3/09 → 3/02。文言は「軸荷重種目の連日 — 3/2」のように日付が入る
+    render(
+      <CheckSettingsForm
+        checks={{ ...defaultChecks(), enabled: true }}
+        suppressed={['axial|d:2026-03-09', 'axial|d:2026-03-02']}
+        exercises={exercises}
+        onUpdate={() => {}}
+        onUnsuppress={() => {}}
+      />,
+    );
+
+    expect(labels(/の許容を取り消す$/, 'の許容を取り消す')).toEqual([
+      '軸荷重種目の連日 — 3/2',
+      '軸荷重種目の連日 — 3/9',
+    ]);
+  });
+});
+
 describe('日付ナビ', () => {
   it('今日を見ているときは「今日」ボタンを出さない', () => {
     render(<DateNav date={todayISO()} today={todayISO()} onChange={() => {}} />);
@@ -7702,6 +7792,34 @@ describe('プリセットと週メニューの分かれ方', () => {
     // 写さない。1 つのプリセットが曜日を 2 つ持つ
     expect(saved.presets).toHaveLength(1);
     expect(saved.presets[0]?.weekdays).toEqual([1, 4]);
+  });
+
+  /*
+   * **並びは名前順。**作った順は使う側から見ると意味を持たない並びで、
+   * 増えるほど「どこにあるか」が読めなくなる（マイ種目・カタログと同じ作法）。
+   */
+  it('プリセットの一覧も、置ける候補も名前順に並ぶ', () => {
+    seedPresets([
+      { id: 'p1', name: 'ひく日', exerciseIds: bench() },
+      { id: 'p2', name: 'あしの日', exerciseIds: bench() },
+      { id: 'p3', name: 'おす日', exerciseIds: bench() },
+    ]);
+    render(<PresetHarness />);
+
+    const names = screen
+      .getAllByRole('button', { name: /を編集$/ })
+      .map((b) => b.getAttribute('aria-label')?.replace('を編集', ''));
+    expect(names).toEqual(['あしの日', 'おす日', 'ひく日']);
+
+    // 週メニューで「その曜日に置く」候補も同じ並び
+    cleanup();
+    render(<WeekHarness />);
+    fireEvent.click(screen.getAllByRole('button', { name: /曜日を決める/ })[1]!);
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットから入れる' }));
+    const candidates = screen
+      .getAllByRole('button', { name: /を月曜日にする$/ })
+      .map((b) => b.getAttribute('aria-label')?.replace('を月曜日にする', ''));
+    expect(candidates).toEqual(['あしの日', 'おす日', 'ひく日']);
   });
 
   /** その日にもう置いてあるものは、候補から外す（同じ日に二度は置けない） */

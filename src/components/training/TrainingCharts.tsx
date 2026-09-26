@@ -9,6 +9,7 @@ import { SearchToggle } from './SearchToggle';
 import {
   EXERCISE_GROUP_ORDER,
   GROUP_KEYS,
+  byName,
   countsReps,
   exerciseName,
   isCardio,
@@ -41,18 +42,24 @@ interface Props {
  * 1 種目ぶんの詳細が画面に居座ると、一覧を見比べるのに毎回その脇を通ることになる。
  */
 export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Props) {
-  // 記録のある種目だけを選択肢にする
+  const t = useT();
+  /*
+   * 記録のある種目だけを選択肢にする。**並びは名前順。**
+   *
+   * 記録回数の多い順にしていたが、探す軸は名前（検索欄も名前で引く）で、
+   * マイ種目・カタログ・目標もすべて名前順。ここだけ別の並びだと、
+   * **記録を足すたびに位置が動く**ので、いつも同じ種目でも毎回探し直しになる。
+   */
   const recorded = useMemo(() => {
-    const counts = new Map<string, number>();
+    const counts = new Set<string>();
     for (const session of sessions) {
-      for (const point of session.exercises) {
-        counts.set(point.exerciseId, (counts.get(point.exerciseId) ?? 0) + 1);
-      }
+      for (const point of session.exercises) counts.add(point.exerciseId);
     }
-    return exercises
-      .filter((e) => counts.has(e.id))
-      .sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0));
-  }, [sessions, exercises]);
+    return byName(
+      t,
+      exercises.filter((e) => counts.has(e.id)),
+    );
+  }, [t, sessions, exercises]);
 
   const [openId, setOpenId] = useState<string | null>(initialOpenId ?? null);
   const [metricId, setMetricId] = useState<string | null>(null);
@@ -60,7 +67,6 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
   /** 名前で探す。見出しの行に畳んである（`SearchToggle`） */
   const [query, setQuery] = useState('');
 
-  const t = useT();
   // 部位は主部位だけで絞る。ここで見たいのは種目の推移で、配分ではない
   // （補助部位まで拾うと、腕にベンチプレスが並ぶ）
   const groups = EXERCISE_GROUP_ORDER.filter((g) => recorded.some((e) => e.group === g));

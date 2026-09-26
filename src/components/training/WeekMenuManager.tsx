@@ -10,7 +10,7 @@ import { ChoicePanel } from '../ChoicePanel';
 import { PresetCreateDialog } from './PresetCreateDialog';
 import { WEEKDAYS } from '../../lib/weekPlan';
 import { WEEKDAY_KEYS } from '../../lib/date';
-import { GROUP_KEYS, GROUP_ORDER, groupsOf } from '../../lib/exerciseCatalog';
+import { GROUP_KEYS, GROUP_ORDER, byName, groupsOf } from '../../lib/exerciseCatalog';
 import { weekLoad } from '../../lib/weekPlan';
 import type { Exercise, GroupGoals, MuscleGroup, Preset, Weekday } from '../../types';
 import { CardHeader } from '../CardHeader';
@@ -75,7 +75,9 @@ export function WeekMenuManager({
    * 曜日を持つもの。**伏せたものは降ろす**——曜日は持ったままなので、
    * 表示に戻せばこの面へそのまま戻る（`Preset.hidden`）。
    */
-  const placed = presets.filter((p) => p.weekdays.length > 0);
+  /* 曜日の中も一覧も名前順（作った順は使う側から見ると意味を持たない） */
+  const sorted = byName(t, presets);
+  const placed = sorted.filter((p) => p.weekdays.length > 0);
   const onDay = (day: Weekday) => placed.filter((p) => p.weekdays.includes(day));
   /**
    * その曜日に置ける候補。**その日にまだ無いものは、ぜんぶ出す。**
@@ -88,8 +90,7 @@ export function WeekMenuManager({
    * **伏せたものは出さない。**置いてある側（`placed`）では降ろしているのに、
    * 置く候補にだけ残っていた——使わないと決めたものを、置く先で勧めていた。
    */
-  const candidates = (day: Weekday) =>
-    presets.filter((p) => !p.hidden && !p.weekdays.includes(day));
+  const candidates = (day: Weekday) => sorted.filter((p) => !p.hidden && !p.weekdays.includes(day));
   /* 置いてあるものを読むだけ。計画データは持たない（`weekLoad`） */
   const load = weekLoad(presets, exercises, groupGoals);
   const peak = Math.max(...GROUP_ORDER.map((g) => load.totals[g]), 0);

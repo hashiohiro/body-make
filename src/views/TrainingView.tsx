@@ -14,7 +14,7 @@ import type { WeightUnit } from '../lib/weight';
 import { defaultSetsFor } from '../lib/preset';
 import { useConfirm } from '../components/ConfirmDialog';
 import { OrderList } from '../components/training/OrderList';
-import { exerciseName, groupsOf, isCardio } from '../lib/exerciseCatalog';
+import { byName, exerciseName, groupsOf, isCardio } from '../lib/exerciseCatalog';
 import { addDays, startOfWeek, weekdayIndex } from '../lib/date';
 import {
   buildBodyWeightLookup,
@@ -170,8 +170,9 @@ export function TrainingView({ body, date }: Props) {
    * **名前の重複だけは伏せたものとも見る**（`PresetBlock`）——戻したときにぶつかるため。
    */
   const presets = useMemo(
-    () => data.presets.filter((p) => !p.hidden).map(option),
-    [data.presets, option],
+    // 並びは名前順。作った順は使う側から見ると意味を持たない（マイ種目と同じ作法）
+    () => byName(t, data.presets.filter((p) => !p.hidden).map(option)),
+    [t, data.presets, option],
   );
 
   /**

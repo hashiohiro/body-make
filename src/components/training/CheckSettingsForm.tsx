@@ -35,6 +35,17 @@ export function CheckSettingsForm({
   onUnsuppress,
 }: Props) {
   const t = useT();
+
+  /*
+   * 許容済みは**出る文言の順**に並べる。許容した順だと、増えるほど
+   * 「どれを戻すか」を目で探すことになる（ほかの一覧と同じく名前で引く）。
+   */
+  const sortedSuppressed = (() => {
+    const collator = new Intl.Collator(t.locale);
+    return [...suppressed].sort((a, b) =>
+      collator.compare(describeKey(t, a, exercises), describeKey(t, b, exercises)),
+    );
+  })();
   return (
     <>
       <section className={ui.card}>
@@ -105,7 +116,7 @@ export function CheckSettingsForm({
                 {t('checks.noneYetHint')}
               </p>
             ) : (
-              suppressed.map((key) => (
+              sortedSuppressed.map((key) => (
                 <div key={key} className={s.suppressRow}>
                   <span className={s.suppressName}>{describeKey(t, key, exercises)}</span>
                   <Button

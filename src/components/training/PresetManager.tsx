@@ -6,7 +6,7 @@ import { removePresetRequest } from './presetConfirm';
 import { PresetCreateDialog } from './PresetCreateDialog';
 import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
-import { groupsOf } from '../../lib/exerciseCatalog';
+import { byName, groupsOf } from '../../lib/exerciseCatalog';
 import { weekdaysLabel } from '../../lib/preset';
 import type { Exercise, Preset } from '../../types';
 import { CardHeader } from '../CardHeader';
@@ -59,8 +59,10 @@ export function PresetManager({
    * 伏せたものは下にまとめる。**消したのではない**ので、一覧から居なくならない
    * （マイ種目の「非表示」欄と同じ作法）。
    */
-  const shown = presets.filter((p) => !p.hidden);
-  const hidden = presets.filter((p) => p.hidden);
+  /* 並びは名前順。作った順だと、あとから足した 1 件がどこにいるか分からない */
+  const sorted = byName(t, presets);
+  const shown = sorted.filter((p) => !p.hidden);
+  const hidden = sorted.filter((p) => p.hidden);
 
   /*
    * 1 件ぶんは**マイ種目の一覧と同じ部品**（`ExerciseSummaryCard`）で出す。
