@@ -98,6 +98,7 @@ export function emptyData(): AppData {
     presets: [],
     checks: defaultChecks(),
     suppressed: [],
+    badgesEarnedAt: {},
   };
 }
 
@@ -449,6 +450,23 @@ export function sanitizeChecks(raw: unknown): CheckSettings {
 }
 
 /** 許容済みのキー。中身は check.ts が組み立てた文字列なので、形だけ見る */
+/**
+ * 実績の獲得日（バッジ ID → `YYYY-MM-DD`）。
+ *
+ * 日付の形が違うものは落とす。**入れ直しは効かない**（いつ取ったかは
+ * 記録から出し直せない）ので、読めるものだけを残す。
+ */
+export function sanitizeBadgesEarnedAt(raw: unknown): Record<string, string> {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [id, date] of Object.entries(raw as Record<string, unknown>)) {
+    if (!id || id.length > 100) continue;
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    out[id] = date;
+  }
+  return out;
+}
+
 export function sanitizeSuppressed(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return [
@@ -677,6 +695,7 @@ export function sanitizeData(raw: unknown): AppData {
     presets: sanitizePresets(o.presets, knownIds, shapes),
     checks: sanitizeChecks(o.checks),
     suppressed: sanitizeSuppressed(o.suppressed),
+    badgesEarnedAt: sanitizeBadgesEarnedAt(o.badgesEarnedAt),
   };
 }
 
@@ -778,6 +797,8 @@ interface MetaRecord {
   groupGoals: GroupGoals;
   checks: CheckSettings;
   suppressed: string[];
+  /** 実績の獲得日。記録から出し直せないので、週ではなくメタに置く */
+  badgesEarnedAt: Record<string, string>;
 }
 
 interface WeekRecord {
@@ -808,6 +829,7 @@ function splitByWeek(data: AppData): { meta: MetaRecord; weeks: Map<string, Week
       groupGoals: data.groupGoals,
       checks: data.checks,
       suppressed: data.suppressed,
+      badgesEarnedAt: data.badgesEarnedAt,
     },
     weeks,
   };

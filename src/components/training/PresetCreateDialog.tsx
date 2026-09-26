@@ -1,5 +1,5 @@
 import { exerciseName } from '../../lib/exerciseCatalog';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { OrderList } from './OrderList';
 import { PickDialog } from './PickDialog';
 import { Modal } from '../Modal';
@@ -46,7 +46,17 @@ export function PresetCreateDialog({
   /** 掴んでいる種目。置くまで並びは変えない */
   const [moving, setMoving] = useState<string | null>(null);
   /** 開いてすぐ選べるようにする。空の一覧を見せてから押させない */
-  const [picking, setPicking] = useState(true);
+  /*
+   * **種目を選ぶ面から始める。**名前だけ決めても中身が無いので、開いた先で
+   * まず選ばせる。ただし**開くのは描画を 1 つ送らせてから。**
+   *
+   * 同じ描画の中で内と外を開くと、`useLayoutEffect` は**子から先に**走るので
+   * `showModal()` の順が「内 → 外」になり、**内側がトップレイヤーの下に回る**。
+   * 開いているのに後ろに描かれ、そのうえ「＋ 種目を追加」を押しても
+   * `picking` はすでに true なので**再描画すら起きない**——ボタンが死んで見える。
+   */
+  const [picking, setPicking] = useState(false);
+  useEffect(() => setPicking(true), []);
 
   const byId = new Map(exercises.map((e) => [e.id, e]));
   /** 種目 ID から、いまの言語で読む名前。消えた種目は括弧つきの札で出す */

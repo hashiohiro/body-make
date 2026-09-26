@@ -128,8 +128,6 @@ export function PresetCard({
             )}
           </div>
         )
-      ) : alreadySaved && !changed ? (
-        <p className={ui.emptyState}>{t('preset.alreadySaved')}</p>
       ) : saving ? (
         <NameEntryRow
           value={name}
@@ -167,6 +165,12 @@ export function PresetCard({
         />
       ) : (
         <>
+          {/*
+            **同じ中身がすでにあっても、保存は塞がない。**
+            名前を分けて持ちたいことがある（押す日 A / 押す日 B）。
+            ただし増やしたことに気づけるよう、すでにあることは先に伝える。
+          */}
+          {alreadySaved && !changed && <p className={ui.note}>{t('preset.alreadySaved')}</p>}
           <p className={s.presetSaveLabel}>{t('preset.current', { n: currentIds.length })}</p>
 
           {/*

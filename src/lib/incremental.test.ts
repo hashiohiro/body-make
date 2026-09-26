@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildDaily, buildWeeks, computeProjection, computeStats } from './derive';
 import { createDeriveCache, deriveAll } from './incremental';
+import { computeBadgeFacts } from './badgeFacts';
 import { buildCheckHistory } from './check';
 import { CATALOG, fromCatalog } from './exerciseCatalog';
 import { buildSessions, buildWeeklySets, computeTrainingStats, exerciseGoals } from './training';
@@ -134,6 +135,7 @@ function full(data: AppData) {
       sessions,
       data.exercises.filter((e) => e.shelf === 'listed'),
     ),
+    badgeFacts: computeBadgeFacts(daily, sessions),
   };
 }
 

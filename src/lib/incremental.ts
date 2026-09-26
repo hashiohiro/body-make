@@ -1,3 +1,5 @@
+import type { BadgeFacts } from './badgeFacts';
+import { EMPTY_BADGE_FACTS, computeBadgeFacts } from './badgeFacts';
 import { findLastIndex } from './array';
 import type {
   AppData,
@@ -69,6 +71,8 @@ export interface Derived {
   trainingStats: TrainingStats;
   checkHistory: CheckHistory;
   trainingGoals: ReturnType<typeof exerciseGoals>;
+  /** 伏せてある実績が見る小ネタ。読むのは `computeBadges` だけ */
+  badgeFacts: BadgeFacts;
 }
 
 const EMPTY_STATS: Stats = {
@@ -168,7 +172,11 @@ export function deriveAll(t: T, data: AppData, cache: DeriveCache): Derived {
 
   const body = combineBody(bodyWeeks, data.settings);
   const training = combineTraining(t, trainingWeeks, data.exercises);
-  return { ...body, ...training };
+  return {
+    ...body,
+    ...training,
+    badgeFacts: computeBadgeFacts(body.daily, training.sessions),
+  };
 }
 
 function empty(t: T, data: AppData): Derived {
@@ -191,6 +199,7 @@ function empty(t: T, data: AppData): Derived {
      * すぐ上の `buildCheckHistory` は種目を渡しているのに、ここだけ抜けていた。
      */
     trainingGoals: exerciseGoals(t, [], data.exercises.filter(isListed)),
+    badgeFacts: EMPTY_BADGE_FACTS,
   };
 }
 

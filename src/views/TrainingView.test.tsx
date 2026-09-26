@@ -9,6 +9,7 @@ import { PresetManager } from '../components/training/PresetManager';
 import { WeekMenuManager } from '../components/training/WeekMenuManager';
 import { App } from '../App';
 import { BadgeGrid } from '../components/BadgeGrid';
+import { badgeName } from '../lib/badges';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { DateNav } from '../components/DateNav';
 import { ChartsView } from './ChartsView';
@@ -37,7 +38,7 @@ import { useBodyData } from '../hooks/useBodyData';
 import { useTheme } from '../hooks/useTheme';
 import { formatMD, startOfWeek, todayISO, weekdayLabel } from '../lib/date';
 import { CATALOG, fromCatalog } from '../lib/exerciseCatalog';
-import type { AppData, Domain, Exercise, ThemePref, WeekPoint } from '../types';
+import type { AppData, Domain, Entries, Exercise, ThemePref, WeekPoint } from '../types';
 import type { EnergyPoint } from '../lib/energy';
 import { emptyData, flushSave, loadData, resetStorageForTests, sanitizeData } from '../lib/storage';
 import { buildSessions } from '../lib/training';
@@ -3168,12 +3169,119 @@ describe('実績バッジ', () => {
     // ホームは切り替えに従って出し分けるので、どちらの側かを必ず持つ
     expect(badges.every((b) => b.domain === 'body' || b.domain === 'training')).toBe(true);
     // どちらの側も同じ数だけ用意する（片側だけ埋まらないと、切り替えが痩せて見える）
-    expect(badges.filter((b) => b.domain === 'training')).toHaveLength(30);
-    expect(badges.filter((b) => b.domain === 'body')).toHaveLength(30);
+    expect(badges.filter((b) => b.domain === 'training')).toHaveLength(55);
+    expect(badges.filter((b) => b.domain === 'body')).toHaveLength(55);
+    // 伏せてあるぶんも同数。片側だけ意外性が多いことにしない
+    const hidden = badges.filter((b) => b.hidden);
+    expect(hidden.filter((b) => b.domain === 'body')).toHaveLength(10);
+    expect(hidden.filter((b) => b.domain === 'training')).toHaveLength(10);
 
     // 段階は「はじめの1回」から始める。始めたばかりでも次に届くものがある
     const first = badges.find((b) => b.id === 'train-1');
     expect(first).toBeTruthy();
+
+    // ID は記録（`badgesEarnedAt`）から引く鍵なので、重なっていると獲得日が混ざる
+    expect(new Set(badges.map((b) => b.id)).size).toBe(badges.length);
+  });
+
+  /*
+   * **増やす方向も数える。**減らす側だけを実績にしていたので、増量期の人には
+   * 体組成の 11 個と「質の高い減量」が永久に未解除のまま並んでいた。
+   */
+  it('体重が増えた側にも、減った側と同じだけ実績が出る', async () => {
+    const { computeBadges } = await import('../lib/badges');
+    const { computeTrainingStats, buildSessions } = await import('../lib/training');
+    const { computeStats, buildDaily, buildWeeks } = await import('../lib/derive');
+    const { DEFAULT_SETTINGS } = await import('../lib/storage');
+
+    const empty = computeTrainingStats(buildSessions({}, [], []));
+    const of = (entries: Entries) => {
+      const daily = buildDaily(entries);
+      return computeBadges(computeStats(daily, buildWeeks(daily), DEFAULT_SETTINGS), empty);
+    };
+    /** 体重と体脂肪率を 1 日 1 件。開始値は移動平均が立ってからなので 4 週間ぶん置く */
+    const run = (from: number, to: number, fat: number, fatTo: number): Entries => {
+      const entries: Entries = {};
+      for (let i = 0; i < 28; i++) {
+        const at = `2026-03-${String(i + 1).padStart(2, '0')}`;
+        const ratio = i / 27;
+        entries[at] = {
+          am: {
+            weight: from + (to - from) * ratio,
+            bodyFat: fat + (fatTo - fat) * ratio,
+            waist: null,
+          },
+          pm: { weight: null, bodyFat: null, waist: null },
+        };
+      }
+      return entries;
+    };
+
+    // 体重を 3kg 増やし、体脂肪率は据え置き（除脂肪が増えたことになる）
+    const gained = of(run(60, 63, 20, 20));
+    expect(gained.find((b) => b.id === 'lean-1')?.earned).toBe(true);
+    expect(gained.find((b) => b.id === 'quality-bulk')?.earned).toBe(true);
+    // 減らす側は当然まだ
+    expect(gained.find((b) => b.id === 'lose-1')?.earned).toBe(false);
+    expect(gained.find((b) => b.id === 'quality-cut')?.earned).toBe(false);
+
+    // 逆向き。体重を 3kg 落とし、落ちたぶんはほぼ脂肪（除脂肪は保てた）
+    const lost = of(run(63, 60, 25, 21));
+    expect(lost.find((b) => b.id === 'lose-1')?.earned).toBe(true);
+    expect(lost.find((b) => b.id === 'quality-cut')?.earned).toBe(true);
+    expect(lost.find((b) => b.id === 'quality-bulk')?.earned).toBe(false);
+  });
+
+  /*
+   * **トレーニング側は「やった量」と「幅」で増やした。**
+   * 規則が値を取り違えていても（セット数と挙上量は桁が近い）画面では気づけないので、
+   * 判定の入口をここで結線ごと見る。
+   */
+  it('セット数・挙上量・有酸素の実績が、記録から解除される', async () => {
+    const { computeBadges } = await import('../lib/badges');
+    const { computeTrainingStats, buildSessions } = await import('../lib/training');
+    const { computeStats, buildDaily, buildWeeks } = await import('../lib/derive');
+    const { DEFAULT_SETTINGS } = await import('../lib/storage');
+
+    const bench = fromCatalog(
+      CATALOG.find((c) => c.id === 'ex_bench')!,
+      0,
+    );
+    const running = fromCatalog(
+      CATALOG.find((c) => c.group === 'cardio')!,
+      1,
+    );
+
+    // 100kg × 10回 を 20 本＝20t。走った日を 1 日
+    const sessions = buildSessions(
+      {
+        '2026-03-02': [
+          {
+            exerciseId: bench.id,
+            sets: Array.from({ length: 20 }, () => ({ weight: 100, reps: 10 })),
+          },
+        ],
+        '2026-03-03': [{ exerciseId: running.id, sets: [{ meters: 5000, seconds: 1800 }] }],
+      },
+      [bench, running],
+      [],
+    );
+
+    const daily = buildDaily({});
+    const stats = computeStats(daily, buildWeeks(daily), DEFAULT_SETTINGS);
+    const badges = computeBadges(stats, computeTrainingStats(sessions));
+    const earned = (id: string) => badges.find((b) => b.id === id)?.earned;
+
+    expect(earned('train-cardio-1')).toBe(true);
+    expect(earned('train-cardio-10')).toBe(false);
+    // 20t なので 10t は解除、100t はまだ
+    expect(earned('train-volume-10')).toBe(true);
+    expect(earned('train-volume-100')).toBe(false);
+    // セットは 21 本。100 本には届かない（挙上量の桁と取り違えていないこと）
+    expect(earned('train-sets-100')).toBe(false);
+    expect(badges.find((b) => b.id === 'train-sets-100')?.value).toBe(21);
+    // 胸と有酸素だけなので、全部位そろった日数は 0
+    expect(earned('train-groups-5')).toBe(false);
   });
 
   it('押すと獲得の条件が読める（title はスマホで出ない）', async () => {
@@ -3186,15 +3294,48 @@ describe('実績バッジ', () => {
     const stats = computeStats(daily, buildWeeks(daily), DEFAULT_SETTINGS);
     const badges = computeBadges(stats, computeTrainingStats(buildSessions({}, [], [])));
 
-    render(<BadgeGrid badges={badges.filter((b) => b.domain === 'body')} />);
+    // 未解除のカード（記録が無いので、体組成の実績はまだ 1 つも獲っていない）
+    render(<BadgeGrid badges={badges.filter((b) => b.domain === 'body')} title="未解除" />);
     expect(screen.getByText(/バッジを押すと/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: '質の高い減量の条件' }));
-    expect(screen.getByText(/除脂肪体重の減少が0.5kg以内/)).toBeTruthy();
+    // カードに出るのは 5 件まで。残りはダイアログで見る
+    fireEvent.click(screen.getByRole('button', { name: /^＋/ }));
+    const dlg = within(document.querySelector('dialog') as HTMLElement);
+
+    fireEvent.click(dlg.getByRole('button', { name: '質の高い減量の条件' }));
+    expect(dlg.getByText(/除脂肪体重の減少が0.5kg以内/)).toBeTruthy();
 
     // 段階のあるバッジは、いまの値と条件も出す
-    fireEvent.click(screen.getByRole('button', { name: '3日連続の条件' }));
-    expect(screen.getByText('いま 0 / 3')).toBeTruthy();
+    fireEvent.click(dlg.getByRole('button', { name: '3日連続の条件' }));
+    expect(dlg.getByText('いま 0 / 3')).toBeTruthy();
+  });
+
+  /*
+   * **伏せてある実績は `???` で出す。**「元日に記録する」を条件つきで並べると
+   * やることリストとして読める（§1.1）。伏せておけば、後から気づく事実になる。
+   */
+  it('伏せてある実績は、解除するまで名前も条件も出さない', async () => {
+    const { computeBadges } = await import('../lib/badges');
+    const { computeTrainingStats, buildSessions } = await import('../lib/training');
+    const { computeStats, buildDaily, buildWeeks } = await import('../lib/derive');
+    const { DEFAULT_SETTINGS } = await import('../lib/storage');
+
+    const daily = buildDaily({});
+    const stats = computeStats(daily, buildWeeks(daily), DEFAULT_SETTINGS);
+    const badges = computeBadges(stats, computeTrainingStats(buildSessions({}, [], [])));
+    const hidden = badges.filter((b) => b.domain === 'body' && b.hidden);
+    expect(hidden).toHaveLength(10);
+
+    render(<BadgeGrid badges={hidden} title="未解除" />);
+
+    // 名前も絵文字も出さない。出るのは ??? だけ
+    expect(screen.getAllByText('???')).toHaveLength(5);
+    expect(screen.queryByText(badgeName(jaT, hidden[0]!))).toBeNull();
+
+    // 押しても条件は読めない。読めるのは「解除すると出る」ということだけ
+    fireEvent.click(screen.getAllByRole('button', { name: '隠れた実績の条件' })[0]!);
+    expect(screen.getByText(/解除すると/)).toBeTruthy();
+    expect(screen.queryByText(/いま /)).toBeNull();
   });
 
   /*
@@ -3211,7 +3352,7 @@ describe('実績バッジ', () => {
     const stats = computeStats(daily, buildWeeks(daily), DEFAULT_SETTINGS);
     const badges = computeBadges(stats, computeTrainingStats(buildSessions({}, [], [])));
 
-    render(<BadgeGrid badges={badges.filter((b) => b.domain === 'body')} />);
+    render(<BadgeGrid badges={badges.filter((b) => b.domain === 'body')} title="未解除" />);
     fireEvent.click(screen.getByRole('button', { name: '3日連続の条件' }));
 
     // 吹き出しはグリッドの中に浮く（カードの末尾ではない）
@@ -3227,6 +3368,39 @@ describe('実績バッジ', () => {
     expect(screen.getByText(/バッジを押すと/)).toBeTruthy();
   });
 
+  /*
+   * **解除済みは獲った順（新しいものが先）。**5 件を超えたぶんは数で畳み、
+   * 押すとダイアログで全部出す——その場で広げると、下のカードが押すたびに動く。
+   */
+  it('解除済みは獲った順に 5 件まで出し、残りはダイアログで出す', async () => {
+    const { computeBadges } = await import('../lib/badges');
+    const { computeTrainingStats, buildSessions } = await import('../lib/training');
+    const { computeStats, buildDaily, buildWeeks } = await import('../lib/derive');
+    const { DEFAULT_SETTINGS } = await import('../lib/storage');
+
+    const daily = buildDaily({});
+    const stats = computeStats(daily, buildWeeks(daily), DEFAULT_SETTINGS);
+    const all = computeBadges(stats, computeTrainingStats(buildSessions({}, [], [])));
+
+    // 獲った日を持つ 7 件を作る（新しいほど先に出る）
+    const earned = all.slice(0, 7).map((b, i) => ({
+      ...b,
+      earned: true,
+      earnedAt: `2026-03-0${i + 1}`,
+    }));
+    render(<BadgeGrid badges={earned} title="解除済み" total={all.length} recentFirst />);
+
+    const names = [...document.querySelectorAll('[class*="_name_"]')].map((el) => el.textContent);
+    // 3/07 が最新。カードに出るのは 5 件
+    expect(names).toHaveLength(5);
+    expect(names[0]).toBe(badgeName(jaT, earned[6]!));
+
+    // 残りは数で畳む
+    fireEvent.click(screen.getByRole('button', { name: '＋2件' }));
+    const dlg = within(document.querySelector('dialog') as HTMLElement);
+    expect(dlg.getAllByRole('button', { name: /の条件$/ })).toHaveLength(7);
+  });
+
   it('「次の目標」は出さない（並び順が同じことを言っている）', async () => {
     const { computeBadges } = await import('../lib/badges');
     const { computeTrainingStats, buildSessions } = await import('../lib/training');
@@ -3237,7 +3411,7 @@ describe('実績バッジ', () => {
     const stats = computeStats(daily, buildWeeks(daily), DEFAULT_SETTINGS);
     const badges = computeBadges(stats, computeTrainingStats(buildSessions({}, [], [])));
 
-    render(<BadgeGrid badges={badges.filter((b) => b.domain === 'training')} />);
+    render(<BadgeGrid badges={badges.filter((b) => b.domain === 'training')} title="未解除" />);
     expect(screen.queryByText('次の目標')).toBeNull();
   });
 });
@@ -4179,6 +4353,31 @@ describe('プリセット（種目の組み合わせ）', () => {
   });
 
   /*
+   * **同じ中身でも、別の名前で保存できる。**
+   *
+   * 以前は「この組み合わせは保存済みです。」と出して保存の面ごと塞いでいた。
+   * ただ名前を分けて持ちたいことはある（押す日 A / 押す日 B）。
+   * 増やしたことに気づけるよう、すでにあることは伝えたうえで押させる。
+   */
+  it('同じ組み合わせでも、別の名前で保存できる', async () => {
+    seedExercises('ex_bench', 'ex_pullup');
+    render(<Harness />);
+    addTwo();
+    save('押す日A');
+
+    openPresets();
+    // すでにあることは伝える
+    expect(screen.getByText(/この組み合わせは保存済みです/)).toBeTruthy();
+    // そのうえで保存できる
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットに保存' }));
+    fireEvent.change(screen.getByLabelText('プリセットの名前'), { target: { value: '押す日B' } });
+    fireEvent.click(screen.getByRole('button', { name: 'この名前で保存' }));
+
+    const saved = await storedData();
+    expect(saved.presets.map((p) => p.name).sort()).toEqual(['押す日A', '押す日B']);
+  });
+
+  /*
    * 帯には要約も出す。開かなくても「まだ残していない」と分かる
    * （ダイアログに畳んだぶん、保存できることに気づけなくなるのを受ける）。
    */
@@ -4630,6 +4829,35 @@ describe('プリセット（設定から見る・編集する）', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '押す日を表示に戻す' }));
     expect((await storedData()).presets[0]?.hidden).toBe(false);
+  });
+
+  /*
+   * **入れ子の面は、外が開いてから開く。**
+   *
+   * `<dialog>` の重なりは `showModal()` を呼んだ順で決まる。同じ描画の中で
+   * 内と外を開くと、React は `useLayoutEffect` を**子から先に**走らせるので
+   * 順が「内 → 外」になり、**内側が後ろに回る**。
+   *
+   * プリセットの新規作成は種目を選ぶ面から始めるので、まさにこれが起きていた。
+   * 開いているのに後ろに描かれ、そのうえ「＋ 種目を追加」を押しても
+   * `picking` はすでに true なので再描画すら起きない——ボタンが死んで見える。
+   */
+  it('プリセットを作る面は、外が先にトップレイヤーへ入る', () => {
+    const order: string[] = [];
+    const proto = HTMLDialogElement.prototype as unknown as Record<string, unknown>;
+    proto.showModal = function (this: HTMLDialogElement) {
+      order.push(this.querySelector('h2')?.textContent ?? '');
+      this.setAttribute('open', '');
+    };
+    try {
+      seedPresets();
+      render(<PresetHarness />);
+      fireEvent.click(screen.getByRole('button', { name: 'プリセットを作る' }));
+
+      expect(order).toEqual(['プリセットを作る', '新しいプリセットに種目を足す']);
+    } finally {
+      delete proto.showModal;
+    }
   });
 
   it('空から新しいプリセットを作れる', async () => {
@@ -6725,7 +6953,20 @@ describe('キーボードとタブバー', () => {
 
   afterEach(() => {
     Reflect.deleteProperty(window, 'visualViewport');
+    // focus したままにすると、次のテストが「入力中」から始まる
+    document.querySelectorAll('body > input').forEach((el) => el.remove());
   });
+
+  /** 入力欄に入った状態を作る。キーボードが出る条件はこれと、ずれの両方 */
+  function focusField() {
+    const input = document.createElement('input');
+    document.body.append(input);
+    act(() => {
+      input.focus();
+      document.dispatchEvent(new Event('focusin'));
+    });
+    return input;
+  }
 
   it('キーボードが無ければ出したまま', () => {
     setViewport(window.innerHeight);
@@ -6733,18 +6974,56 @@ describe('キーボードとタブバー', () => {
     expect(document.querySelector('[data-tabbar]')!.hasAttribute('hidden')).toBe(false);
   });
 
-  it('視覚ビューポートが縮んだら引っ込める', () => {
-    // キーボードで画面の 45% が埋まった状態
+  it('入力中に縮んだら引っ込める', () => {
+    // キーボードで画面の 45% が埋まった状態（ずれは端末で違うので、割合は代表値）
     setViewport(Math.round(window.innerHeight * 0.55));
     render(<TabBar active="records" onChange={() => {}} />);
+    focusField();
     expect(document.querySelector('[data-tabbar]')!.hasAttribute('hidden')).toBe(true);
   });
 
-  /* アドレスバーの出入り（1 割ほど）でバーが消えては、押したいときに無いことになる */
-  it('アドレスバーぶんの縮みでは引っ込めない', () => {
-    setViewport(Math.round(window.innerHeight * 0.9));
+  /*
+   * **縮んだだけでは引っ込めない。**
+   *
+   * iOS Safari は URL バーの開閉で `window.innerHeight` そのものが変わるので、
+   * 分子と分母が別々に動いて閾値を割る。キーボードが出ていないのにタブバーが
+   * 消えていたのはこれ（画面を移れなくなる）。知りたいのは「入力中か」なので、
+   * 欄に入っていることも合わせて見る。
+   */
+  it('入力していなければ、縮んでも引っ込めない', () => {
+    setViewport(Math.round(window.innerHeight * 0.55));
     render(<TabBar active="records" onChange={() => {}} />);
     expect(document.querySelector('[data-tabbar]')!.hasAttribute('hidden')).toBe(false);
+  });
+
+  /** ボタンや切り替えの `input` はキーボードを出さないので数えない */
+  it('押す的に focus が乗っても引っ込めない', () => {
+    setViewport(Math.round(window.innerHeight * 0.55));
+    render(<TabBar active="records" onChange={() => {}} />);
+    const button = document.createElement('input');
+    button.type = 'checkbox';
+    document.body.append(button);
+    act(() => {
+      button.focus();
+      document.dispatchEvent(new Event('focusin'));
+    });
+    expect(document.querySelector('[data-tabbar]')!.hasAttribute('hidden')).toBe(false);
+  });
+
+  /* アドレスバーの出入りでバーが消えては、押したいときに無いことになる */
+  it('アドレスバーぶんの縮みでは、入力中でも引っ込めない', () => {
+    setViewport(Math.round(window.innerHeight * 0.95));
+    render(<TabBar active="records" onChange={() => {}} />);
+    focusField();
+    expect(document.querySelector('[data-tabbar]')!.hasAttribute('hidden')).toBe(false);
+  });
+
+  /* 端末差でキーボードの高さは変わる。**浅いずれでも引っ込める**（漏らさない） */
+  it('キーボードが小さめでも引っ込める', () => {
+    setViewport(Math.round(window.innerHeight * 0.85));
+    render(<TabBar active="records" onChange={() => {}} />);
+    focusField();
+    expect(document.querySelector('[data-tabbar]')!.hasAttribute('hidden')).toBe(true);
   });
 
   it('visualViewport が無い環境では出したまま', () => {
@@ -6765,6 +7044,7 @@ describe('キーボードとタブバー', () => {
     const tall = window.innerHeight;
     const viewport = setViewport(tall);
     render(<TabBar active="records" onChange={() => {}} />);
+    focusField();
     const bar = () => document.querySelector('[data-tabbar]')!;
     expect(bar().hasAttribute('hidden')).toBe(false);
 
@@ -7400,6 +7680,60 @@ describe('プリセットと週メニューの分かれ方', () => {
     // **写さない。**そのプリセットに曜日が足されるだけ
     expect(saved.presets).toHaveLength(1);
     expect(saved.presets[0]?.weekdays).toEqual([1]);
+  });
+
+  /*
+   * **同じプリセットを複数の曜日に置ける。**
+   *
+   * 以前は「曜日を持たないもの」だけを候補にしていたので、一度どこかに置くと
+   * 二度と別の曜日に置けなかった。押す日を月曜と木曜にやる、は普通のこと。
+   * 持ちものは 1 つのまま、曜日を 2 つ持つ（写さない）。
+   */
+  it('すでに置いたプリセットも、別の曜日に置ける', async () => {
+    seedPresets([{ id: 'p1', name: '胸の日', exerciseIds: bench(), weekdays: [1] }]);
+    render(<WeekHarness />);
+
+    // 木曜（休み）に、月曜に置いてあるものを置く
+    fireEvent.click(screen.getAllByRole('button', { name: /曜日を決める/ })[3]!);
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットから入れる' }));
+    fireEvent.click(screen.getByRole('button', { name: '胸の日を木曜日にする' }));
+
+    const saved = await storedData();
+    // 写さない。1 つのプリセットが曜日を 2 つ持つ
+    expect(saved.presets).toHaveLength(1);
+    expect(saved.presets[0]?.weekdays).toEqual([1, 4]);
+  });
+
+  /** その日にもう置いてあるものは、候補から外す（同じ日に二度は置けない） */
+  it('その曜日にすでに置いてあるものは、候補に出ない', () => {
+    seedPresets([{ id: 'p1', name: '胸の日', exerciseIds: bench(), weekdays: [1] }]);
+    render(<WeekHarness />);
+
+    // 月曜の行を押すと編集に入るので、別の休みの日から候補を見る
+    fireEvent.click(screen.getAllByRole('button', { name: /曜日を決める/ })[3]!);
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットから入れる' }));
+    expect(screen.getByRole('button', { name: '胸の日を木曜日にする' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '胸の日を月曜日にする' })).toBeNull();
+  });
+
+  /*
+   * **伏せたプリセットは、置く候補にも出さない。**
+   *
+   * 置いてある側では降ろしているのに、置く候補にだけ残っていた——
+   * 使わないと決めたものを、置く先で勧めていたことになる。
+   */
+  it('伏せたプリセットは、曜日に置く候補に出ない', () => {
+    seedPresets([
+      { id: 'p1', name: '胸の日', exerciseIds: bench(), weekdays: [] },
+      { id: 'p2', name: 'やめた日', exerciseIds: bench(), weekdays: [], hidden: true },
+    ]);
+    render(<WeekHarness />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /曜日を決める/ })[1]!);
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットから入れる' }));
+
+    expect(screen.getByRole('button', { name: '胸の日を月曜日にする' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'やめた日を月曜日にする' })).toBeNull();
   });
 
   /** 持っていない人は、その場で作ってそのまま置ける */

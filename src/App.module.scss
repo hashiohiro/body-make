@@ -3,7 +3,8 @@
 .app {
   max-width: var(--content-w);
   margin: 0 auto;
-  padding: 0 16px calc(var(--tab-h) + 28px + env(safe-area-inset-bottom));
+  /* 下は「タブバー + 余白 + 吹き出しの余地」（`--tip-room` の由来はトークン側） */
+  padding: 0 16px calc(var(--tab-h) + 28px + var(--tip-room) + env(safe-area-inset-bottom));
 }
 
 /*

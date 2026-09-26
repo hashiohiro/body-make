@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { computeBadges } from '../lib/badges';
+import type { computeBadgeFacts } from '../lib/badgeFacts';
 import { useToday } from './useToday';
 import { emptyDay, isBlankDay } from '../lib/derive';
 import { createDeriveCache, deriveAll } from '../lib/incremental';
@@ -95,6 +97,8 @@ export interface BodyData {
   trainingGoals: ReturnType<typeof exerciseGoals>;
   /** 過去の日の資源消費。構成チェックが読む（lib/check.ts） */
   checkHistory: ReturnType<typeof buildCheckHistory>;
+  /** 伏せてある実績が見る小ネタ（`lib/badgeFacts.ts`） */
+  badgeFacts: ReturnType<typeof computeBadgeFacts>;
 
   setValue: (date: string, slot: SlotId, field: MeasurementField, value: number | null) => void;
   updateSettings: (patch: Partial<Settings>) => void;
@@ -243,7 +247,33 @@ export function useBodyData(initial: AppData): BodyData {
     trainingStats,
     checkHistory,
     trainingGoals,
+    badgeFacts,
   } = derived;
+
+  /*
+   * **獲った日を書き留める。**ほかの数字と違い、いつ取ったかは記録の合計からは
+   * 戻らない（導出値を保存しない作法の、ここだけの例外／`AppData.badgesEarnedAt`）。
+   *
+   * 見るのは「獲っているのに日付が無いもの」だけ。書くのは今日の日付で、
+   * 一度書いたら触らない——あとで記録を直して条件を割っても、獲った事実は消さない。
+   *
+   * **この仕組みより前に獲っていたぶんも、ここで今日として記録される。**
+   * 初回だけは獲得順が本当の順にならないが、閾値の小さい順に並べれば
+   * 「達成しやすい順」になり、実際の順とおおむね一致する（`BadgeGrid`）。
+   */
+  useEffect(() => {
+    const earned = computeBadges(stats, trainingStats, data.badgesEarnedAt, badgeFacts)
+      .filter((b) => b.earned && b.earnedAt == null)
+      .map((b) => b.id);
+    if (earned.length === 0) return;
+    setData((prev) => ({
+      ...prev,
+      badgesEarnedAt: {
+        ...prev.badgesEarnedAt,
+        ...Object.fromEntries(earned.map((id) => [id, today])),
+      },
+    }));
+  }, [stats, trainingStats, badgeFacts, data.badgesEarnedAt, today]);
   const setValue = useCallback(
     (date: string, slot: SlotId, field: MeasurementField, value: number | null) => {
       setData((prev) => {
@@ -719,6 +749,7 @@ export function useBodyData(initial: AppData): BodyData {
     trainingStats,
     trainingGoals,
     checkHistory,
+    badgeFacts,
     setValue,
     updateSettings,
     importData,

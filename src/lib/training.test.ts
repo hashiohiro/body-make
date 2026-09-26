@@ -706,3 +706,78 @@ describe('カタログ', () => {
     expect(data.exercises.map((e) => e.id)).toEqual(CATALOG.map((c) => c.id));
   });
 });
+
+/*
+ * 実績に出す通算の値（`badges.ts` の「行為の量」と「幅」）。
+ *
+ * 数えるのは**やった事実**で、伸びではない（設計 §6.3）。
+ * どれも 1 度の走査でまとめて出すので、片方だけ数え落としても気づきにくい。
+ */
+describe('通算の量と幅', () => {
+  const chest = ex({ id: 'ex_chest', name: '胸', group: 'chest' });
+  const legs = ex({ id: 'ex_legs', name: '脚', group: 'legs' });
+  const plank = ex({ id: 'ex_plank', name: 'プランク', group: 'core', repUnit: 'seconds' });
+  const run = ex({ id: 'ex_run', name: 'ラン', group: 'cardio' });
+
+  const stats = (workouts: Record<string, SessionExercise[]>) =>
+    computeTrainingStats(buildSessions(workouts, [chest, legs, plank, run], []));
+
+  it('セットは本数で、挙上量は 重量 × 回数 で足す', () => {
+    const s = stats({
+      '2026-03-02': [entry(sets([60, 10], [60, 8]), 'ex_chest')],
+      '2026-03-04': [entry(sets([100, 5]), 'ex_legs')],
+    });
+    expect(s.totalSets).toBe(3);
+    expect(s.totalVolume).toBe(60 * 10 + 60 * 8 + 100 * 5);
+  });
+
+  it('秒で数える種目はセットには入り、挙上量には入らない', () => {
+    const s = stats({ '2026-03-02': [entry([{ weight: null, reps: 60 }], 'ex_plank')] });
+    // やったセットは 1 本。挙上量は出せないので 0（0 kg 挙げたことにはしない）
+    expect(s.totalSets).toBe(1);
+    expect(s.totalVolume).toBe(0);
+  });
+
+  it('有酸素をやった日を数える（部位別とは別に持つ）', () => {
+    const s = stats({
+      '2026-03-02': [entry([{ meters: 5000, seconds: 1800 }], 'ex_run')],
+      '2026-03-03': [entry(sets([60, 10]), 'ex_chest')],
+      '2026-03-05': [
+        entry([{ meters: 3000, seconds: 1200 }], 'ex_run'),
+        entry(sets([60, 10]), 'ex_chest'),
+      ],
+    });
+    // 筋トレと同じ日に走っても 1 日。走っていない日は数えない
+    expect(s.cardioDays).toBe(2);
+  });
+
+  it('部位の偏りは、いちばん少ない部位の日数で見る', () => {
+    const one = (id: string) => [entry(sets([50, 10]), id)];
+    const lopsided = stats({
+      '2026-03-02': one('ex_chest'),
+      '2026-03-03': one('ex_chest'),
+      '2026-03-04': one('ex_legs'),
+    });
+    // 背中・肩・腕・体幹は 0 日なので、そろった日数は 0
+    expect(lopsided.minGroupDays).toBe(0);
+
+    // 6 部位を 1 日ずつ。多い部位を足しても、いちばん少ない部位に引っぱられる
+    const all = GROUP_ORDER.map((g) => ex({ id: `ex_${g}`, name: g, group: g }));
+    const even = computeTrainingStats(
+      buildSessions(
+        {
+          ...Object.fromEntries(GROUP_ORDER.map((g, i) => [`2026-03-0${i + 2}`, one(`ex_${g}`)])),
+          '2026-03-09': one('ex_chest'),
+        },
+        all,
+        [],
+      ),
+    );
+    expect(even.minGroupDays).toBe(1);
+  });
+
+  it('記録がなければ 0（null にしない。数えた結果の 0 と区別する必要がない）', () => {
+    const s = stats({});
+    expect([s.totalSets, s.totalVolume, s.cardioDays, s.minGroupDays]).toEqual([0, 0, 0, 0]);
+  });
+});

@@ -724,6 +724,19 @@ export interface TrainingStats {
   bestWeekDays: number;
   /** これまでにやったことのある種目の種類数 */
   exerciseKinds: number;
+  /** 通算セット数。**挙上量に計上しない種目（秒で数えるもの）も 1 本と数える** */
+  totalSets: number;
+  /** 通算挙上量（kg）。重量 × レップ数を足し上げたもの */
+  totalVolume: number;
+  /** 有酸素をやった日数。部位ではないので部位別の集計とは別に持つ */
+  cardioDays: number;
+  /**
+   * 6 部位のうち**いちばん少ない部位**の実施日数。
+   *
+   * 「全部位を N 日ずつ」を 1 本の線で言うための値。部位ごとに持つと
+   * バッジ側で 6 つ見ることになり、どこが足りないかの話になる（§1.1）。
+   */
+  minGroupDays: number;
   /** 初回から今日までの日数（1 日目を 1 と数える） */
   spanDays: number;
 }
@@ -822,11 +835,39 @@ export function computeTrainingStats(
     weeks3Plus: 0,
     bestWeekDays: 0,
     exerciseKinds: 0,
+    totalSets: 0,
+    totalVolume: 0,
+    cardioDays: 0,
+    minGroupDays: 0,
     spanDays: 0,
   };
   if (sessions.length === 0) return empty;
 
   const weeks = weeklySets ?? buildWeeklySets(sessions, sessions[0]!.date);
+
+  /*
+   * 通算の「やった量」と「幅」。**1 度の走査でまとめて数える。**
+   *
+   * セッションは 1 日に 1 つなので、日数はそのまま件数で数えられる
+   * （`sessions` の長さを通算回数として出しているのと同じ前提）。
+   *
+   * 部位は `sessionGroups` で見る。補助部位ぶんの係数で 1 セット相当に届かない部位を
+   * 「やった」に数えないのは、部位の空き日数と同じ物差しにするため（`TRAINED_SETS`）。
+   */
+  let totalSets = 0;
+  let totalVolume = 0;
+  let cardioDays = 0;
+  const groupDays = { ...EMPTY_GROUPS };
+  for (const session of sessions) {
+    let cardio = false;
+    for (const point of session.exercises) {
+      totalSets += point.workSets;
+      totalVolume += point.volume;
+      if (isCardio(point.group)) cardio = true;
+    }
+    if (cardio) cardioDays++;
+    for (const group of sessionGroups(session)) groupDays[group]++;
+  }
 
   let best = 0;
   let run = 0;
@@ -918,6 +959,10 @@ export function computeTrainingStats(
     bestWeekDays,
     // 種目の種類は「何を試したか」の事実。挙げた量ではないので種目をまたいでも数えられる
     exerciseKinds: historyById.size,
+    totalSets,
+    totalVolume,
+    cardioDays,
+    minGroupDays: Math.min(...ALL_GROUPS.map((g) => groupDays[g])),
     spanDays: diffDays(today, firstDate) + 1,
     daysSinceGroup,
     daysSinceCardio,

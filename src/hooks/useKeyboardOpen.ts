@@ -1,13 +1,51 @@
 import { useEffect, useState } from 'react';
 
 /**
- * 視覚ビューポートがこの割合より縮んだら、ソフトキーボードが出ているとみなす。
+ * 視覚ビューポートがレイアウトビューポートよりこの割合を超えて小さいか。
  *
- * キーボードは画面の 35〜50% を占める。アドレスバーの出入りで縮むのは 10% 前後なので、
- * その間に線を引く。厳密な高さは端末とキーボード（絵文字・予測変換のバー）で変わるので、
- * 「何 px 縮んだか」ではなく割合で見る。
+ * **キーボードの高さは測らない。**iOS と Android でも、絵文字や予測変換のバーの
+ * 有無でも変わるので、そこに線を引くと端末ごとに外れる。
+ *
+ * 見ているのは**2 つのビューポートのずれ**そのもの。ずれているとは
+ * 「レイアウトは縮んでいないのに、見えている範囲だけが狭い」状態で、
+ * そのときだけ `position: fixed; bottom: 0` が画面の途中に浮く。
+ * どのキーボードでもずれは 3 割を超えるので、閾値は**緩くてよい**
+ * （狭く取ると端末差で漏れる）。
+ *
+ * ずれだけでは URL バーの開閉も拾ってしまうので、入力中かどうかと**両方**見る。
  */
-const SHRUNK = 0.75;
+const SHRUNK = 0.9;
+
+/**
+ * いまキーボードを出す欄に入っているか。
+ *
+ * **縮んだかどうかだけでは足りない。**iOS Safari は URL バーの開閉で
+ * `window.innerHeight` そのものが変わるので、分子と分母が別々に動いて
+ * キーボードが無くても比が閾値を割る（タブバーが勝手に引っ込む）。
+ * 知りたいのは「入力中か」なので、それを直接見る。
+ *
+ * ボタンやチェックボックスの `input` はキーボードを出さないので数えない。
+ */
+const NO_KEYBOARD = new Set([
+  'button',
+  'submit',
+  'reset',
+  'checkbox',
+  'radio',
+  'file',
+  'range',
+  'color',
+  'image',
+]);
+
+function editableFocused(): boolean {
+  const el = document.activeElement;
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.isContentEditable) return true;
+  if (el.tagName === 'TEXTAREA') return true;
+  if (el.tagName !== 'INPUT') return false;
+  return !NO_KEYBOARD.has((el as HTMLInputElement).type);
+}
 
 /**
  * ソフトキーボードが出ているか。
@@ -20,6 +58,10 @@ const SHRUNK = 0.75;
  * ビューポートのメタタグにある `interactive-widget` は Chromium だけの口で、
  * iOS（Safari も、ホーム画面に追加した PWA も、iOS の Chrome も中身は WebKit）には効かない。
  * 端末に任せられないので、視覚ビューポートの高さを見てこちらで判断する。
+ *
+ * **縮んだことと、入力欄に入っていることの両方**を見る。片方だけでは誤る。
+ *   縮んだだけ（URL バーの開閉）      → 隠さない
+ *   入力欄に入っただけ（外付けキーボード）→ 隠さない
  *
  * `visualViewport` を持たない環境では常に false（＝これまでどおり出したまま）。
  *
@@ -43,9 +85,9 @@ export function useKeyboardOpen(): boolean {
 
     let frame = 0;
     const update = () => {
-      // innerHeight はレイアウトビューポート。キーボードでは変わらないので、これを分母にする
       const layout = window.innerHeight;
-      setOpen(layout > 0 && viewport.height / layout < SHRUNK);
+      const shrunk = layout > 0 && viewport.height / layout < SHRUNK;
+      setOpen(shrunk && editableFocused());
     };
     /** いま測って、レイアウトが落ち着いた次のフレームでもう一度測る */
     const schedule = () => {
@@ -58,11 +100,16 @@ export function useKeyboardOpen(): boolean {
     viewport.addEventListener('resize', schedule);
     window.addEventListener('resize', schedule);
     window.addEventListener('orientationchange', schedule);
+    // 欄に入った・出たの両方で測り直す（縮みの通知より先に来ることも後に来ることもある）
+    document.addEventListener('focusin', schedule);
+    document.addEventListener('focusout', schedule);
     return () => {
       cancelAnimationFrame(frame);
       viewport.removeEventListener('resize', schedule);
       window.removeEventListener('resize', schedule);
       window.removeEventListener('orientationchange', schedule);
+      document.removeEventListener('focusin', schedule);
+      document.removeEventListener('focusout', schedule);
     };
   }, []);
 

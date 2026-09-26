@@ -32,7 +32,7 @@ const SPARK_DAYS = 30;
  */
 export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
   // 部位別の配分は全期間ぶん（表側が直近 5 週に切る）。作るのは useBodyData で 1 回だけ
-  const { daily, stats, sessions, weeklySets, trainingStats, data } = body;
+  const { daily, stats, sessions, weeklySets, trainingStats, badgeFacts, data } = body;
   const t = useT();
   const waistEnabled = data.settings.waistEnabled;
   // 表とダイアログのグラフで同じ値を見る
@@ -57,9 +57,15 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
    * どちらの話をしている画面なのか読めなくなる。
    */
   const badges = useMemo(
-    () => computeBadges(stats, trainingStats).filter((b) => b.domain === domain),
-    [stats, trainingStats, domain],
+    () =>
+      computeBadges(stats, trainingStats, body.data.badgesEarnedAt, badgeFacts).filter(
+        (b) => b.domain === domain,
+      ),
+    [stats, trainingStats, badgeFacts, body.data.badgesEarnedAt, domain],
   );
+
+  const earnedBadges = badges.filter((b) => b.earned);
+  const lockedBadges = badges.filter((b) => !b.earned);
 
   const trendLink = (label: string) => (
     <button type="button" className={`${ui.card} ${ui.linkRow}`} onClick={onOpenTrend}>
@@ -132,17 +138,26 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
         </>
       )}
 
-      {domain === 'body' && daily.length > 0 && (
+      {/*
+        実績は**解除済みと未解除で 2 枚に分ける。**1 枚に混ぜると、獲ったものが
+        未獲得に埋もれて「何を取ったか」が読めない。
+        解除済みは獲った順、未解除は達成率の高い順（`computeBadges` の並びのまま）。
+      */}
+      {((domain === 'body' && daily.length > 0) ||
+        (domain === 'training' && trainingStats.sessions > 0)) && (
         <>
           <p className={ui.sectionLabel}>{t('badge.section')}</p>
-          <BadgeGrid badges={badges} />
-        </>
-      )}
-
-      {domain === 'training' && trainingStats.sessions > 0 && (
-        <>
-          <p className={ui.sectionLabel}>{t('badge.section')}</p>
-          <BadgeGrid badges={badges} />
+          {earnedBadges.length > 0 && (
+            <BadgeGrid
+              badges={earnedBadges}
+              title={t('badge.earnedSection')}
+              total={badges.length}
+              recentFirst
+            />
+          )}
+          {lockedBadges.length > 0 && (
+            <BadgeGrid badges={lockedBadges} title={t('badge.lockedSection')} />
+          )}
         </>
       )}
     </>

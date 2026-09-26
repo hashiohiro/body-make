@@ -75,10 +75,21 @@ export function WeekMenuManager({
    * 曜日を持つもの。**伏せたものは降ろす**——曜日は持ったままなので、
    * 表示に戻せばこの面へそのまま戻る（`Preset.hidden`）。
    */
-  const placed = presets.filter((p) => p.weekdays.length > 0 && !p.hidden);
+  const placed = presets.filter((p) => p.weekdays.length > 0);
   const onDay = (day: Weekday) => placed.filter((p) => p.weekdays.includes(day));
-  /** 曜日を持たないもの。ここから曜日に割り当てられる */
-  const free = presets.filter((p) => p.weekdays.length === 0);
+  /**
+   * その曜日に置ける候補。**その日にまだ無いものは、ぜんぶ出す。**
+   *
+   * 以前は「曜日を持たないもの」だけを候補にしていたので、一度どこかに置くと
+   * **二度と別の曜日に置けなかった**。押す日を月曜と木曜にやる、は普通のことで、
+   * 持ちものは 1 つのまま曜日を 2 つ持てばよい（`Preset.weekdays` は配列で、
+   * 押したときの処理も足す形になっている）。塞いでいたのはこの絞り込みだけ。
+   *
+   * **伏せたものは出さない。**置いてある側（`placed`）では降ろしているのに、
+   * 置く候補にだけ残っていた——使わないと決めたものを、置く先で勧めていた。
+   */
+  const candidates = (day: Weekday) =>
+    presets.filter((p) => !p.hidden && !p.weekdays.includes(day));
   /* 置いてあるものを読むだけ。計画データは持たない（`weekLoad`） */
   const load = weekLoad(presets, exercises, groupGoals);
   const peak = Math.max(...GROUP_ORDER.map((g) => load.totals[g]), 0);
@@ -251,7 +262,7 @@ export function WeekMenuManager({
           title={t('week.pickOn', { day: t(WEEKDAY_KEYS[picking]) })}
           onClose={() => setPicking(null)}
         >
-          {free.length === 0 ? (
+          {candidates(picking).length === 0 ? (
             <p className={ui.emptyState}>
               {t('preset.managerEmpty')}
               <br />
@@ -259,7 +270,7 @@ export function WeekMenuManager({
             </p>
           ) : (
             <div>
-              {free.map((preset) => (
+              {candidates(picking).map((preset) => (
                 <PresetRow
                   key={preset.id}
                   name={preset.name}

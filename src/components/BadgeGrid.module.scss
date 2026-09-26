@@ -11,6 +11,16 @@
   gap: 9px;
 }
 
+/* 残りの件数。バッジと同じ器だが、中身は数だけ */
+.more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
 .badge {
   position: relative;
   width: 100%;
@@ -66,13 +76,21 @@
  * 押したバッジから遠く、開くたびにカードが伸びて下のカードが動いた。
  * 浮かせれば下は動かないし、どのバッジの話かも位置で分かる。
  *
- * 横幅はグリッドいっぱい。バッジの幅（94px〜）に合わせると条件文が縦に伸びるし、
- * 端のバッジでは枠から出る。指すのはしっぽに任せる。
+ * **押したバッジの中心に寄せ、枠の内側で止める。**
+ * グリッド幅いっぱいに取っていた頃は、条件文が 1〜2 行しかないので
+ * 横に伸ばしたぶんがそのまま空白になっていた。
+ * かといってバッジの幅（94px〜）に合わせると条件文が縦に伸び、端のバッジでは枠から出る。
+ *
+ * `clamp` の両端は**幅の半分**。中心を合わせている（`translateX(-50%)`）ので、
+ * 中心が半分より内側へ入らないようにすれば、端のバッジでも切れない。
  */
 .tip {
+  --half: min(120px, 50%);
+
   position: absolute;
-  left: 0;
-  right: 0;
+  left: clamp(var(--half), var(--tip-x), calc(100% - var(--half)));
+  width: min(240px, 100%);
+  transform: translateX(-50%);
   z-index: 2;
   padding: 11px 12px;
   border: 1px solid var(--border);
@@ -83,10 +101,14 @@
   box-shadow: var(--shadow);
 }
 
-/* しっぽ。**これだけがバッジを指す**（吹き出し本体はグリッド幅いっぱい） */
+/*
+ * しっぽ。**これだけがバッジを指す**（吹き出しは端で寄せて止まる）。
+ * 位置は器の座標で入れるので `top` は持たない。吹き出しより手前に置いて、
+ * 継ぎ目（吹き出しの上辺）を隠す。
+ */
 .tipArrow {
   position: absolute;
-  top: -5px;
+  z-index: 3;
   width: 9px;
   height: 9px;
   border: 1px solid var(--border);
