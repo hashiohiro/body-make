@@ -48,6 +48,12 @@ export interface Settings {
   targetBodyFat: number | null;
   /** 'YYYY-MM-DD' */
   targetDate: string | null;
+  /**
+   * 目標の開始日 'YYYY-MM-DD'。**開始値（開始比・進捗の起点）をこの日からの記録で取る。**
+   * null なら記録の最初の日から（これまでどおり）。
+   * 減量と増量を切り替えたとき、前の期間の値を起点にし続けると進捗が読めなくなる。
+   */
+  startDate: string | null;
   theme: ThemePref;
   /**
    * 表示する言語。**テーマと同じ形**——端末に従うか、名指しか。
@@ -546,10 +552,17 @@ export type Workouts = Record<string, SessionExercise[]>;
  */
 export type GroupGoalType = 'sets' | 'volume';
 
-/** 部位の目標。立て方と値を対で持つ（種目の `ExerciseTarget` と同じ形） */
+/**
+ * 部位の目標。**セット数と挙上量を同時に持てる**（どちらか片方だけでもよい）。
+ * 両方とも無い部位は、目標そのものを null にする（`{ sets: null, volume: null }` は持たない）。
+ * 挙上量は kg で持つ。
+ *
+ * **以前は `{ type, value }` で片方しか持てなかった（その前は素の数値＝セット数）。**
+ * どちらも読み込みで今の形に読み替える（`sanitizeGroupGoals`）。
+ */
 export interface GroupTarget {
-  type: GroupGoalType;
-  value: number;
+  sets: number | null;
+  volume: number | null;
 }
 
 /**
@@ -557,9 +570,6 @@ export interface GroupTarget {
  *
  * 体組成の設定（身長・目標体重）とは別のレイヤーなので Settings には混ぜない。
  * 無いときは基準値をこちらで発明せず、数値だけを出す。
- *
- * **以前はセット数だけの `number | null` だった。**読み込みで素の数値を
- * 見つけたら「セット数の目標」として読み替える（`sanitizeGroupGoals`）。
  */
 export type GroupGoals = Record<MuscleGroup, GroupTarget | null>;
 

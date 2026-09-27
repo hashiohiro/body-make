@@ -23,6 +23,7 @@ export const SEED_DATA: unknown = {
     targetWeight: 65,
     targetBodyFat: 10,
     targetDate: '2026-10-31',
+    startDate: null,
     theme: 'system',
   },
   entries: {
@@ -3127,12 +3128,12 @@ export const SEED_DATA: unknown = {
     ],
   },
   groupGoals: {
-    chest: 20,
-    back: 20,
-    legs: 20,
-    shoulders: 20,
-    arms: 20,
-    core: 20,
+    chest: { sets: 20, volume: null },
+    back: { sets: 20, volume: null },
+    legs: { sets: 20, volume: null },
+    shoulders: { sets: 20, volume: null },
+    arms: { sets: 20, volume: null },
+    core: { sets: 20, volume: null },
   },
   presets: [
     {

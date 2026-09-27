@@ -27,6 +27,11 @@ interface Props {
    * 件数で高さが動かないようにして、読む位置を留める。
    */
   tall?: boolean | undefined;
+  /**
+   * 見出しの右、「閉じる」の左に置くボタン 1 つ（推移から目標を決める、など）。
+   * その面から別の面へ進む入口が 1 つだけあるときに使う。本文に置くと、長い面では下に埋もれる。
+   */
+  action?: { label: string; ariaLabel?: string; onClick: () => void } | undefined;
   children: ReactNode;
 }
 
@@ -68,7 +73,7 @@ function unlockScroll() {
  * ネイティブ `<dialog>` の薄いラッパー。
  * フォーカストラップ・Esc・背面の不活性化はブラウザに任せる（依存を足さない）。
  */
-export function Modal({ open, title, onClose, onBack, tall, children }: Props) {
+export function Modal({ open, title, onClose, onBack, tall, action, children }: Props) {
   const t = useT();
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -183,7 +188,21 @@ export function Modal({ open, title, onClose, onBack, tall, children }: Props) {
         <h2 className={s.title} id={titleId}>
           {title}
         </h2>
-        <button type="button" className={s.close} onClick={onClose}>
+        {action && (
+          <button
+            type="button"
+            className={s.action}
+            aria-label={action.ariaLabel}
+            onClick={action.onClick}
+          >
+            {action.label}
+          </button>
+        )}
+        <button
+          type="button"
+          className={`${s.close} ${action ? s.closeAfterAction : ''}`}
+          onClick={onClose}
+        >
           {t('common.close')}
         </button>
       </div>

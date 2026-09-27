@@ -40,6 +40,8 @@ interface Props {
   from: string;
   /** 週の内訳をどの週で見るか。記録画面から開いたときは編集中の日 */
   date?: string;
+  /** 見出しの「閉じる」の左に置く入口（目標画面から開いたときの「目標」） */
+  action?: { label: string; ariaLabel?: string; onClick: () => void } | undefined;
 }
 
 /**
@@ -49,7 +51,15 @@ interface Props {
  * 記録しながら「過去最高までどれくらいか」を見るのと、
  * 一覧から掘り下げるのは、見たいものが同じなので画面を分ける理由がない。
  */
-export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, date }: Props) {
+export function ExerciseDetailDialog({
+  open,
+  onClose,
+  exercise,
+  sessions,
+  from,
+  date,
+  action,
+}: Props) {
   const [metricId, setMetricId] = useState<string | null>(null);
   const { unit, label: unitLabel, conv, convOrNull } = useWeightFormat();
 
@@ -208,7 +218,7 @@ export function ExerciseDetailDialog({ open, onClose, exercise, sessions, from, 
   for (const sub of exercise.subGroups) share[sub.group] = sub.weight;
 
   return (
-    <Modal open={open} title={exerciseName(t, exercise)} onClose={onClose}>
+    <Modal open={open} title={exerciseName(t, exercise)} onClose={onClose} action={action}>
       <div>
         <ChipGroup
           options={metrics}

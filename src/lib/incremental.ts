@@ -12,7 +12,7 @@ import type {
   Stats,
   WeekPoint,
 } from '../types';
-import { MA_WINDOW, baseline, computeProjection, measured } from './derive';
+import { MA_WINDOW, baseline, computeProjection, measured, startValues } from './derive';
 import { isListed } from './exerciseCatalog';
 import { addDays, formatMD, todayISO } from './date';
 import { buildCheckHistory } from './check';
@@ -297,8 +297,13 @@ function combineStats(
   }
 
   // 開始値は最初の 7 個の実測。**集まった時点で打ち切る**（全期間を繋がない）
-  const startWeight = headAverage(built, (w) => w.headWeights);
-  const startBodyFat = headAverage(built, (w) => w.headBodyFats);
+  /*
+   * 開始日を決めてあれば、全計算と同じ関数（`startValues`）で開始日からの記録を見る。
+   * 決めていなければ、これまでどおり週の部分結果の先頭から（全期間を繋がない）。
+   */
+  const fromStart = settings.startDate == null ? null : startValues(daily, settings.startDate);
+  const startWeight = fromStart ? fromStart.weight : headAverage(built, (w) => w.headWeights);
+  const startBodyFat = fromStart ? fromStart.bodyFat : headAverage(built, (w) => w.headBodyFats);
   /*
    * 腹囲の開始値だけは `daily` の先頭から出す。
    *
@@ -307,7 +312,7 @@ function combineStats(
    * 全計算側の `baseline` は `daily` しか見ないので、そこで答えが割れる。
    * `baseline` は 7 個集まった時点で打ち切るので、走る距離は変わらない。
    */
-  const startWaist = baseline(daily.map((d) => d.waist));
+  const startWaist = fromStart ? fromStart.waist : baseline(daily.map((d) => d.waist));
 
   const compose = (w: number | null, bf: number | null) =>
     w != null && bf != null ? { fat: (w * bf) / 100, lean: w - (w * bf) / 100 } : null;

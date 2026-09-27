@@ -12,7 +12,7 @@ import { addDays, diffDays, isoToTime, startOfWeek, todayISO } from './date';
 /** 移動平均の窓。増分側（lib/weekly.ts）も同じ値を読む */
 export const MA_WINDOW = 7;
 /** ペース推定に使う直近日数。短すぎると水分変動を拾い、長すぎると直近の変化に追随しない */
-const PACE_WINDOW = 28;
+export const PACE_WINDOW = 28;
 
 export const EMPTY_MEASUREMENT: Measurement = { weight: null, bodyFat: null, waist: null };
 
@@ -208,6 +208,29 @@ export function baseline(values: readonly (number | null)[], n = MA_WINDOW): num
   return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
 }
 
+/**
+ * 開始値（体重・体脂肪率・腹囲）。**開始日があれば、その日からの記録で取る。**
+ *
+ * 全計算（`computeStats`）と増分（`lib/incremental.ts`）の両方がこれを呼ぶ——
+ * 片方だけ開始日を見ると、画面によって開始比が割れる。
+ * 7 個集まった時点で打ち切る（`baseline`）ので、走る距離は開始日から 7 日ぶん程度。
+ */
+export function startValues(
+  daily: readonly DailyPoint[],
+  startDate: string | null,
+): { weight: number | null; bodyFat: number | null; waist: number | null } {
+  let from = 0;
+  if (startDate != null) {
+    while (from < daily.length && daily[from]!.date < startDate) from++;
+  }
+  const tail = from === 0 ? daily : daily.slice(from);
+  return {
+    weight: baseline(tail.map((d) => d.weight)),
+    bodyFat: baseline(tail.map((d) => d.bodyFat)),
+    waist: baseline(tail.map((d) => d.waist)),
+  };
+}
+
 function lastNonNull(values: readonly (number | null)[]): number | null {
   for (let i = values.length - 1; i >= 0; i--) {
     const v = values[i];
@@ -265,9 +288,11 @@ export function computeStats(daily: DailyPoint[], weeks: WeekPoint[], settings: 
   const currentWeight = lastNonNull(daily.map((d) => d.maWeight));
   const currentBodyFat = lastNonNull(daily.map((d) => d.maBodyFat));
   const currentWaist = lastNonNull(daily.map((d) => d.maWaist));
-  const startWeight = baseline(daily.map((d) => d.weight));
-  const startBodyFat = baseline(daily.map((d) => d.bodyFat));
-  const startWaist = baseline(daily.map((d) => d.waist));
+  const {
+    weight: startWeight,
+    bodyFat: startBodyFat,
+    waist: startWaist,
+  } = startValues(daily, settings.startDate);
 
   const compose = (w: number | null, bf: number | null) =>
     w != null && bf != null ? { fat: (w * bf) / 100, lean: w - (w * bf) / 100 } : null;

@@ -995,6 +995,12 @@ export interface ExerciseGoal {
   current: number | null;
   /** 最初の 3 セッションの平均 */
   baseline: number | null;
+  /**
+   * これまでの最大（`current` と同じ物差し）。目標の線に「最大」の印として出す。
+   * `current` は直近 1 回の値なので、軽めの日には大きく下がる——その日の値だけでは
+   * どこまで届いたことがあるのかが読めない。
+   */
+  best: number | null;
   delta: number | null;
   /** 0〜1。開始値 → 目標 の到達率。到達していれば 1（目標が開始値より下でも空にしない） */
   progress: number | null;
@@ -1103,6 +1109,7 @@ export function exerciseGoals(
       target: goal.value,
       current,
       baseline,
+      best: values.length ? Math.max(...values) : null,
       delta: current != null && baseline != null ? current - baseline : null,
       progress,
       reached,

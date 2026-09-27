@@ -4,11 +4,10 @@ import type {
   DayEntry,
   Entries,
   Exercise,
+  GroupTarget,
   ExerciseGroup,
   ExerciseTarget,
   GroupGoals,
-  GroupGoalType,
-  GroupTarget,
   LoadMode,
   Measurement,
   MuscleGroup,
@@ -60,6 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
   targetWeight: null,
   targetBodyFat: null,
   targetDate: null,
+  startDate: null,
   theme: 'system',
   locale: 'system',
   waistEnabled: false,
@@ -103,20 +103,27 @@ export function emptyData(): AppData {
 }
 
 /**
- * 部位の目標。**素の数値はセット数の目標として読み替える。**
- * 立て方を持たせる前のデータ（`chest: 20`）が、版を上げずにそのまま生きる。
+ * 部位の目標。**これまでの形をすべて今の形に読み替える**（版は上げない）。
+ *
+ *   `chest: 20`                          … セット数だけを持っていた頃（素の数値）
+ *   `chest: { type: 'volume', value }`  … 立て方を 1 つ選んでいた頃
+ *   `chest: { sets, volume }`           … 今（両方を同時に持てる）
+ *
+ * 値が範囲の外なら、その側だけ落とす。両方とも落ちたら目標ごと null。
  */
 function sanitizeGroupTarget(raw: unknown): GroupTarget | null {
-  if (typeof raw === 'number' || typeof raw === 'string') {
-    const sets = int(raw, GROUP_GOAL_RANGE[0], GROUP_GOAL_RANGE[1]);
-    return sets == null ? null : { type: 'sets', value: sets };
-  }
+  const setsOf = (v: unknown) => int(v, GROUP_GOAL_RANGE[0], GROUP_GOAL_RANGE[1]);
+  const volumeOf = (v: unknown) => int(v, GROUP_VOLUME_GOAL_RANGE[0], GROUP_VOLUME_GOAL_RANGE[1]);
+  const make = (sets: number | null, volume: number | null): GroupTarget | null =>
+    sets == null && volume == null ? null : { sets, volume };
+
+  if (typeof raw === 'number' || typeof raw === 'string') return make(setsOf(raw), null);
   if (raw == null || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
-  const type: GroupGoalType = o.type === 'volume' ? 'volume' : 'sets';
-  const range = type === 'volume' ? GROUP_VOLUME_GOAL_RANGE : GROUP_GOAL_RANGE;
-  const value = int(o.value, range[0], range[1]);
-  return value == null ? null : { type, value };
+  if ('type' in o || 'value' in o) {
+    return o.type === 'volume' ? make(null, volumeOf(o.value)) : make(setsOf(o.value), null);
+  }
+  return make(setsOf(o.sets), volumeOf(o.volume));
 }
 
 function sanitizeGroupGoals(raw: unknown): GroupGoals {
@@ -190,7 +197,6 @@ export const GROUP_GOAL_RANGE: [number, number] = [1, 50];
 /**
  * 部位の挙上量の目標（kg/週）。
  * 上限は種目 1 つの目標（`TARGET_VOLUME_RANGE`）と同じにそろえる。
- * 桁を無闇に広げると、行に出す数字の幅もそのぶん取ることになる。
  */
 export const GROUP_VOLUME_GOAL_RANGE: [number, number] = [1, 100000];
 /** 有酸素の目標。距離(m) / 時間(分) / 速度(m/分)。どれも入力欄と同じ単位 */
@@ -658,6 +664,7 @@ function sanitizeSettings(raw: unknown): Settings {
     targetWeight: parseWeight(o.targetWeight),
     targetBodyFat: parseBodyFat(o.targetBodyFat),
     targetDate: typeof o.targetDate === 'string' && ISO_RE.test(o.targetDate) ? o.targetDate : null,
+    startDate: typeof o.startDate === 'string' && ISO_RE.test(o.startDate) ? o.startDate : null,
     // 知らない配色を持つバックアップは 'system' に落とす
     theme: THEME_IDS.includes(theme as ThemePref) ? (theme as ThemePref) : 'system',
     // 言語も同じ。持っていないバックアップは端末に合わせる

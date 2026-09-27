@@ -37,9 +37,9 @@ export function suggestSetsPerDay(
   group: MuscleGroup,
   days: number,
 ): number | null {
-  const target = goals[group];
-  if (target == null || target.type !== 'sets' || days <= 0) return null;
-  return Math.ceil(target.value / days);
+  const sets = goals[group]?.sets;
+  if (sets == null || days <= 0) return null;
+  return Math.ceil(sets / days);
 }
 
 /**

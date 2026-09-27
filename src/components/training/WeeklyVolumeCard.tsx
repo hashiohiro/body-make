@@ -1,19 +1,25 @@
 import { useState } from 'react';
 import { GroupGoalEditor } from './GroupGoalEditor';
-import { Meter } from '../Meter';
+import { groupColor } from './groupColor';
+import { VolumeSwatch } from './VolumeSwatch';
+import { volumeBarStyle } from './volumeBar';
+import { fmtVolume } from '../../lib/format';
+import { useWeightFormat } from '../../hooks/useWeightUnit';
 import { Modal } from '../Modal';
 import { GROUP_KEYS, GROUP_ORDER, isCardio, isListed } from '../../lib/exerciseCatalog';
-import { addDays, formatMD, startOfWeek, todayISO } from '../../lib/date';
-import { fmtVolume } from '../../lib/format';
+import { addDays, formatMD, startOfWeek, todayISO, weekdayLabel } from '../../lib/date';
 import { cardioWeek, formatSets } from '../../lib/training';
 import type { TrainingStats } from '../../lib/training';
 import type { Exercise, GroupGoals, GroupTarget, MuscleGroup, SessionPoint } from '../../types';
 import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
 import s from './training.module.scss';
-import { useWeightFormat } from '../../hooks/useWeightUnit';
 import { useT } from '../../lib/i18n';
 import type { T } from '../../lib/i18n';
+
+/** 棒の縦の物差しの上端（目標に対する割合）。§ 本体のコメント */
+const VOL_TOP_MIN = 1.25;
+const VOL_TOP_MAX = 2.5;
 
 /**
  * 最終実施からの日数の言い方。回復ダイアログと同じ語彙を使う。
@@ -81,19 +87,52 @@ export function WeeklyVolumeCard({
     const target = groupGoals[group];
     const sets = stats.thisWeekSetsByGroup[group];
     const volume = stats.thisWeekVolumeByGroup[group];
-    // 立て方で割る相手が変わる。行に出す数字も進捗も、同じ軸から引く
-    const done = target?.type === 'volume' ? volume : sets;
     return {
       group,
       target,
       sets,
       volume,
-      done,
       days: stats.daysSinceGroup[group],
-      /** 量の進捗。目標を決めていない部位は出さない（割る相手がない） */
-      progress: target == null ? null : Math.min(1, done / target.value),
+      /** 目標に対する割合。目標を決めていない側は null（割る相手がない） */
+      setsRatio: target?.sets == null ? null : sets / target.sets,
+      volumeRatio: target?.volume == null ? null : volume / target.volume,
     };
   });
+
+  /*
+   * 棒の縦の物差しは**目標に対する割合**。セット数と挙上量で桁が 3 つ違い、部位ごとに値も違うので、
+   * 実数で 1 本の軸に並べると目標の線が棒ごとに別の高さになる。
+   * 割合なら目標の線は 1 本（100%）で済み、セット数と挙上量の棒も同じ線で読める。
+   * 上端は目標の 1.25 倍か、いちばん高い棒まで（2.5 倍で頭打ち。1 本だけ突き抜けても
+   * ほかの棒が潰されないように）。
+   */
+  const ratios = rows
+    .flatMap((r) => [r.setsRatio, r.volumeRatio])
+    .filter((v): v is number => v != null);
+  const top = Math.min(VOL_TOP_MAX, Math.max(VOL_TOP_MIN, ...ratios));
+  const hasVolumeGoal = rows.some((r) => r.volumeRatio != null);
+
+  /* その週にやった日。数は見出しが言っている（`thisWeekDays`）ので、ここは位置だけ */
+  const doneDays = new Set(
+    sessions.filter((x) => x.date >= thisWeekStart && x.date <= thisWeekEnd).map((x) => x.date),
+  );
+  const week = Array.from({ length: 7 }, (_, i) => addDays(thisWeekStart, i));
+
+  /*
+   * 目標の線の名前。全部位がセット数だけの同じ目標なら数も書く（「目標 15」）。
+   * そうでなければ数は書けない（物差しが割合なので、線の高さは同じでも数は棒ごとに違う）。
+   */
+  const targets = rows.map((r) => r.target).filter((x): x is GroupTarget => x != null);
+  const sameSets =
+    targets.length > 0 &&
+    !hasVolumeGoal &&
+    targets.every((x) => x.sets != null && x.sets === targets[0]!.sets);
+  const targetLabel =
+    targets.length === 0
+      ? null
+      : sameSets
+        ? t('volume.targetLine', { n: targets[0]!.sets! })
+        : t('common.goal');
 
   const hasCardio = exercises.some((e) => isCardio(e.group) && isListed(e));
   const current = open == null ? null : rows.find((r) => r.group === open)!;
@@ -108,58 +147,103 @@ export function WeeklyVolumeCard({
           }
         />
 
-        {rows.map((row) => (
-          <button
-            key={row.group}
-            type="button"
-            className={s.volRow}
-            aria-label={t('volume.ofGroup', { name: t(GROUP_KEYS[row.group]) })}
-            onClick={() => setOpen(row.group)}
-          >
-            <span className={s.volName}>{t(GROUP_KEYS[row.group])}</span>
-
-            {/*
-              目標を決めていない部位にはバーを出さない。割る相手がないので、
-              空のバーを置くと「0 のまま伸びていない」と読めてしまう。
-            */}
-            {row.progress == null ? (
-              <span />
-            ) : (
-              <Meter
-                value={row.progress}
-                label={t('volume.ofGroup', { name: t(GROUP_KEYS[row.group]) })}
-              />
-            )}
-
-            {/*
-              単位は行に書かない（バーがそのぶん痩せる）。セット数なら見出しが言っていて、
-              挙上量なら桁で分かる。**目標の立て方に合わせた軸で出す**——
-              セット数の目標に挙上量を並べても、足りているかが読めない。
-            */}
-            <span className={s.volValue}>
-              {/*
-                挙上量は kg で積んである。実績と目標の**両方**を読む単位へ直す——
-                片方だけ直すと、行の「いま / 目標」が別の物差しの比較になる。
-                バーの割合は kg どうしの比なので、単位を変えても動かない。
-              */}
-              {row.target?.type === 'volume' ? fmtVolume(conv(row.volume)) : formatSets(row.sets)} /{' '}
-              {row.target == null
-                ? '—'
-                : row.target.type === 'volume'
-                  ? fmtVolume(conv(row.target.value))
-                  : row.target.value}
+        {/* 週の 7 日。やった日を塗る（日曜始まり。週の数え方は `startOfWeek`） */}
+        <div className={s.weekDots} aria-hidden="true">
+          {week.map((d) => (
+            <span key={d} className={doneDays.has(d) ? s.weekDotOn : undefined}>
+              <i />
+              {weekdayLabel(t, d)}
             </span>
-            {/*
-              最終実施からの日数。「4日空き」は余裕があるようにも読めるので、
-              いつやったかをそのまま書く。回復ダイアログと同じ言い方にそろえる。
-              今週が 0 でも、ここが「昨日」なら週替わりで空になっただけだと読める
-            */}
-            <span className={s.volStatus}>{lastDoneLabel(t, row.days)}</span>
-            <span className={s.chevron} aria-hidden="true">
-              ›
+          ))}
+        </div>
+
+        {/*
+          部位 1 つにつき 1 本の棒。**棒ごと押せる**（押したらその部位の目標を決める面）。
+          目標を決めていない部位には棒を出さない。割る相手がないので、
+          空の棒を置くと「0 のまま伸びていない」と読めてしまう。
+        */}
+        <div className={s.volChart}>
+          {rows.map((row, index) => {
+            const name = t(GROUP_KEYS[row.group]);
+            const color = groupColor(row.group);
+            const tallest = Math.max(row.setsRatio ?? 0, row.volumeRatio ?? 0);
+            /* 棒 1 本。高さは同じ列の高いほうの棒に対する割合（列の器がその高さを持つ） */
+            const bar = (ratio: number | null, kind: 'sets' | 'volume') =>
+              ratio == null ? null : (
+                <span
+                  role="progressbar"
+                  aria-label={t(kind === 'sets' ? 'volume.setsOf' : 'volume.volumeOf', { name })}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(Math.min(1, ratio) * 100)}
+                  className={s.volBar}
+                  style={{
+                    height:
+                      tallest > 0 ? `${(Math.min(ratio, top) / Math.min(tallest, top)) * 100}%` : 0,
+                    ...volumeBarStyle(kind, color),
+                  }}
+                />
+              );
+            return (
+              <button
+                key={row.group}
+                type="button"
+                className={s.volCol}
+                aria-label={t('volume.ofGroup', { name })}
+                onClick={() => setOpen(row.group)}
+              >
+                <span className={s.volPlot}>
+                  {row.target != null && (
+                    <span
+                      className={s.volTarget}
+                      style={{ bottom: `calc(${1 / top} * (100% - 22px))` }}
+                    />
+                  )}
+                  {/* 目標の線の名前は 1 度だけ（右端の列に置く） */}
+                  {index === rows.length - 1 && targetLabel && (
+                    <span
+                      className={s.volTargetLabel}
+                      style={{ bottom: `calc(${1 / top} * (100% - 22px) + 3px)` }}
+                    >
+                      {targetLabel}
+                    </span>
+                  )}
+                  {/*
+                    いまの値は棒の頭に乗せる。セット数の目標があればセット数、挙上量だけなら挙上量。
+                    挙上量は kg で積んであるので、読む単位へ直す。
+                  */}
+                  <span className={s.volNow}>
+                    {row.setsRatio == null && row.volumeRatio != null
+                      ? fmtVolume(conv(row.volume))
+                      : formatSets(row.sets)}
+                  </span>
+                  <span
+                    className={s.volBars}
+                    style={{ height: `calc(${Math.min(tallest, top) / top} * (100% - 22px))` }}
+                  >
+                    {bar(row.setsRatio, 'sets')}
+                    {bar(row.volumeRatio, 'volume')}
+                  </span>
+                </span>
+                <span className={s.volName}>{name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 挙上量の目標が 1 つでもあれば、棒の模様の見方を添える（セット数＝塗り、挙上量＝斜線） */}
+        {hasVolumeGoal && (
+          <div className={s.volLegend} aria-hidden="true">
+            <span>
+              <VolumeSwatch kind="sets" />
+              {t('metric.sets')}
             </span>
-          </button>
-        ))}
+            <span>
+              <VolumeSwatch kind="volume" />
+              {t('metric.volume')}
+            </span>
+          </div>
+        )}
 
         {/*
           有酸素は部位ではないので、**週のセット数も部位目標も持たない。**

@@ -4,17 +4,19 @@ import { ExerciseDetailDialog } from './ExerciseDetailDialog';
 import { ExercisePickList } from './ExercisePickList';
 import { ExerciseSettingsForm } from './ExerciseSettingsForm';
 import { GoalEditor } from './GoalEditor';
-import { Meter } from '../Meter';
+import { GoalTrack } from './GoalTrack';
+import { GoalLegend, ReachedRing } from './GoalLegend';
+import { TONE_CLASS } from '../tone';
+import { groupColor } from './groupColor';
 import { Modal } from '../Modal';
 import {
   EXERCISE_GROUP_ORDER,
   GROUP_KEYS,
   byName,
   exerciseName,
-  goalTypeLabel,
   isListed,
 } from '../../lib/exerciseCatalog';
-import { fmt, fmtPercent } from '../../lib/format';
+import { fmt } from '../../lib/format';
 import { todayISO } from '../../lib/date';
 import { RECENT_DAYS, STALE_WEEKS } from '../../lib/training';
 import type { ExerciseGoal, TrainingStats } from '../../lib/training';
@@ -22,8 +24,6 @@ import type { Exercise, SessionPoint } from '../../types';
 import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
 import { Tag } from '../Tag';
-import { MiniButton } from '../MiniButton';
-import { ExerciseSummaryCard } from './ExerciseSummaryCard';
 import { Pill } from '../Pill';
 import s from './training.module.scss';
 import { useGoalUnit } from '../../hooks/useWeightUnit';
@@ -83,19 +83,25 @@ export function ExerciseGoalsCard({
   const order = new Map(EXERCISE_GROUP_ORDER.map((g, i) => [g, i]));
 
   /*
-   * 並びは部位の順 → その部位の中は名前順。
+   * **並びは進み具合の順**（到達 → 到達率の高い順 → 記録なし）。同じ進み具合なら部位の順 → 名前順。
    *
-   * 以前は部位の中をマイ種目の `order`（＝追加順）にしていたが、**マイ種目の一覧は
-   * 名前順**なので、同じ種目が 2 つの画面で違う位置に出ていた。探す軸は名前で同じ。
+   * 以前は部位ごとに見出しを付けて名前順に並べていた。1 本の線で進み具合を描くようにしたので、
+   * 近いものから上に来るほうが一目で読める。どの部位かは行頭の色の丸（今週の量の棒と同じ色）が持つ。
    */
   const collator = new Intl.Collator(t.locale);
-  const sorted = [...goals].sort((a, b) => {
+  const rank = (g: ExerciseGoal) => (g.reached ? 2 : g.current == null ? -1 : (g.progress ?? 0));
+  const byGroupName = (a: ExerciseGoal, b: ExerciseGoal) => {
     const ga = order.get(a.group) ?? 99;
     const gb = order.get(b.group) ?? 99;
     if (ga !== gb) return ga - gb;
     return collator.compare(a.name, b.name);
-  });
-  const reached = goals.filter((g) => g.reached).length;
+  };
+  const sorted = [...goals].sort((a, b) => rank(b) - rank(a) || byGroupName(a, b));
+  /** 数値の目標。1 本の線で出す */
+  const tracked = sorted.filter((g) => g.target != null);
+  /** 維持は数値を決めないので線を持たない。名前だけを下に並べる */
+  const maintained = sorted.filter((g) => g.target == null);
+  const reached = tracked.filter((g) => g.reached).length;
 
   /** まだ目標を持たない種目。非表示の種目には足さない（一覧にも出ない） */
   const withoutGoal = byName(
@@ -114,76 +120,40 @@ export function ExerciseGoalsCard({
   const noListed = !exercises.some(isListed);
 
   const openExercise = openId ? (byId.get(openId) ?? null) : null;
+  const trendExercise = trendOf ? (byId.get(trendOf) ?? null) : null;
   const pickedExercise = picked ? (byId.get(picked) ?? null) : null;
 
   /**
-   * 目標 1 件。**マイ種目の一覧と同じカード**（名前 → 事実 → 入口）で出す。
-   * 同じ種目を 2 つの画面で見るのに、違う形で出す理由がない。
+   * 目標 1 件。**色の丸・名前・いま / 目標** の 1 行と、その下に 1 本の線。
    *
-   * 部位ごとに束ねて出すので、カードの側に部位は書かない（見出しが言っている）。
-   *
-   * **行ぜんたいを押させない。**目標・推移・設定の 3 つに行けるので、
-   * 押す場所で結果が変わる面にすると、何が起きるか読めなくなる。
+   * 行ぜんたいが**推移**への入口。目標を決める面は、推移の見出し（閉じるの左）から開く——
+   * 目標を決め直すのは推移を見てからのことが多いので、見る → 決めるの順に並べる。
+   * いまの値の色は事実だけ：届いた（緑）・開始より下（赤）。
    */
   const row = (goal: ExerciseGoal) => {
-    const exercise = byId.get(goal.exerciseId);
     const unit = shown(goal.unit);
     return (
-      <ExerciseSummaryCard
+      <button
         key={goal.exerciseId}
-        name={goal.name}
-        kind={goalTypeLabel(t, goal.type, exercise?.repUnit ?? 'reps', true)}
-        goal={
-          goal.target == null ? null : `${fmt(unit.conv(goal.target), goal.digits)} ${unit.label}`
-        }
-        /*
-          いまの値。**前回からの増減はここに足さない**——1 行で動く数字は 1 つにする。
-          伸びの中身は推移が持っている。
-        */
-        factLeft={t('exGoal.now', {
-          value: `${fmt(unit.conv(goal.current), goal.digits)} ${unit.label}`,
-        })}
-        /* 維持は数値を決めないので割合も出ない。それは立て方の札が言っている */
-        factRight={
-          goal.target == null
-            ? '—'
-            : goal.reached
-              ? t('exGoal.reached')
-              : goal.progress == null
-                ? '—'
-                : fmtPercent(goal.progress)
-        }
-        meter={
-          goal.target == null ? null : (
-            <Meter value={goal.progress ?? 0} label={t('exGoal.rate', { name: goal.name })} />
-          )
-        }
-        actions={
-          <>
-            <MiniButton
-              label={t('exGoal.changeOf', { name: goal.name })}
-              onClick={() => setOpenId(goal.exerciseId)}
-            >
-              {t('common.goal')}
-            </MiniButton>
-            <MiniButton
-              label={t('common.trendOf', { name: goal.name })}
-              onClick={() => setTrendOf(goal.exerciseId)}
-            >
-              {t('common.trend')}
-            </MiniButton>
-            <MiniButton
-              label={t('exercise.settingsOf', { name: goal.name })}
-              onClick={() => {
-                setOpenId(goal.exerciseId);
-                setSettings(true);
-              }}
-            >
-              {t('common.settings')}
-            </MiniButton>
-          </>
-        }
-      />
+        type="button"
+        className={s.goalRow}
+        aria-label={t('common.trendOf', { name: goal.name })}
+        onClick={() => setTrendOf(goal.exerciseId)}
+      >
+        <span className={s.goalRowHead}>
+          <i
+            className={s.goalRowDot}
+            style={{ background: groupColor(goal.group) }}
+            aria-hidden="true"
+          />
+          <span className={s.goalRowName}>{goal.name}</span>
+          <b className={nowTone(goal)}>{fmt(unit.conv(goal.current), goal.digits)}</b>
+          <span className={s.goalRowOf}>
+            {`/ ${fmt(unit.conv(goal.target), goal.digits)} ${unit.label}`}
+          </span>
+        </span>
+        <GoalTrack goal={goal} label={t('exGoal.rate', { name: goal.name })} />
+      </button>
     );
   };
 
@@ -200,8 +170,11 @@ export function ExerciseGoalsCard({
         <CardHeader
           title={t('exGoal.title')}
           hint={
-            goals.length > 0 ? (
-              <>{t('exGoal.reachedCount', { done: reached, total: goals.length })}</>
+            tracked.length > 0 ? (
+              <span className={s.ringHint}>
+                <ReachedRing done={reached} total={tracked.length} />
+                {t('exGoal.reachedCount', { done: reached, total: tracked.length })}
+              </span>
             ) : null
           }
         />
@@ -223,21 +196,26 @@ export function ExerciseGoalsCard({
             )}
           </p>
         ) : (
-          /*
-            **部位ごとに見出しを付ける。**マイ種目・カタログ・移行先と同じ切り方。
-            並び順だけ部位の順にしていたが、見出しが無いと切れ目が読めず、
-            どこまでが同じ部位なのかを行の右の札で数えることになっていた。
-          */
-          EXERCISE_GROUP_ORDER.map((g) => {
-            const items = sorted.filter((goal) => goal.group === g);
-            if (items.length === 0) return null;
-            return (
-              <div key={g}>
-                <div className={s.manageGroup}>{t(GROUP_KEYS[g])}</div>
-                {items.map(row)}
+          <>
+            {tracked.length > 0 && <GoalLegend />}
+            {tracked.map(row)}
+            {maintained.length > 0 && (
+              <div className={s.maintainRow}>
+                <span>{t('goalType.maintain')}</span>
+                {maintained.map((goal) => (
+                  <button
+                    key={goal.exerciseId}
+                    type="button"
+                    className={s.maintainChip}
+                    aria-label={t('common.trendOf', { name: goal.name })}
+                    onClick={() => setTrendOf(goal.exerciseId)}
+                  >
+                    {goal.name}
+                  </button>
+                ))}
               </div>
-            );
-          })
+            )}
+          </>
         )}
 
         {/*
@@ -295,15 +273,24 @@ export function ExerciseGoalsCard({
       </section>
 
       {/*
-        推移は**ダイアログで重ねる。** 画面ごと移ってしまうと、閉じたときに戻るのは
-        目標の一覧で、開いていた種目の面ではない。見ていた場所に戻れるようにする。
+        推移は**ダイアログで重ねる。** 見出しの「閉じる」の左に「目標」を置き、
+        そこから目標を決める面をさらに重ねる（閉じると推移に戻る）。
       */}
       <ExerciseDetailDialog
         open={trendOf != null}
         onClose={() => setTrendOf(null)}
-        exercise={exercises.find((e) => e.id === trendOf) ?? null}
+        exercise={trendExercise}
         sessions={sessions}
         from={sessions[0]?.date ?? todayISO()}
+        action={
+          trendExercise
+            ? {
+                label: t('common.goal'),
+                ariaLabel: t('exGoal.changeOf', { name: exerciseName(t, trendExercise) }),
+                onClick: () => setOpenId(trendExercise.id),
+              }
+            : undefined
+        }
       />
 
       {openExercise && (
@@ -321,10 +308,22 @@ export function ExerciseGoalsCard({
             <ExerciseSettingsForm exercise={openExercise} onUpdate={onUpdate} />
           ) : (
             /*
-              目標を決める面。**入口は持たない**——推移も設定も一覧のカードから開く。
-              同じ操作を 2 か所に置くと、片方だけ直って挙動がずれる。
+              目標を決める面（推移の見出しから開く）。種目そのものの設定の入口はここに置き、
+              この面を差し替えて出す（‹ 戻る で戻る）。
             */
-            <GoalEditor exercise={openExercise} sessions={sessions} onUpdate={onUpdate} />
+            <>
+              <GoalEditor exercise={openExercise} sessions={sessions} onUpdate={onUpdate} />
+              <div className={ui.detailRow}>
+                <button
+                  type="button"
+                  className={ui.detailBtn}
+                  aria-label={t('exercise.settingsOf', { name: exerciseName(t, openExercise) })}
+                  onClick={() => setSettings(true)}
+                >
+                  {t('common.settings')}
+                </button>
+              </div>
+            </>
           )}
         </Modal>
       )}
@@ -363,4 +362,13 @@ export function ExerciseGoalsCard({
       )}
     </>
   );
+}
+
+/** 「いま」の色。届いたか・開始より下か、の 2 つの事実だけ（それ以外は色を付けない） */
+function nowTone(goal: ExerciseGoal): string | undefined {
+  if (goal.reached) return TONE_CLASS.good;
+  if (goal.current != null && goal.baseline != null && goal.current < goal.baseline) {
+    return TONE_CLASS.bad;
+  }
+  return undefined;
 }

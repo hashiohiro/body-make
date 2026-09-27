@@ -20,8 +20,8 @@ interface Props {
   previous: ExerciseHistoryPoint | null;
   /** **その日を含む週**の部位別セット数。今日の週とは限らない（遡って打つ日がある） */
   weekSets: Record<MuscleGroup, number>;
-  /** 同じ週の部位別挙上量（kg）。部位の目標を挙上量で立てたときに割る相手 */
   weekVolume: Record<MuscleGroup, number>;
+  /** 同じ週の部位別挙上量（kg）。部位の目標を挙上量で立てたときに割る相手 */
   groupGoals: GroupGoals;
   /** その日の部位別セット数。**回復と同じ数え方**（`CheckHistory`）を借りる */
   todayGroupSets: GroupSets | null;
@@ -91,9 +91,14 @@ export function ExerciseRipple({
      * **主部位だけ。**ベンチは肩にも腕にも係数ぶん積まれるが、3 部位ぶん並べると
      * 部位だけで 3 行を使い切る。補助ぶんの配分はホームのヒートマップが持つ話。
      */
-    const target = groupGoals[muscle];
-    // 立て方で見る軸が変わる。行に出す数字も、跨いだかどうかも、同じ軸から引く
-    const volumeAxis = target?.type === 'volume';
+    /*
+     * 見る軸は 1 つ。**セット数の目標があればセット数、挙上量だけならその挙上量。**
+     * 1 打ごとの行なので、2 つの目標を並べると答え（届いたか）が埋もれる。
+     * 行に出す数字も、跨いだかどうかも、同じ軸から引く。
+     */
+    const goal = groupGoals[muscle];
+    const volumeAxis = goal != null && goal.sets == null && goal.volume != null;
+    const target = goal == null ? null : volumeAxis ? goal.volume : goal.sets;
     const after = volumeAxis ? weekVolume[muscle] : weekSets[muscle];
     const mine = volumeAxis ? (point?.volume ?? 0) : (point?.workSets ?? 0);
     const before = after - mine;
@@ -104,12 +109,7 @@ export function ExerciseRipple({
 
     /*
      * 単位と目標は**辞書側の穴に入れる**（`docs/design-i18n.md` §2.2）。
-     *
-     * 以前はここで `${moved} ${unit}${note}` と組み立てていて、
-     * **和語の単位まで空けていた**（`0 セット`）。ほかの画面は `common.sets` で
-     * `3セット` と詰めているので、同じ語が 2 通りに出ていた。
-     * 英語では逆に目標の前が詰まっていた（`0 sets(goal 15)`）——
-     * 区切りは言語ごとに違うので、コードで決められない。
+     * 和語の単位は詰める（`3セット`）。区切りは言語ごとに違うので、コードで決めない。
      */
     const amount = volumeAxis
       ? t('common.valueUnit', { value: moved, unit: unitLabel })
@@ -118,11 +118,12 @@ export function ExerciseRipple({
     rows.push({
       key: 'group',
       label: t('ripple.groupWeek', { group: t(GROUP_KEYS[muscle]) }),
-      value: !target
-        ? amount
-        : after >= target.value && before < target.value
-          ? t('ripple.goalReached', { amount, value: show(target.value) })
-          : t('ripple.goalOf', { amount, value: show(target.value) }),
+      value:
+        target == null
+          ? amount
+          : after >= target && before < target
+            ? t('ripple.goalReached', { amount, value: show(target) })
+            : t('ripple.goalOf', { amount, value: show(target) }),
     });
 
     /*

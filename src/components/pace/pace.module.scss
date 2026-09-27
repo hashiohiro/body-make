@@ -1,0 +1,179 @@
+@use '../../styles/mixins' as *;
+
+/* 目標タブ（体組成）の 3 枚。`docs/design-pace.md` */
+
+.chart {
+  position: relative;
+
+  svg {
+    display: block;
+    width: 100%;
+    overflow: visible;
+  }
+
+  text {
+    font-size: 11px;
+    fill: var(--ink-muted);
+    @include tabular;
+  }
+}
+
+.strongText {
+  fill: var(--ink) !important;
+  font-weight: 620;
+}
+
+.panel {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+  font-size: 11px;
+  color: var(--ink-muted);
+  @include tabular;
+
+  b {
+    color: var(--ink);
+    font-weight: 620;
+  }
+}
+
+.tileLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.big {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+
+  small {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--ink-muted);
+  }
+}
+
+.sub {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.subTitle {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--ink-muted);
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-2);
+
+  b {
+    margin-left: auto;
+    color: var(--ink);
+    font-weight: 620;
+    @include tabular;
+  }
+}
+
+/* 目標の体組成：棒の押し場所（透明）と、内訳の吹き出し */
+.barHit {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 2;
+  min-width: 132px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  box-shadow: var(--shadow, 0 4px 16px rgba(0, 0, 0, 0.18));
+  transform: translate(-50%, -100%);
+  font-size: 12px;
+  color: var(--ink-2);
+  pointer-events: none;
+  @include tabular;
+
+  > b {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--ink);
+    font-weight: 620;
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 3px 12px;
+    margin: 0;
+  }
+
+  dt {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+
+    i {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+    }
+  }
+
+  dd {
+    margin: 0;
+    text-align: right;
+    color: var(--ink);
+    font-weight: 620;
+  }
+}

@@ -60,6 +60,7 @@
 
 /* 戻ると閉じるは同じ器。役割の違いは位置と言葉で出す（左が戻る、右が閉じる） */
 .back,
+.action,
 .close {
   min-height: var(--tap-row);
   padding: 0 10px;
@@ -72,6 +73,17 @@
 
 .close {
   margin-left: auto;
+}
+
+/* 見出しの入口（`action`）。閉じるの左に並べ、右寄せはこちらが持つ */
+.action {
+  margin-left: auto;
+  color: var(--accent, var(--ink));
+  font-weight: 620;
+}
+
+.closeAfterAction {
+  margin-left: 0;
 }
 
 .body {

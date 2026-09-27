@@ -47,7 +47,7 @@ function fullData(): AppData {
       '2026-03-10': [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
     },
     // 部位目標は全部位のキーを持つ（決めていない部位は null）
-    groupGoals: { ...base.groupGoals, chest: { type: 'sets', value: 12 } },
+    groupGoals: { ...base.groupGoals, chest: { sets: 12, volume: 20000 } },
     presets: [
       {
         id: 'p1',

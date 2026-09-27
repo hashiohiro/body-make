@@ -1882,6 +1882,7 @@ describe('推移の横軸目盛り', () => {
     targetWeight: null,
     targetBodyFat: null,
     targetDate: null,
+    startDate: null,
     theme: 'system' as const,
     locale: 'system' as const,
     waistEnabled: true,
@@ -2935,8 +2936,8 @@ describe('部位の目標', () => {
         arms: { type: 'sets', value: 'x' },
       },
     });
-    expect(data.groupGoals.chest).toEqual({ type: 'sets', value: 12 });
-    expect(data.groupGoals.back).toEqual({ type: 'sets', value: 13 }); // 整数に丸める
+    expect(data.groupGoals.chest).toEqual({ sets: 12, volume: null });
+    expect(data.groupGoals.back).toEqual({ sets: 13, volume: null }); // 整数に丸める
     expect(data.groupGoals.legs).toBeNull(); // 下限未満
     expect(data.groupGoals.shoulders).toBeNull(); // 上限超え
     expect(data.groupGoals.arms).toBeNull();
@@ -2950,12 +2951,12 @@ describe('部位の目標', () => {
   it('素の数値はセット数の目標として読み替える', async () => {
     const { sanitizeData } = await import('../lib/storage');
     const data = sanitizeData({ groupGoals: { chest: 20, back: 0, legs: 'x' } });
-    expect(data.groupGoals.chest).toEqual({ type: 'sets', value: 20 });
+    expect(data.groupGoals.chest).toEqual({ sets: 20, volume: null });
     expect(data.groupGoals.back).toBeNull();
     expect(data.groupGoals.legs).toBeNull();
   });
 
-  it('挙上量の目標も持てる（セット数より桁が上がる）', async () => {
+  it('以前の挙上量の目標（立て方を 1 つ選ぶ形）も読み替える', async () => {
     const { sanitizeData, GROUP_VOLUME_GOAL_RANGE } = await import('../lib/storage');
     const data = sanitizeData({
       groupGoals: {
@@ -2963,14 +2964,14 @@ describe('部位の目標', () => {
         back: { type: 'volume', value: GROUP_VOLUME_GOAL_RANGE[1] + 1 },
       },
     });
-    expect(data.groupGoals.chest).toEqual({ type: 'volume', value: 20000 });
+    expect(data.groupGoals.chest).toEqual({ sets: null, volume: 20000 });
     expect(data.groupGoals.back).toBeNull();
   });
 
   it('目標はバックアップに含まれて往復する', async () => {
     const { sanitizeData } = await import('../lib/storage');
     const original = sanitizeData({
-      groupGoals: { chest: { type: 'sets', value: 12 }, back: { type: 'volume', value: 30000 } },
+      groupGoals: { chest: { sets: 12, volume: 30000 }, back: { sets: null, volume: 30000 } },
     });
     const roundTripped = sanitizeData(JSON.parse(JSON.stringify(original)));
     expect(roundTripped.groupGoals).toEqual(original.groupGoals);
@@ -3319,7 +3320,7 @@ describe('バックアップの読み込み', () => {
 
     const after = await storedData();
     expect(after.presets).toHaveLength(1);
-    expect(after.groupGoals.chest).toEqual({ type: 'sets', value: 12 });
+    expect(after.groupGoals.chest).toEqual({ sets: 12, volume: null });
     expect(after.entries['2026-03-01']).toBeDefined();
   });
 
@@ -3340,7 +3341,7 @@ describe('バックアップの読み込み', () => {
     fireEvent.click(screen.getByRole('button', { name: 'いまの記録に足す' }));
     const after = await storedData();
     expect(after.presets[0]!.name).toBe('押す日');
-    expect(after.groupGoals.chest).toEqual({ type: 'sets', value: 15 });
+    expect(after.groupGoals.chest).toEqual({ sets: 15, volume: null });
   });
 
   it('やめるを押したら、何も取り込まない', async () => {
@@ -4255,39 +4256,63 @@ describe('目標画面', () => {
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     // ほかの部位は動かさない（1 か所を開いているのに 6 か所が変わると驚く）
-    expect(screen.getByText('0 / 6')).toBeTruthy();
-    // 決めていない部位は割る相手がないので、分母を「—」にしてバーも出さない
-    expect(screen.getAllByText('0 / —')).toHaveLength(5);
+    // 決めていない部位は割る相手がないので、棒を出さない
+    const volumeBars = () =>
+      within(screen.getByText('今週の量').closest('section')!).queryAllByRole('progressbar');
+    expect(volumeBars()).toHaveLength(1);
+    expect(
+      within(screen.getByRole('button', { name: '胸の今週の量' }))
+        .getByRole('progressbar')
+        .getAttribute('aria-valuenow'),
+    ).toBe('0');
 
     // 外すのはボタン 1 つ（欄を空にしただけでは消さない）
     fireEvent.click(screen.getByRole('button', { name: '胸の今週の量' }));
     fireEvent.click(screen.getByRole('button', { name: '目標を外す' }));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expect(screen.getAllByText('0 / —')).toHaveLength(6);
+    expect(volumeBars()).toHaveLength(0);
   });
 
   /*
    * セット数だけでなく**挙上量でも立てられる。**選ぶのは種目の目標と同じトグル。
    * 桁が 3 つ違うので、立て方を変えたときに値は持ち越さない。
    */
-  it('部位の目標は挙上量でも立てられる', async () => {
+  /*
+   * **セット数と挙上量を同時に決められる。**欄は 2 つ並び、片方だけでもよい。
+   * 棒は目標ごとに 1 本（セット数は塗り、挙上量は斜線）。物差しは割合なので同じ目標の線で読める。
+   */
+  it('部位の目標はセット数と挙上量を同時に決められる', async () => {
     seedData(['ex_bench'], {
       [todayISO()]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
     });
     render(<GoalsHarness domain="training" />);
 
+    // 挙上量だけ決める
     fireEvent.click(screen.getByRole('button', { name: '胸の今週の量' }));
-    const dialog = topDialogAny();
-    expect(dialog.getByRole('button', { name: 'セット数', pressed: true })).toBeTruthy();
+    fireEvent.change(goalField(/^胸の挙上量の目標$/), { target: { value: '20000' } });
+    expect((await storedData()).groupGoals.chest).toEqual({ sets: null, volume: 20000 });
 
-    fireEvent.click(dialog.getByRole('button', { name: '挙上量' }));
-    fireEvent.change(goalField(/^胸の目標$/), { target: { value: '20000' } });
+    // セット数も足す（挙上量は残る）
+    fireEvent.change(goalField(/^胸の目標$/), { target: { value: '10' } });
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expect((await storedData()).groupGoals.chest).toEqual({ sets: 10, volume: 20000 });
 
-    const stored = await storedData();
-    expect(stored.groupGoals.chest).toEqual({ type: 'volume', value: 20000 });
-    // 行の数字も挙上量の軸で出る（60 × 10 = 600kg）
-    expect(screen.getByText('600 / 20,000')).toBeTruthy();
+    // 棒は 2 本。1 / 10 セット = 10%、600 / 20,000 kg = 3%
+    const chest = within(screen.getByRole('button', { name: '胸の今週の量' }));
+    expect(
+      chest.getByRole('progressbar', { name: '胸の今週のセット数' }).getAttribute('aria-valuenow'),
+    ).toBe('10');
+    expect(
+      chest.getByRole('progressbar', { name: '胸の今週の挙上量' }).getAttribute('aria-valuenow'),
+    ).toBe('3');
+    // 模様の見方が出る（挙上量の目標があるときだけ）
+    expect(screen.getAllByText('挙上量').length).toBeGreaterThan(0);
+
+    // 片方の欄を空にすると、その側だけ外れる（もう片方が残っているとき）
+    fireEvent.click(screen.getByRole('button', { name: '胸の今週の量' }));
+    fireEvent.change(goalField(/^胸の挙上量の目標$/), { target: { value: '' } });
+    fireEvent.blur(goalField(/^胸の挙上量の目標$/));
+    expect((await storedData()).groupGoals.chest).toEqual({ sets: 10, volume: null });
   });
 
   it('種目の目標は目標画面で決め、その場から推移も見られる', () => {
@@ -4314,44 +4339,42 @@ describe('目標画面', () => {
      * 一覧はマイ種目と同じカード（名前 → 事実 → 入口）。
      * いまの値と目標を両方出す——片方だけでは近いのかどうか読めない。
      */
-    const card = screen
-      .getByText('ベンチプレス（バーベル）')
-      .closest<HTMLElement>('[class*="_itemCard_"]')!;
-    expect(card.textContent).toContain('いま 60.0 kg');
-    expect(card.textContent).toContain('目標 100.0 kg');
-    // 到達率が出せないときも、何の値が出ていないのかは書く（記録が 3 セッション未満）
-    expect(card.textContent).toContain('—');
+    /* 1 行に「いま / 目標」を並べる——片方だけでは近いのかどうか読めない */
+    const card = screen.getByText('ベンチプレス（バーベル）').closest<HTMLElement>('button')!;
+    expect(card.textContent).toContain('60.0');
+    expect(card.textContent).toContain('/ 100.0 kg');
 
     /*
-     * 入口はボタンで選ぶ。**行ぜんたいは押させない**——目標・推移・設定の
-     * 3 つに行けるので、押す場所で結果が変わると何が起きるか読めない。
-     * 種目そのものの設定は、同じダイアログの面を差し替えて出す
+     * **行を押すと推移。**目標を決める面は、推移の見出し（閉じるの左）の「目標」から開く。
+     * 一覧の行にはボタンを置かない（行き先を 1 つにする）。
      */
-    fireEvent.click(within(card).getByRole('button', { name: /の目標を変える$/ }));
+    expect(within(card).queryAllByRole('button')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移を見る$/ }));
+    expect(screen.getByText('元データ')).toBeTruthy();
+
+    const trend = [...document.querySelectorAll('dialog')].find((d) =>
+      d.textContent?.includes('元データ'),
+    )!;
+    // 見出しに「目標」と「閉じる」が並ぶ（目標が左）
+    const head = [...within(trend).getAllByRole('button')].map((b) => b.textContent);
+    expect(head.indexOf('目標')).toBeLessThan(head.indexOf('閉じる'));
+    fireEvent.click(within(trend).getByRole('button', { name: /ベンチプレス.*の目標を変える$/ }));
     expect(goalField(/ベンチプレス.*の目標$/)).toBeTruthy();
 
-    // 設定も一覧のカードから開く（目標の面には入口を置かない）
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    fireEvent.click(within(card).getByRole('button', { name: /の設定$/ }));
+    // 設定は目標の面から。同じダイアログの面を差し替えて出す
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の設定$/ }));
     expect(screen.getByText('補助的に使う部位')).toBeTruthy();
 
     // 深い面では、右上に「‹ 戻る」が並ぶ（閉じるとダイアログごと消えてしまう）
     fireEvent.click(screen.getByRole('button', { name: '‹ 戻る' }));
     expect(goalField(/ベンチプレス.*の目標$/)).toBeTruthy();
 
-    // 推移は重ねて出す。画面ごと移ると、閉じたときに開いていた種目へ戻れない
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    fireEvent.click(within(card).getByRole('button', { name: /の推移を見る$/ }));
-    expect(screen.getByText('元データ')).toBeTruthy();
-
-    // 閉じると、開いていた種目の面がそのまま残っている
-    const trend = [...document.querySelectorAll('dialog')].find((d) =>
-      d.textContent?.includes('元データ'),
+    // 目標の面を閉じると、下の推移に戻る
+    const goalDialog = [...document.querySelectorAll('dialog')].find(
+      (d) => d.textContent?.includes('補助的に使う部位') || d.querySelector('input'),
     )!;
-    fireEvent.click(within(trend).getByRole('button', { name: '閉じる' }));
-    expect(screen.queryByText('元データ')).toBeNull();
-    // 閉じると、見ていた一覧がそのまま残っている
-    expect(within(card).getByRole('button', { name: /の目標を変える$/ })).toBeTruthy();
+    fireEvent.click(within(goalDialog).getByRole('button', { name: '閉じる' }));
+    expect(screen.getByText('元データ')).toBeTruthy();
   });
 
   /*
@@ -4359,7 +4382,7 @@ describe('目標画面', () => {
    * 並び順だけ部位の順にしていた頃は、切れ目が読めず、
    * どこまでが同じ部位なのかを行の右の札で数えることになっていた。
    */
-  it('種目の目標は部位ごとに束ねて出す', async () => {
+  it('種目の目標は見出しで束ねず、部位は行頭の色の丸で示す', async () => {
     const today = todayISO();
     seedData(['ex_bench', 'ex_curl'], {
       [today]: [
@@ -4381,16 +4404,10 @@ describe('目標画面', () => {
     }
 
     const card = screen.getByText('種目の目標').closest('section')!;
-    const heads = [...card.querySelectorAll('[class*="_manageGroup_"]')].map(
-      (el) => el.textContent,
-    );
-    expect(heads).toEqual(['胸', '腕']);
-
-    // 見出しが言っているので、行の側に部位は書かない
-    const row = within(card)
-      .getByText('ベンチプレス（バーベル）')
-      .closest('[class*="_itemCard_"]')!;
-    expect(row.textContent).not.toContain('胸');
+    // 見出しは付けない（並びは進み具合の順。部位は色の丸が持つ）
+    expect(card.querySelectorAll('[class*="_manageGroup_"]')).toHaveLength(0);
+    const dots = [...card.querySelectorAll<HTMLElement>('[class*="_goalRowDot_"]')];
+    expect(dots.map((d) => d.style.background)).toEqual(['var(--g-chest)', 'var(--g-arms)']);
   });
 
   it('量と目標を別のカードに分ける（部位と種目を混ぜない）', async () => {
@@ -4423,14 +4440,14 @@ describe('目標画面', () => {
 
     // 量のカードの行は部位だけ。種目の話は入らない
     const chestRow = screen.getByRole('button', { name: '胸の今週の量' });
-    expect(chestRow.textContent).toContain('2 / —');
+    expect(chestRow.textContent).toContain('2');
     expect(chestRow.textContent).not.toContain('到達');
-    // ベンチは補助部位（肩・腕）にも積むので、前回の日はその 3 部位が今日になる
-    expect(screen.getAllByText('今日')).toHaveLength(3);
 
     // 目標を決めれば、一覧の行にバーが出る（数字だけだと割り算をしないと分からない）
     expect(chestRow.querySelector('[role="progressbar"]')).toBeNull();
     fireEvent.click(chestRow);
+    // 前回の日は部位を開いた面が持つ
+    expect(screen.getByText(/今日やりました/)).toBeTruthy();
     fireEvent.change(goalField(/^胸の目標$/), { target: { value: '12' } });
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
@@ -4468,9 +4485,11 @@ describe('目標画面', () => {
      * 先週の値まで添えると、1 行に時間軸の違う数字が 2 つ並ぶ。
      */
     const chest = screen.getByRole('button', { name: '胸の今週の量' });
-    expect(chest.textContent).toContain('0 / —');
-    expect(chest.textContent).toContain('日前');
+    expect(chest.textContent).toContain('0');
     expect(chest.textContent).not.toContain('先週');
+    // 前回の日は部位を開いた面で読める
+    fireEvent.click(chest);
+    expect(screen.getByText(/最後にやってから \d+日/)).toBeTruthy();
   });
 });
 
@@ -5434,7 +5453,7 @@ describe('一覧の並び（名前順にそろえる）', () => {
     seedChest();
     render(<GoalsHarness />);
 
-    expect(labels(/の目標を変える$/, 'の目標を変える')).toEqual([
+    expect(labels(/の推移を見る$/, 'の推移を見る')).toEqual([
       'インクラインベンチプレス（バーベル）',
       'ベンチプレス（バーベル）',
     ]);
@@ -5585,16 +5604,16 @@ describe('日付ナビ', () => {
     render(<App initial={seeded} />);
     fireEvent.click(screen.getByRole('button', { name: 'トレーニング' }));
 
-    // 「今週の量」の行に出す最終実施日は trainingStats（導出）が持っている
-    const chest = () => screen.getByRole('button', { name: '胸の今週の量' });
-    expect(chest().textContent).toContain('昨日');
+    // 部位の面に出す最終実施日は trainingStats（導出）が持っている
+    fireEvent.click(screen.getByRole('button', { name: '胸の今週の量' }));
+    expect(screen.getByText(/最後にやってから 1日/)).toBeTruthy();
 
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date(`${isoAdd(today, 1)}T09:00:00`));
     fireEvent(document, new Event('visibilitychange'));
 
-    expect(chest().textContent).toContain('2日前');
-    expect(chest().textContent).not.toContain('昨日');
+    expect(screen.getByText(/最後にやってから 2日/)).toBeTruthy();
+    expect(screen.queryByText(/最後にやってから 1日/)).toBeNull();
 
     vi.useRealTimers();
   });

@@ -1,6 +1,9 @@
 import { GoalMeter } from '../components/GoalMeter';
+import { CompositionCard } from '../components/pace/CompositionCard';
 import { TrainingGoalBoard } from '../components/training/TrainingGoalBoard';
 import type { BodyData } from '../hooks/useBodyData';
+import { useToday } from '../hooks/useToday';
+import { paceLine, targetComposition } from '../lib/pace';
 import type { Domain } from '../types';
 
 interface Props {
@@ -23,8 +26,10 @@ interface Props {
  * 設定に残すのは、滅多に変えない定義（種目そのもの・表示・データ）だけ。
  */
 export function GoalsView({ body, domain, onOpenExercises }: Props) {
+  const today = useToday();
   const {
     data,
+    daily,
     stats,
     projection,
     sessions,
@@ -50,12 +55,31 @@ export function GoalsView({ body, domain, onOpenExercises }: Props) {
     );
   }
 
+  /*
+   * 目標のカードの下に、目標の体組成のカードを 1 枚（`docs/design-pace.md`）。
+   * ペースは目標のカードの中に持つ（`PacePanel`）。
+   * 目標体重が無ければどれも出さない——`GoalMeter` の空状態が入口になる。
+   */
+  const { settings } = data;
+  const hasTarget = settings.targetWeight != null && stats.currentWeight != null;
+  const composition = hasTarget ? targetComposition(settings, stats) : null;
+
   return (
-    <GoalMeter
-      settings={data.settings}
-      stats={stats}
-      projection={projection}
-      onUpdate={updateSettings}
-    />
+    <>
+      <GoalMeter
+        settings={settings}
+        stats={stats}
+        projection={projection}
+        onUpdate={updateSettings}
+        line={paceLine(daily, settings, today)}
+      />
+      {composition && settings.targetBodyFat != null && stats.currentBodyFat != null && (
+        <CompositionCard
+          composition={composition}
+          currentBodyFat={stats.currentBodyFat}
+          targetBodyFat={settings.targetBodyFat}
+        />
+      )}
+    </>
   );
 }

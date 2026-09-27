@@ -25,6 +25,7 @@ const SETTINGS: Settings = {
   targetWeight: 68,
   targetBodyFat: 15,
   targetDate: null,
+  startDate: null,
   theme: 'system',
   locale: 'system',
   waistEnabled: true,
@@ -163,6 +164,21 @@ describe('増分と全計算の一致', () => {
       expect(inc(data)).toEqual(full(data));
     });
   }
+
+  /*
+   * **開始日を決めたら、開始値はその日からの記録で取る。**
+   * 増分と全計算が同じ関数（`startValues`）を見ているので、答えは割れない。
+   */
+  it('開始日を決めると、開始値はその日からの記録で取り、全計算と一致する', () => {
+    const entries = entriesOf(60, 60, 0.1);
+    const base = dataOf(entries, workoutsOf(60, 60));
+    const startDate = addDays(todayISO(), -20);
+    const data = { ...base, settings: { ...base.settings, startDate } };
+    const withStart = inc(data);
+    expect(withStart).toEqual(full(data));
+    // 開始日より前の記録は開始値に入らない（決めていないときと値が変わる）
+    expect(withStart.stats.startWeight).not.toBe(inc(base).stats.startWeight);
+  });
 
   it('全期間が欠測でも壊れない', () => {
     const entries = entriesOf(60, 7, 0.95);

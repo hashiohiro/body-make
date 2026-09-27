@@ -46,26 +46,26 @@ function draftOf(entries: [Weekday, string, number][]) {
  */
 describe('セット数の提案', () => {
   it('週の目標を置いた日数で割る', () => {
-    expect(suggestSetsPerDay(goals({ chest: { type: 'sets', value: 12 } }), 'chest', 2)).toBe(6);
+    expect(suggestSetsPerDay(goals({ chest: { sets: 12, volume: null } }), 'chest', 2)).toBe(6);
   });
 
   it('割り切れなければ切り上げる（足りないより多いほうが目標に届く）', () => {
-    expect(suggestSetsPerDay(goals({ chest: { type: 'sets', value: 13 } }), 'chest', 2)).toBe(7);
+    expect(suggestSetsPerDay(goals({ chest: { sets: 13, volume: null } }), 'chest', 2)).toBe(7);
   });
 
   it('目標を決めていない部位は提案しない', () => {
     expect(suggestSetsPerDay(goals({}), 'chest', 2)).toBeNull();
   });
 
-  /** 挙上量で立てた目標からはセット数を出せない（別の軸） */
-  it('挙上量の目標からは出さない', () => {
+  /** 挙上量だけの目標からはセット数を出せない（別の軸） */
+  it('挙上量だけの目標からは出さない', () => {
     expect(
-      suggestSetsPerDay(goals({ chest: { type: 'volume', value: 20000 } }), 'chest', 2),
+      suggestSetsPerDay(goals({ chest: { sets: null, volume: 20000 } }), 'chest', 2),
     ).toBeNull();
   });
 
   it('置いた日が 0 なら出さない', () => {
-    expect(suggestSetsPerDay(goals({ chest: { type: 'sets', value: 12 } }), 'chest', 0)).toBeNull();
+    expect(suggestSetsPerDay(goals({ chest: { sets: 12, volume: null } }), 'chest', 0)).toBeNull();
   });
 });
 
@@ -226,7 +226,7 @@ describe('週の置きかた', () => {
     const load = weekLoad(
       [menu('m1', [1, 4], [bench.id])],
       EXERCISES,
-      goals({ chest: { type: 'sets', value: 12 } }),
+      goals({ chest: { sets: 12, volume: null } }),
     );
     expect(load.perDay[1].chest).toBe(6);
     expect(load.perDay[4].chest).toBe(6);
