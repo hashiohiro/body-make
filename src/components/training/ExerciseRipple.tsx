@@ -99,22 +99,30 @@ export function ExerciseRipple({
     const before = after - mine;
 
     const show = (n: number) => (volumeAxis ? fmt(conv(n), 0) : sets1(n));
-    const unit = volumeAxis ? unitLabel : t('metric.setsUnit');
     // まだ何も打っていなければ矢印を出さない（8 → 8 は読むものが増えるだけ）
     const moved = mine > 0 ? `${show(before)} → ${show(after)}` : show(after);
 
-    let note = '';
-    if (target) {
-      const reached = after >= target.value && before < target.value;
-      note = reached
-        ? t('ripple.goalReached', { value: show(target.value) })
-        : t('ripple.goalOf', { value: show(target.value) });
-    }
+    /*
+     * 単位と目標は**辞書側の穴に入れる**（`docs/design-i18n.md` §2.2）。
+     *
+     * 以前はここで `${moved} ${unit}${note}` と組み立てていて、
+     * **和語の単位まで空けていた**（`0 セット`）。ほかの画面は `common.sets` で
+     * `3セット` と詰めているので、同じ語が 2 通りに出ていた。
+     * 英語では逆に目標の前が詰まっていた（`0 sets(goal 15)`）——
+     * 区切りは言語ごとに違うので、コードで決められない。
+     */
+    const amount = volumeAxis
+      ? t('common.valueUnit', { value: moved, unit: unitLabel })
+      : t('common.sets', { n: moved });
 
     rows.push({
       key: 'group',
       label: t('ripple.groupWeek', { group: t(GROUP_KEYS[muscle]) }),
-      value: `${moved} ${unit}${note}`,
+      value: !target
+        ? amount
+        : after >= target.value && before < target.value
+          ? t('ripple.goalReached', { amount, value: show(target.value) })
+          : t('ripple.goalOf', { amount, value: show(target.value) }),
     });
 
     /*

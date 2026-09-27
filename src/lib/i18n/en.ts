@@ -10,6 +10,7 @@ export const en: Record<MessageKey, string> = {
   'common.noExercises': 'No exercises yet.',
   'common.exportJson': 'Export JSON',
   'common.sets': '{n} sets',
+  'common.valueUnit': '{value} {unit}',
   'common.speed': '{n}m/min',
   'common.fromStart': '{delta}{unit} from the start',
   'common.weight': 'Body weight',
@@ -660,8 +661,8 @@ export const en: Record<MessageKey, string> = {
   'warn.suppress': 'Accept',
   'ripple.cardioWeek': 'Cardio this week',
   'ripple.groupWeek': '{group} this week',
-  'ripple.goalReached': '(goal {value} reached)',
-  'ripple.goalOf': '(goal {value})',
+  'ripple.goalReached': '{amount} (goal {value} reached)',
+  'ripple.goalOf': '{amount} (goal {value})',
   'ripple.nextOf': '{group} recovers on',
   'ripple.reached': '{value} {unit} reached',
 

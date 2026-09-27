@@ -15,6 +15,7 @@ export const ja = {
   'common.noExercises': 'マイ種目がまだ空です。',
   'common.exportJson': 'JSONで書き出す',
   'common.sets': '{n}セット',
+  'common.valueUnit': '{value} {unit}',
   'common.speed': '{n}m/分',
   'common.fromStart': '開始から {delta}{unit}',
   'common.weight': '体重',
@@ -681,8 +682,8 @@ export const ja = {
   'warn.suppress': '許容する',
   'ripple.cardioWeek': '今週の有酸素',
   'ripple.groupWeek': '{group} 今週',
-  'ripple.goalReached': '（目標 {value} に到達）',
-  'ripple.goalOf': '（目標 {value}）',
+  'ripple.goalReached': '{amount}（目標 {value} に到達）',
+  'ripple.goalOf': '{amount}（目標 {value}）',
   'ripple.nextOf': '{group}が回復する日',
   'ripple.reached': '{value} {unit} に到達',
 

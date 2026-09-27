@@ -402,12 +402,13 @@ describe('トレ画面', () => {
 
     // 打つ前は矢印を出さない（0 → 0 は読むものが増えるだけ）
     expect(ripple().getByText('胸 今週')).toBeTruthy();
-    expect(ripple().getByText('0 セット')).toBeTruthy();
+    // 単位は詰める（ほかの画面の `3セット` と同じ `common.sets`）
+    expect(ripple().getByText('0セット')).toBeTruthy();
 
     typeSet(setRows()[0]!, '60', '10');
 
     // 跨ぐ線が無くても出す。立てていない人には、これが唯一の「外に及んだ」情報
-    expect(ripple().getByText('0 → 1 セット')).toBeTruthy();
+    expect(ripple().getByText('0 → 1セット')).toBeTruthy();
   });
 
   /*
