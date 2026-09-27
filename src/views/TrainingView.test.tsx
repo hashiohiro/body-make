@@ -833,6 +833,43 @@ describe('トレ画面', () => {
    * 秒で数える種目は挙上量を**原理的に持たない**ので `—` も出さない。
    * 出すと「重量を打てば出る」と読めてしまう（出せない理由が違う）。
    */
+  /*
+   * 器具を使わない自重種目（Vアップ・クランチ）は、重量欄そのものが出ない。
+   * **挙上量は原理的に出ない**ので `—` も置かない（「打てば出る」と読めてしまう）。
+   * 体重が乗る種目（懸垂）とは、出せない理由が違う。
+   */
+  it('器具を使わない自重種目には「挙上量 —」を出さない', () => {
+    seedExercises('ex_v_up');
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ Vアップ/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('Vアップ');
+
+    fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '20' } });
+    expect(screen.getAllByText('合計 20回').length).toBeGreaterThan(0);
+    expect(screen.queryByText('挙上量 —')).toBeNull();
+    // 重量を聞かない種目なので、欄も出ていない
+    expect(screen.queryByLabelText(/1セット目の重量/)).toBeNull();
+  });
+
+  /*
+   * 体重が乗る種目（懸垂）は挙上量を出せる側。**体重を記録すれば遡って出る**ので、
+   * いま出ていないことは `—` で言える。
+   */
+  it('体重が乗る種目には「挙上量 —」を出す（体重を入れれば kg になる）', () => {
+    seedExercises('ex_pullup');
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ 懸垂/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('懸垂');
+
+    fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '10' } });
+    expect(screen.getAllByText('合計 10回').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('挙上量 —').length).toBeGreaterThan(0);
+  });
+
   it('秒で数える種目には「挙上量 —」を出さない', () => {
     seedExercises('ex_plank');
     render(<Harness />);

@@ -1,5 +1,5 @@
 import { deltaTone, fmt, fmtDelta, fmtVolume } from '../../lib/format';
-import { REP_UNIT_KEYS, countsReps, isCardio } from '../../lib/exerciseCatalog';
+import { REP_UNIT_KEYS, catalogEquipment, countsReps, isCardio } from '../../lib/exerciseCatalog';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { Exercise, ExercisePoint } from '../../types';
 import { useWeightFormat } from '../../hooks/useWeightUnit';
@@ -57,8 +57,23 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
    * 出すのはセット数だけにして、打ちはじめてから合計を出す。
    */
   const typed = (point?.sets ?? []).some((set) => set.weight != null || set.reps != null);
-  /** 挙上量を出せる種目か。秒で数える種目は原理的に持たないので `—` も出さない */
-  const canVolume = countsReps(exercise.repUnit);
+
+  /*
+   * **挙上量を出せる種目か。**出せないものに `—` を置くと、
+   * 「重量を打てば出る」と読めてしまう——出せない理由が違う。
+   *
+   *   秒で数える種目（プランク）                … 重量 × 秒 は挙上量にならない
+   *   器具を使わない自重種目（Vアップ・クランチ）… 重量欄そのものが出ない
+   *
+   * 体重が乗る種目（懸垂・腕立て）は出せる側。**体重を記録すれば遡って出る**ので、
+   * いま出ていないことは `—` で正しく言える。器具を使わない種目でも、
+   * 加重を打っていれば同じ（打った値は挙上量に入る）。
+   */
+  const hasWeight = (point?.sets ?? []).some((set) => set.weight != null);
+  const noEquipment = catalogEquipment(exercise.id) === 'bodyweight';
+  const canVolume =
+    countsReps(exercise.repUnit) &&
+    (exercise.loadMode === 'bodyweight' || !noEquipment || hasWeight);
   const count = point?.reps ?? 0;
   const countLabel = t('totals.count', { n: count, unit: t(REP_UNIT_KEYS[exercise.repUnit]) });
 
