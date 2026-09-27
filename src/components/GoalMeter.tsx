@@ -158,8 +158,8 @@ export function GoalMeter({ settings, stats, projection, onUpdate }: Props) {
           <div className={s.etaRow}>
             <span>{t('goal.requiredPace', { date: formatYMD(t, settings.targetDate) })}</span>
             <span>
-              <b>{fmtDelta(projection.requiredPerWeek, 2)}</b>
-              {t('goal.perWeek')}
+              {/* 強める場所は辞書が持っている（`{strong}`）。`<b>` で割らない */}
+              <Strong text={t('goal.perWeek')} values={[fmtDelta(projection.requiredPerWeek, 2)]} />
             </span>
           </div>
         )}

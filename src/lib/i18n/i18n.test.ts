@@ -278,6 +278,35 @@ describe('文言の抜け漏れ', () => {
     expect(bad).toEqual([]);
   });
 
+  /*
+   * `{strong}` を持つ文は、**`Strong` の `text=` にだけ渡す。**
+   *
+   * そのまま `{t(...)}` で出すと穴が埋まらず、**`{strong}` が画面にそのまま出る**。
+   * 実際、必要なペースの行が `-0.44{strong} kg/週` になっていた
+   * （数字を `<b>` に入れて、文を素で並べていた）。
+   *
+   * 上の検査は `t()` を 2 つ `<b>` で割った形しか見ておらず、
+   * 「値を `<b>` に入れて文を素で出す」形は通ってしまう。穴の側から見る。
+   */
+  it('{strong} を持つ文は Strong に渡している', () => {
+    const keys = Object.entries(ja)
+      .filter(([, value]) => value.includes('{strong}'))
+      .map(([key]) => key);
+    expect(keys.length).toBeGreaterThan(0);
+
+    const bare: string[] = [];
+    for (const key of keys) {
+      const call = `t('${key}'`;
+      for (const f of SCREENS) {
+        const code = read(f);
+        for (let at = code.indexOf(call); at >= 0; at = code.indexOf(call, at + 1)) {
+          if (!code.slice(0, at).endsWith('text={')) bare.push(`${f}: ${key}`);
+        }
+      }
+    }
+    expect(bare).toEqual([]);
+  });
+
   /* 剥がし終わった面に日本語が残っていたら落とす */
   it('剥がした面に日本語が残っていない', () => {
     const left = SCREENS.filter(
