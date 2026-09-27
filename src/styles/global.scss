@@ -29,7 +29,17 @@ body {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
-  overscroll-behavior-y: none;
+  /*
+   * 端まで払った指を、ブラウザの遷移に渡さない。**縦も横も。**
+   *
+   * 縦は引っぱって更新（pull-to-refresh）、横は「戻る／進む」。
+   * チップ行のように横スクロールする器は個別に閉じてあるが（`ui.module.scss`）、
+   * 地の面そのものを払ったときの連鎖はここで閉じる。
+   *
+   * **OS のスワイプ戻る（iOS の画面端・Android の戻るジェスチャ）は
+   * これでは止まらない。**あちらは履歴を積まないことで効かなくしている（`App.tsx`）。
+   */
+  overscroll-behavior: none;
 
   // テキスト選択と長押しメニューを止める。
   // 数値は設定画面から JSON で書き出せるので、選択できなくても取り出す手段は残る

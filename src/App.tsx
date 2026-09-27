@@ -144,20 +144,28 @@ function AppShell({ body }: { body: BodyData }) {
           t(settingsTitleKey(route.section, route.param)!)
         : sectionTitle(route.tab, route.section);
 
-  // このセッションで積んだ履歴の数と、戻り先の表示名
-  const pushes = useRef(0);
-  const backLabel = useRef(t('nav.home'));
+  /**
+   * 来た道。**戻り先は自分で覚える。**
+   *
+   * ブラウザの履歴は積まない（`go` はいつも `replaceState`）。積むと、
+   * **左右スワイプで画面が変わってしまう**——iOS の画面端スワイプも Android の
+   * 戻るジェスチャも OS のもので、CSS でも JS でも無効化できない。
+   * 積まなければ戻り先が無いので、払っても何も起きない。
+   *
+   * 積んでいた目的は standalone の戻る操作を効かせることだけで、
+   * **リロードで位置が保たれるのは `replaceState` の側**（URL に載っている）。
+   *
+   * 札は route から引き直せないので、離れる画面の見出しを一緒に覚えておく。
+   */
+  const trail = useRef<{ route: Route; label: string }[]>([]);
+  const backLabel = trail.current.at(-1)?.label ?? t('nav.home');
 
-  /** 位置を URL に載せる。standalone 表示の戻る操作とリロードで位置が保たれる */
+  /** 位置を URL に載せる。リロードで位置が保たれる（履歴は積まない） */
   const go = (next: Route, replace = false) => {
-    const hash = toHash(next);
-    if (replace) {
-      window.history.replaceState(null, '', hash);
-    } else {
-      backLabel.current = title ?? t(TITLE_KEYS[route.tab]);
-      pushes.current++;
-      if (window.location.hash !== hash) window.location.hash = hash;
+    if (!replace) {
+      trail.current.push({ route, label: title ?? t(TITLE_KEYS[route.tab]) });
     }
+    window.history.replaceState(null, '', toHash(next));
     setRoute(next);
     window.scrollTo({ top: 0 });
   };
@@ -171,12 +179,8 @@ function AppShell({ body }: { body: BodyData }) {
    * 直接 URL を開いた場合だけ、履歴を遡らずに一覧へ寄せる。
    */
   const back = () => {
-    if (pushes.current > 0) {
-      pushes.current--;
-      window.history.back();
-    } else {
-      go({ tab: route.tab, section: null, param: null }, true);
-    }
+    const from = trail.current.pop();
+    go(from?.route ?? { tab: route.tab, section: null, param: null }, true);
   };
 
   useEffect(() => {
@@ -210,7 +214,7 @@ function AppShell({ body }: { body: BodyData }) {
                   onClick={back}
                   aria-label={t('common.back')}
                 >
-                  ‹ {backLabel.current}
+                  ‹ {backLabel}
                 </button>
                 <h1 className={s.title}>{title}</h1>
               </>

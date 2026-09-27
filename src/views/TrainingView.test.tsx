@@ -5677,6 +5677,28 @@ describe('画面の位置（タブと下位画面）', () => {
     expect(screen.getByRole('button', { name: '戻る' }).textContent).toContain('BodyMake');
   });
 
+  /*
+   * **履歴は積まない。**積むと左右スワイプで画面が変わる——iOS の画面端スワイプも
+   * Android の戻るジェスチャも OS のもので、CSS でも JS でも無効化できない。
+   * 戻り先はアプリが覚えていて、`‹` の札で出す（リロードの位置は URL が持つ）。
+   */
+  it('下位画面を開いても履歴を積まない', () => {
+    seedData([], {}, { '2026-03-07': { am: { weight: 70, bodyFat: 20, waist: null } } });
+    render(<App initial={seeded} />);
+    const before = window.history.length;
+
+    fireEvent.click(screen.getByRole('button', { name: /体重・体脂肪率の推移/ }));
+
+    // 位置は URL に載るが、履歴は伸びない
+    expect(window.location.hash).toBe('#home/trend');
+    expect(window.history.length).toBe(before);
+
+    // 戻るはアプリの側で効く（`history.back()` に頼らない）
+    fireEvent.click(screen.getByRole('button', { name: '戻る' }));
+    expect(window.location.hash).toBe('#home');
+    expect(window.history.length).toBe(before);
+  });
+
   it('記録タブのヘッダが日付ナビになる', () => {
     render(<App initial={seeded} />);
     expect(screen.queryByLabelText('記録する日付')).toBeNull();
