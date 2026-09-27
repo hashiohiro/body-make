@@ -1,5 +1,5 @@
 import { deltaTone, fmt, fmtDelta, fmtVolume } from '../../lib/format';
-import { REP_UNIT_KEYS, isCardio } from '../../lib/exerciseCatalog';
+import { REP_UNIT_KEYS, countsReps, isCardio } from '../../lib/exerciseCatalog';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { Exercise, ExercisePoint } from '../../types';
 import { useWeightFormat } from '../../hooks/useWeightUnit';
@@ -48,6 +48,19 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
   const rawVolume = point?.volume ?? 0;
   const overWeight = bestWeight != null && topWeight != null && topWeight > bestWeight;
   const overVolume = best != null && best > 0 && rawVolume > best;
+
+  /*
+   * **まだ何も打っていないか。**行はあるが値が 1 つも無い状態。
+   *
+   * 種目を入れた直後はここに居る。そのときに `合計 0回` や `挙上量 —` を出すと、
+   * 持っていない指標を書くことになる（0 kg と書かないのと同じ理由）。
+   * 出すのはセット数だけにして、打ちはじめてから合計を出す。
+   */
+  const typed = (point?.sets ?? []).some((set) => set.weight != null || set.reps != null);
+  /** 挙上量を出せる種目か。秒で数える種目は原理的に持たないので `—` も出さない */
+  const canVolume = countsReps(exercise.repUnit);
+  const count = point?.reps ?? 0;
+  const countLabel = t('totals.count', { n: count, unit: t(REP_UNIT_KEYS[exercise.repUnit]) });
 
   return (
     <>
@@ -102,21 +115,17 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
                 体重を乗せない自重種目（レッグレイズ）… 重量欄が空なら 0 × 回数
               代わりに、その種目が実際に持っている量（合計の回数・秒数）を出す。
             */}
-            {rawVolume === 0 && (
-              <span>
-                {t('totals.count', {
-                  n: point?.reps ?? 0,
-                  unit: t(REP_UNIT_KEYS[exercise.repUnit]),
-                })}
-              </span>
-            )}
+            {canVolume && rawVolume === 0 && count > 0 && <span>{countLabel}</span>}
             {/*
-              **挙上量の場所は消さない。**出せないときは `—` を置く。
+              **挙上量を出せる種目では、その場所を消さない。**出せないときは `—`。
 
               消すと「合計 30回」だけが残り、ウエイトなのに回数が出ている理由が
               画面から読めない（数えていないのか、出せないのかが分からない）。
               場所を残せば、重量を打った瞬間に同じ位置が kg に変わる。
               **「重量を入れましょう」とは書かない**——出すのは事実だけ（§1.2）。
+
+              秒で数える種目は挙上量を**原理的に持たない**ので `—` も出さない。
+              「打てば出る」と読めてしまう（出せない理由が違う）。合計が主役になる。
             */}
             <b>
               {rawVolume > 0 ? (
@@ -126,8 +135,12 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
                     <span className={`${ui.hint} ${TONE_CLASS[tone]}`}> {fmtDelta(delta, 0)}</span>
                   )}
                 </>
-              ) : (
+              ) : !typed ? (
+                ''
+              ) : canVolume ? (
                 t('totals.noVolume')
+              ) : (
+                countLabel
               )}
             </b>
           </>

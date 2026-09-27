@@ -807,6 +807,46 @@ describe('トレ画面', () => {
   });
 
   /*
+   * **何も打っていないうちは合計を出さない。**行はあっても値が 1 つも無い状態で
+   * 「合計 0回」や「挙上量 —」を出すと、持っていない指標を書くことになる。
+   */
+  it('値を 1 つも打っていないときは、セット数だけを出す', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
+
+    // 合計の行はあるが、合計も挙上量も書かない
+    const foot = () =>
+      [...document.querySelectorAll('[class*="_exFoot_"]')].map((el) => el.textContent ?? '');
+    expect(foot().length).toBeGreaterThan(0);
+    expect(foot().every((x) => !x.includes('合計') && !x.includes('挙上量'))).toBe(true);
+
+    // 打ちはじめたら出る
+    fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '10' } });
+    expect(screen.getAllByText('挙上量 —').length).toBeGreaterThan(0);
+  });
+
+  /*
+   * 秒で数える種目は挙上量を**原理的に持たない**ので `—` も出さない。
+   * 出すと「重量を打てば出る」と読めてしまう（出せない理由が違う）。
+   */
+  it('秒で数える種目には「挙上量 —」を出さない', () => {
+    seedExercises('ex_plank');
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ プランク/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('プランク');
+
+    fireEvent.change(screen.getByLabelText('1セット目の秒数'), { target: { value: '60' } });
+    expect(screen.getAllByText('合計 60秒').length).toBeGreaterThan(0);
+    expect(screen.queryByText('挙上量 —')).toBeNull();
+  });
+
+  /*
    * **ウエイトの種目で重量が空のとき。**掛ける相手（重量）がないので挙上量が出せない。
    * 「合計 10回」だけを出すと、ウエイトなのに回数が出ている理由が画面から読めないので、
    * 挙上量の場所は消さずに `—` を置く（重量を打てば同じ位置が kg に変わる）。
