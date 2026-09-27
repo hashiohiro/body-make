@@ -11,6 +11,13 @@ import { useT } from '../../lib/i18n';
 interface Props {
   exercise: Exercise;
   point: ExercisePoint | null;
+  /**
+   * その日の体重（kg）。**体重が乗る種目で、負荷が埋まっているかを見るために要る。**
+   *
+   * 無いまま加重だけ打つと、`effectiveWeight` は加重ぶんだけを返す
+   * （打った値が消えたように見せないため）。本当の負荷より小さいので、その旨を添える。
+   */
+  bodyWeight: number | null;
   previous: ExerciseHistoryPoint | null;
   /** その日より前の挙上量の最高値。当日を含めると、入れた瞬間に自分が最高になって指標にならない */
   best: number | null;
@@ -25,7 +32,7 @@ interface Props {
  * 移したので、そこに無いと、確かめるたびに閉じてカードへ戻ることになる。
  * 別々に組むと数字の出し方がずれるので、同じ部品を両方に置く。
  */
-export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: Props) {
+export function ExerciseTotals({ exercise, point, bodyWeight, previous, best, bestWeight }: Props) {
   /*
    * 記録は kg で持っている（`lib/weight.ts`）。ここは読む場所なので、
    * 出す直前に読むときの単位へ直す。**差分も換算後どうしで取る**——
@@ -56,26 +63,45 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
    * 持っていない指標を書くことになる（0 kg と書かないのと同じ理由）。
    * 出すのはセット数だけにして、打ちはじめてから合計を出す。
    */
-  const typed = (point?.sets ?? []).some((set) => set.weight != null || set.reps != null);
+  /*
+   * **この行は「その日の量」を出す場所。量はその種目の性質で 1 つに決まる。**
+   *
+   *   器具で負荷をかける / 体重が乗る … 挙上量（kg）
+   *   器具を使わない自重（Vアップ）  … 総レップ
+   *   秒で数える（プランク）          … 総秒数
+   *   有酸素                          … 距離（なければ時間）
+   *
+   * 以前は太字の枠が「挙上量 → 出せなければ回数 → それも無ければ —」と意味を変えていた。
+   * 重量を打った瞬間に太字が「30回」から「600 kg」へすり替わり、
+   * 出せない種目には何を書くべきかが場面ごとの判断になっていた。
+   *
+   * **同じ事実を 2 か所に出さない。**量が回数の種目では回数を左に添えない
+   * （太字がそれを言っている）。逆に挙上量が量の種目では、回数を左に出す。
+   */
+  const count = point?.reps ?? 0;
+  const countLabel = t('totals.amount', {
+    n: count,
+    unit: t(REP_UNIT_KEYS[exercise.repUnit]),
+  });
 
   /*
-   * **挙上量を出せる種目か。**出せないものに `—` を置くと、
-   * 「重量を打てば出る」と読めてしまう——出せない理由が違う。
+   * 挙上量を量にできる種目か。**打てば出る／体重を入れれば出る**ものだけ。
    *
-   *   秒で数える種目（プランク）                … 重量 × 秒 は挙上量にならない
-   *   器具を使わない自重種目（Vアップ・クランチ）… 重量欄そのものが出ない
+   *   秒で数える種目                            … 重量 × 秒 は挙上量にならない
+   *   器具を使わない自重（Vアップ・クランチ）    … 体重が乗らず、重量欄も出ない
    *
-   * 体重が乗る種目（懸垂・腕立て）は出せる側。**体重を記録すれば遡って出る**ので、
-   * いま出ていないことは `—` で正しく言える。器具を使わない種目でも、
-   * 加重を打っていれば同じ（打った値は挙上量に入る）。
+   * 器具を使わない種目で加重した日も、**量は総レップのまま**にする。
+   * 日によって太字の意味が変わるほうが読みにくい（打った加重は左に添える）。
    */
-  const hasWeight = (point?.sets ?? []).some((set) => set.weight != null);
-  const noEquipment = catalogEquipment(exercise.id) === 'bodyweight';
-  const canVolume =
+  const byVolume =
     countsReps(exercise.repUnit) &&
-    (exercise.loadMode === 'bodyweight' || !noEquipment || hasWeight);
-  const count = point?.reps ?? 0;
-  const countLabel = t('totals.count', { n: count, unit: t(REP_UNIT_KEYS[exercise.repUnit]) });
+    (exercise.loadMode === 'bodyweight' || catalogEquipment(exercise.id) !== 'bodyweight');
+
+  /*
+   * 体重が乗る種目なのに体重の記録が無く、加重だけで挙上量が出ている状態。
+   * 本当の負荷より小さいので、そのことを添える（体重を 1 件入れれば遡って正しくなる）。
+   */
+  const partialVolume = exercise.loadMode === 'bodyweight' && bodyWeight == null && rawVolume > 0;
 
   return (
     <>
@@ -130,37 +156,49 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
                 体重を乗せない自重種目（レッグレイズ）… 重量欄が空なら 0 × 回数
               代わりに、その種目が実際に持っている量（合計の回数・秒数）を出す。
             */}
-            {canVolume && rawVolume === 0 && count > 0 && <span>{countLabel}</span>}
+            {/* 回数は、挙上量が量の種目でだけ左に添える（量が回数なら太字が言っている） */}
+            {byVolume && count > 0 && <span>{countLabel}</span>}
             {/*
-              **挙上量を出せる種目では、その場所を消さない。**出せないときは `—`。
-
-              消すと「合計 30回」だけが残り、ウエイトなのに回数が出ている理由が
-              画面から読めない（数えていないのか、出せないのかが分からない）。
-              場所を残せば、重量を打った瞬間に同じ位置が kg に変わる。
-              **「重量を入れましょう」とは書かない**——出すのは事実だけ（§1.2）。
-
-              秒で数える種目は挙上量を**原理的に持たない**ので `—` も出さない。
-              「打てば出る」と読めてしまう（出せない理由が違う）。合計が主役になる。
+              器具を使わない自重種目で加重した日。**量は総レップのまま**なので、
+              打った加重ぶんの挙上量はここに添える。
+            */}
+            {!byVolume && rawVolume > 0 && (
+              <span>{t('totals.volumeValue', { value: fmtVolume(volume), unit: unitLabel })}</span>
+            )}
+            {/*
+              **太字はその種目の量。**挙上量が量の種目で、まだ出せないときは空にする
+              （`0 kg` も `—` も書かない。打てば同じ位置が kg になる）。
             */}
             <b>
-              {rawVolume > 0 ? (
-                <>
-                  {fmtVolume(volume)} {unitLabel}
-                  {delta != null && (
-                    <span className={`${ui.hint} ${TONE_CLASS[tone]}`}> {fmtDelta(delta, 0)}</span>
-                  )}
-                </>
-              ) : !typed ? (
-                ''
-              ) : canVolume ? (
-                t('totals.noVolume')
-              ) : (
+              {byVolume ? (
+                rawVolume > 0 ? (
+                  <>
+                    {fmtVolume(volume)} {unitLabel}
+                    {delta != null && (
+                      <span className={`${ui.hint} ${TONE_CLASS[tone]}`}>
+                        {' '}
+                        {fmtDelta(delta, 0)}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  ''
+                )
+              ) : count > 0 ? (
                 countLabel
+              ) : (
+                ''
               )}
             </b>
           </>
         )}
       </div>
+
+      {/*
+        体重が乗る種目で、体重の記録が無いまま加重だけ打った日。
+        **指示ではなく事実**を書く（§1.2）——入れれば遡って出し直すのは仕組みの側の話。
+      */}
+      {partialVolume && <p className={ui.note}>{t('totals.noBodyWeight')}</p>}
 
       {/*
         通算の最高。前回との差は上の行が持っているので、ここは通算で見る。

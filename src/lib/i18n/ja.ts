@@ -390,13 +390,14 @@ export const ja = {
   'exercise.removeFromDay': '{name}をこの日から外す',
   'exercise.editSetsOf': '{name}のセットを編集',
   'exercise.setGoalOf': '{name}の目標を決める',
-  'totals.count': '合計 {n}{unit}',
+  'totals.amount': '{n}{unit}',
+  'totals.volumeValue': '挙上量 {value} {unit}',
+  'totals.noBodyWeight': '体重の記録が無いので、加重ぶんだけの挙上量です。',
   'totals.cardioSets': '{n}本',
   'totals.minutes': '{n}分',
   'totals.oneRm': '推定1RM {value} {unit}',
   'totals.bestWeight': '最高重量',
   'totals.bestVolume': '最高挙上量',
-  'totals.noVolume': '挙上量 —',
 
   // --- セット入力 ---
   'set.reps': '回数',

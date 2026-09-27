@@ -772,142 +772,133 @@ describe('トレ画面', () => {
   });
 
   /*
-   * **持っていない指標を 0 と書かない。**有酸素で 0 kg を出さないのと同じ。
-   * 挙上量が出ないのは「掛ける相手がない」からで、やっていないという意味ではない。
+   * **合計の行は「その日の量」を出す場所。量はその種目の性質で 1 つに決まる。**
+   *
+   *   器具で負荷をかける / 体重が乗る … 挙上量（kg）
+   *   器具を使わない自重（Vアップ）  … 総レップ
+   *   秒で数える（プランク）          … 総秒数
+   *
+   * 以前は太字の枠が「挙上量 → 出せなければ回数 → それも無ければ —」と意味を変えていて、
+   * 重量を打った瞬間に太字が「30回」から「600 kg」へすり替わっていた。
+   * **持っていない指標は書かない**（`0 kg` も `合計 0回` も出さない）。
    */
-  it('秒で数える種目は、0kg ではなく合計の秒数を出す', () => {
+  const foot = () =>
+    [...document.querySelectorAll('[class*="_exFoot_"]')].map((el) => el.textContent ?? '');
+
+  const openAndExpand = (label: RegExp, name: string) => {
+    openPicker();
+    fireEvent.click(screen.getByText(label));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand(name);
+  };
+
+  it('器具で負荷をかける種目は、量が挙上量（打つまでは空）', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+    openAndExpand(/^＋ ベンチプレス/, 'ベンチプレス');
+
+    fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '10' } });
+    // 回数は左に出る。量（太字）はまだ出せないので空にする
+    expect(screen.getAllByText('10回').length).toBeGreaterThan(0);
+    expect(foot().every((x) => !x.includes('kg'))).toBe(true);
+    // 同じ事実を 2 か所に出さない（左に出したものを太字にも置かない）
+    expect(foot().every((x) => x.split('10回').length - 1 === 1)).toBe(true);
+
+    fireEvent.change(screen.getByLabelText(/1セット目の重量/), { target: { value: '60' } });
+    expect(foot().some((x) => x.includes('600 kg'))).toBe(true);
+    // 回数は左に残る（太字とすり替わらない）
+    expect(screen.getAllByText('10回').length).toBeGreaterThan(0);
+  });
+
+  it('値を 1 つも打っていないときは、セット数だけを出す', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+    openAndExpand(/^＋ ベンチプレス/, 'ベンチプレス');
+
+    expect(foot().length).toBeGreaterThan(0);
+    expect(foot().every((x) => !x.includes('回') && !x.includes('kg'))).toBe(true);
+  });
+
+  it('器具を使わない自重種目は量が総レップ。加重しても入れ替わらない', () => {
+    seedExercises('ex_v_up');
+    render(<Harness />);
+    openAndExpand(/^＋ Vアップ/, 'Vアップ');
+
+    fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '20' } });
+    expect(screen.getAllByText('20回').length).toBeGreaterThan(0);
+    // 量が回数の種目では、回数を左に添えない（太字がそれを言っている）
+    expect(foot().every((x) => x.split('20回').length - 1 === 1)).toBe(true);
+    // 体重が乗らないので重量欄そのものが出ない。挙上量の語も出さない
+    expect(screen.queryByLabelText(/1セット目の重量/)).toBeNull();
+    expect(foot().every((x) => !x.includes('挙上量'))).toBe(true);
+
+    // 加重した日は、打った加重ぶんの挙上量を左に添える（量は総レップのまま）
+    fireEvent.click(screen.getByRole('button', { name: '加重' }));
+    fireEvent.change(screen.getByLabelText(/1セット目の(追加)?重量/), { target: { value: '10' } });
+    expect(foot().some((x) => x.includes('挙上量 200 kg'))).toBe(true);
+    expect(screen.getAllByText('20回').length).toBeGreaterThan(0);
+  });
+
+  it('秒で数える種目は、量が総秒数', () => {
     seedExercises('ex_plank');
     render(<Harness />);
-    openPicker();
-    fireEvent.click(screen.getByText(/^＋ プランク/));
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expand('プランク');
+    openAndExpand(/^＋ プランク/, 'プランク');
 
     fireEvent.change(screen.getByLabelText('1セット目の秒数'), { target: { value: '60' } });
     fireEvent.click(screen.getByRole('button', { name: 'セットを追加' }));
     fireEvent.change(screen.getByLabelText('2セット目の秒数'), { target: { value: '45' } });
 
-    // 同じ合計はカードとセット入力の両方に出る（ExerciseTotals を共有している）
-    expect(screen.getAllByText('合計 105秒').length).toBeGreaterThan(0);
-    expect(screen.queryByText(/0 kg/)).toBeNull();
+    // 同じ量はカードとセット入力の両方に出る（ExerciseTotals を共有している）
+    expect(screen.getAllByText('105秒').length).toBeGreaterThan(0);
+    expect(foot().every((x) => !x.includes('kg'))).toBe(true);
   });
 
-  it('体重を乗せない自重種目は、0kg ではなく合計の回数を出す', () => {
-    seedExercises('ex_leg_raise');
-    render(<Harness />);
-    openPicker();
-    fireEvent.click(screen.getByText(/^＋ レッグレイズ/));
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expand('レッグレイズ');
-
-    fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '15' } });
-
-    expect(screen.getAllByText('合計 15回').length).toBeGreaterThan(0);
-    expect(screen.queryByText(/0 kg/)).toBeNull();
-  });
-
-  /*
-   * **何も打っていないうちは合計を出さない。**行はあっても値が 1 つも無い状態で
-   * 「合計 0回」や「挙上量 —」を出すと、持っていない指標を書くことになる。
-   */
-  it('値を 1 つも打っていないときは、セット数だけを出す', () => {
-    seedExercises('ex_bench');
-    render(<Harness />);
-    openPicker();
-    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expand('ベンチプレス');
-
-    // 合計の行はあるが、合計も挙上量も書かない
-    const foot = () =>
-      [...document.querySelectorAll('[class*="_exFoot_"]')].map((el) => el.textContent ?? '');
-    expect(foot().length).toBeGreaterThan(0);
-    expect(foot().every((x) => !x.includes('合計') && !x.includes('挙上量'))).toBe(true);
-
-    // 打ちはじめたら出る
-    fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '10' } });
-    expect(screen.getAllByText('挙上量 —').length).toBeGreaterThan(0);
-  });
-
-  /*
-   * 秒で数える種目は挙上量を**原理的に持たない**ので `—` も出さない。
-   * 出すと「重量を打てば出る」と読めてしまう（出せない理由が違う）。
-   */
-  /*
-   * 器具を使わない自重種目（Vアップ・クランチ）は、重量欄そのものが出ない。
-   * **挙上量は原理的に出ない**ので `—` も置かない（「打てば出る」と読めてしまう）。
-   * 体重が乗る種目（懸垂）とは、出せない理由が違う。
-   */
-  it('器具を使わない自重種目には「挙上量 —」を出さない', () => {
-    seedExercises('ex_v_up');
-    render(<Harness />);
-    openPicker();
-    fireEvent.click(screen.getByText(/^＋ Vアップ/));
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expand('Vアップ');
-
-    fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '20' } });
-    expect(screen.getAllByText('合計 20回').length).toBeGreaterThan(0);
-    expect(screen.queryByText('挙上量 —')).toBeNull();
-    // 重量を聞かない種目なので、欄も出ていない
-    expect(screen.queryByLabelText(/1セット目の重量/)).toBeNull();
-  });
-
-  /*
-   * 体重が乗る種目（懸垂）は挙上量を出せる側。**体重を記録すれば遡って出る**ので、
-   * いま出ていないことは `—` で言える。
-   */
-  it('体重が乗る種目には「挙上量 —」を出す（体重を入れれば kg になる）', () => {
+  it('体重が乗る種目は、体重の記録が無いあいだ量を出せない', () => {
     seedExercises('ex_pullup');
     render(<Harness />);
-    openPicker();
-    fireEvent.click(screen.getByText(/^＋ 懸垂/));
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expand('懸垂');
+    openAndExpand(/^＋ 懸垂/, '懸垂');
 
     fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '10' } });
-    expect(screen.getAllByText('合計 10回').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('挙上量 —').length).toBeGreaterThan(0);
-  });
-
-  it('秒で数える種目には「挙上量 —」を出さない', () => {
-    seedExercises('ex_plank');
-    render(<Harness />);
-    openPicker();
-    fireEvent.click(screen.getByText(/^＋ プランク/));
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expand('プランク');
-
-    fireEvent.change(screen.getByLabelText('1セット目の秒数'), { target: { value: '60' } });
-    expect(screen.getAllByText('合計 60秒').length).toBeGreaterThan(0);
-    expect(screen.queryByText('挙上量 —')).toBeNull();
+    expect(screen.getAllByText('10回').length).toBeGreaterThan(0);
+    expect(foot().every((x) => !x.includes('kg'))).toBe(true);
+    expect(screen.queryByText(/体重の記録が無いので/)).toBeNull();
   });
 
   /*
-   * **ウエイトの種目で重量が空のとき。**掛ける相手（重量）がないので挙上量が出せない。
-   * 「合計 10回」だけを出すと、ウエイトなのに回数が出ている理由が画面から読めないので、
-   * 挙上量の場所は消さずに `—` を置く（重量を打てば同じ位置が kg に変わる）。
+   * 体重が分からなくても、打った加重は数える（`effectiveWeight`）。
+   * ただし本当の負荷より小さいので、**そのことを事実として添える。**
    */
-  it('重量が空のときは、回数の合計と「挙上量 —」を並べる', () => {
-    seedExercises('ex_bench');
+  it('体重の記録が無いまま加重すると、加重ぶんだけだと添える', () => {
+    seedExercises('ex_pullup');
     render(<Harness />);
-    openPicker();
-    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expand('ベンチプレス');
-
-    const foot = () =>
-      [...document.querySelectorAll('[class*="_exFoot_"]')].map((el) => el.textContent ?? '');
+    openAndExpand(/^＋ 懸垂/, '懸垂');
 
     fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '10' } });
-    expect(screen.getAllByText('合計 10回').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('挙上量 —').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: '加重' }));
+    fireEvent.change(screen.getByLabelText(/1セット目の(追加)?重量/), { target: { value: '10' } });
 
-    // 重量を打つと、同じ位置が kg に変わる
-    fireEvent.change(screen.getByLabelText(/1セット目の重量/), { target: { value: '60' } });
-    expect(screen.queryByText('挙上量 —')).toBeNull();
-    expect(screen.queryByText('合計 10回')).toBeNull();
-    expect(foot().some((x) => x.includes('600 kg'))).toBe(true);
+    expect(foot().some((x) => x.includes('100 kg'))).toBe(true);
+    expect(screen.getAllByText(/体重の記録が無いので/).length).toBeGreaterThan(0);
+  });
+
+  it('体重を記録してあれば、体重ぶんを含めた挙上量が出る', () => {
+    seedData(
+      ['ex_pullup'],
+      {},
+      {
+        [todayISO()]: {
+          am: { weight: 70, bodyFat: null, waist: null },
+          pm: { weight: null, bodyFat: null, waist: null },
+        },
+      },
+    );
+    render(<Harness />);
+    openAndExpand(/^＋ 懸垂/, '懸垂');
+
+    fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '10' } });
+    // 70kg（係数 1）× 10回
+    expect(foot().some((x) => x.includes('700 kg'))).toBe(true);
+    expect(screen.queryByText(/体重の記録が無いので/)).toBeNull();
   });
 
   it('器具を使わない種目でも重量を聞かない（クランチ・デッドバグなど）', () => {

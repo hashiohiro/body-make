@@ -11,6 +11,8 @@ import { useT } from '../../lib/i18n';
 interface Props {
   exercise: Exercise;
   point: ExercisePoint | null;
+  /** その日の体重（kg）。合計の行が読む（`ExerciseTotals`） */
+  bodyWeight: number | null;
   previous: ExerciseHistoryPoint | null;
   /** その日より前の挙上量の最高値。当日を含めると、入れた瞬間に自分が最高になって指標にならない */
   best: number | null;
@@ -30,6 +32,7 @@ interface Props {
 export function ExerciseCard({
   exercise,
   point,
+  bodyWeight,
   previous,
   best,
   bestWeight,
@@ -79,6 +82,7 @@ export function ExerciseCard({
       <ExerciseTotals
         exercise={exercise}
         point={point}
+        bodyWeight={bodyWeight}
         previous={previous}
         best={best}
         bestWeight={bestWeight}

@@ -391,6 +391,7 @@ export function TrainingView({ body, date }: Props) {
               key={entry.exerciseId}
               exercise={exercise}
               point={session?.exercises.find((p) => p.exerciseId === entry.exerciseId) ?? null}
+              bodyWeight={bodyWeightAt(date)}
               previous={previousPoint(sessions, entry.exerciseId, date)}
               best={personalBest(sessions, entry.exerciseId, addDays(date, -1), pickVolume)}
               // 換算後ではなく、バーに載せた数字（目標やグラフの「最大重量」と同じ取り方）

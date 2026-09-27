@@ -314,6 +314,7 @@ export function ExerciseSetEditor({
       <ExerciseTotals
         exercise={exercise}
         point={point}
+        bodyWeight={bodyWeight}
         previous={previous}
         best={best}
         bestWeight={bestWeight}
