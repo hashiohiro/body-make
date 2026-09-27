@@ -683,8 +683,7 @@ export const ja = {
   'ripple.groupWeek': '{group} 今週',
   'ripple.goalReached': '（目標 {value} に到達）',
   'ripple.goalOf': '（目標 {value}）',
-  'ripple.nextOf': '{group}の次',
-  'ripple.nextValue': '{date}（{sets} セット）',
+  'ripple.nextOf': '{group}が回復する日',
   'ripple.reached': '{value} {unit} に到達',
 
   'goalNote.maintain': '数値は決めず、到達の判定もしません。開始比だけ出ます。',

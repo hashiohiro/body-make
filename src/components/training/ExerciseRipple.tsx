@@ -131,11 +131,12 @@ export function ExerciseRipple({
       rows.push({
         key: 'recovery',
         label: t('ripple.nextOf', { group: t(GROUP_KEYS[muscle]) }),
-        // 日付が答えで、セット数がその根拠。日数は日付が言っているので添えない
-        value: t('ripple.nextValue', {
-          date: formatMD(addDays(date, days)),
-          sets: sets1(todaySets),
-        }),
+        /*
+         * **日付だけ。**セット数は添えない——すぐ上の行（`{部位} 今週`）が
+         * すでにセット数を言っているし、日数は日付そのものが言っている。
+         * 根拠を並べると、答えである日付が埋もれる。
+         */
+        value: formatMD(addDays(date, days)),
       });
     }
   }

@@ -662,8 +662,7 @@ export const en: Record<MessageKey, string> = {
   'ripple.groupWeek': '{group} this week',
   'ripple.goalReached': '(goal {value} reached)',
   'ripple.goalOf': '(goal {value})',
-  'ripple.nextOf': 'Next {group}',
-  'ripple.nextValue': '{date} ({sets} sets)',
+  'ripple.nextOf': '{group} recovers on',
   'ripple.reached': '{value} {unit} reached',
 
   'goalNote.maintain': 'No number to hit and no “reached” check. Only the change from the start.',

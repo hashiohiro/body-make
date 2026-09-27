@@ -410,6 +410,29 @@ describe('トレ画面', () => {
     expect(ripple().getByText('0 → 1 セット')).toBeTruthy();
   });
 
+  /*
+   * 部位の空きの行。**答えは日付だけ。**
+   *
+   * 以前は「胸の次 9/25（11 セット）」だった。ラベルが何の「次」か言っておらず、
+   * 添えたセット数は**すぐ上の行（`胸 今週`）がすでに言っている**ので、
+   * 答えである日付が埋もれていた。
+   */
+  it('部位が回復する日は、日付だけを出す', async () => {
+    const { addDays, formatMD, todayISO } = await import('../lib/date');
+    seedExercises('ex_bench');
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
+
+    typeSet(setRows()[0]!, '60', '10');
+
+    // 1 セットなら 1 日空け（`RECOVERY_STEPS`）
+    const label = ripple().getByText('胸が回復する日');
+    expect(label.nextElementSibling?.textContent).toBe(formatMD(addDays(todayISO(), 1)));
+  });
+
   it('通算の最高を超えたら、最高の行そのものが変わる（行は増えない）', async () => {
     const { addDays, todayISO } = await import('../lib/date');
     const today = todayISO();
