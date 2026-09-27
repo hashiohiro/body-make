@@ -382,6 +382,7 @@ export const en: Record<MessageKey, string> = {
   'totals.oneRm': 'Est. 1RM {value} {unit}',
   'totals.bestWeight': 'Best weight',
   'totals.bestVolume': 'Best volume',
+  'totals.noVolume': 'Volume —',
 
   'set.reps': 'Reps',
   'set.seconds': 'Seconds',
@@ -673,6 +674,7 @@ export const en: Record<MessageKey, string> = {
   'goalNote.duration': 'Judged by the day’s total time.',
   'goalEditor.typeOf': 'Goal type for {name}',
   'unit.seconds': 'sec',
+  'unit.reps': 'reps',
 
   'exSettings.subWeightOf': 'Count {name} as {w}',
   'exSettings.closeCalc': 'Close the calculation',

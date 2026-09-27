@@ -2151,8 +2151,15 @@ export const LOAD_MODE_HINT_KEYS: Record<LoadMode, MessageKey> = {
 
 export const LOAD_MODE_ORDER: LoadMode[] = ['standard', 'perSide', 'bodyweight'];
 
+/*
+ * 数字に添える単位。**セッション数の単位（`summary.times`）とは別のキーにする。**
+ *
+ * 日本語ではどちらも「回」なので 1 つのキーに寄せていたが、英語では別の語で、
+ * **10 レップの目標が `10 sessions` と出ていた**（マイ種目の札・目標の欄・種目の合計）。
+ * 同じ語でも意味が違うので分ける（`i18n.test.ts` の `SAME_WORD_OK`）。
+ */
 export const REP_UNIT_KEYS: Record<RepUnit, MessageKey> = {
-  reps: 'summary.times',
+  reps: 'unit.reps',
   seconds: 'unit.seconds',
 };
 

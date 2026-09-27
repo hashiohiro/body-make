@@ -806,6 +806,33 @@ describe('トレ画面', () => {
     expect(screen.queryByText(/0 kg/)).toBeNull();
   });
 
+  /*
+   * **ウエイトの種目で重量が空のとき。**掛ける相手（重量）がないので挙上量が出せない。
+   * 「合計 10回」だけを出すと、ウエイトなのに回数が出ている理由が画面から読めないので、
+   * 挙上量の場所は消さずに `—` を置く（重量を打てば同じ位置が kg に変わる）。
+   */
+  it('重量が空のときは、回数の合計と「挙上量 —」を並べる', () => {
+    seedExercises('ex_bench');
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
+
+    const foot = () =>
+      [...document.querySelectorAll('[class*="_exFoot_"]')].map((el) => el.textContent ?? '');
+
+    fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '10' } });
+    expect(screen.getAllByText('合計 10回').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('挙上量 —').length).toBeGreaterThan(0);
+
+    // 重量を打つと、同じ位置が kg に変わる
+    fireEvent.change(screen.getByLabelText(/1セット目の重量/), { target: { value: '60' } });
+    expect(screen.queryByText('挙上量 —')).toBeNull();
+    expect(screen.queryByText('合計 10回')).toBeNull();
+    expect(foot().some((x) => x.includes('600 kg'))).toBe(true);
+  });
+
   it('器具を使わない種目でも重量を聞かない（クランチ・デッドバグなど）', () => {
     // 体重を挙上量に足さない種目（loadMode は standard）でも、器具は要らない
     seedExercises('ex_crunch');

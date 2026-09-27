@@ -95,12 +95,28 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
             {/*
               **持っていない指標を 0 と書かない。**有酸素で 0 kg を出さないのと同じ理由。
 
-              挙上量が出ないのは 2 通りある。どちらも「掛ける相手がない」で、
+              挙上量が出ないのは 3 通りある。どれも「掛ける相手がない」で、
               やっていないという意味ではない。
+                重量が空のセットしかない          … 重量 × 回数 の重量が無い
                 秒で数える種目（プランク）        … 重量 × 秒 は挙上量にならない
                 体重を乗せない自重種目（レッグレイズ）… 重量欄が空なら 0 × 回数
               代わりに、その種目が実際に持っている量（合計の回数・秒数）を出す。
-              重量を打てば挙上量が出るので、そのときはこれまでどおり。
+            */}
+            {rawVolume === 0 && (
+              <span>
+                {t('totals.count', {
+                  n: point?.reps ?? 0,
+                  unit: t(REP_UNIT_KEYS[exercise.repUnit]),
+                })}
+              </span>
+            )}
+            {/*
+              **挙上量の場所は消さない。**出せないときは `—` を置く。
+
+              消すと「合計 30回」だけが残り、ウエイトなのに回数が出ている理由が
+              画面から読めない（数えていないのか、出せないのかが分からない）。
+              場所を残せば、重量を打った瞬間に同じ位置が kg に変わる。
+              **「重量を入れましょう」とは書かない**——出すのは事実だけ（§1.2）。
             */}
             <b>
               {rawVolume > 0 ? (
@@ -111,7 +127,7 @@ export function ExerciseTotals({ exercise, point, previous, best, bestWeight }: 
                   )}
                 </>
               ) : (
-                t('totals.count', { n: point?.reps ?? 0, unit: t(REP_UNIT_KEYS[exercise.repUnit]) })
+                t('totals.noVolume')
               )}
             </b>
           </>

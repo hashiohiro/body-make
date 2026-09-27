@@ -1047,7 +1047,7 @@ export function goalUnitOf(t: T, type: GoalType, repUnit: RepUnit): string {
   if (type === 'weight') return 'kg';
   if (type === 'volume') return 'kg';
   if (type === 'maintain') return repUnit === 'seconds' ? t('unit.seconds') : 'kg';
-  return repUnit === 'seconds' ? t('unit.seconds') : t('summary.times');
+  return repUnit === 'seconds' ? t('unit.seconds') : t('unit.reps');
 }
 
 export function exerciseGoals(

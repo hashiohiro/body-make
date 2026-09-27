@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CATALOG, GROUP_ORDER } from './exerciseCatalog';
+import { CATALOG, GROUP_ORDER, REP_UNIT_KEYS } from './exerciseCatalog';
 import {
   buildBodyWeightLookup,
   buildExercisePoint,
@@ -9,6 +9,7 @@ import {
   effectiveWeight,
   estimateOneRm,
   exerciseBaseline,
+  goalUnitOf,
   personalBest,
   pickOneRm,
   resolveSets,
@@ -779,5 +780,31 @@ describe('通算の量と幅', () => {
   it('記録がなければ 0（null にしない。数えた結果の 0 と区別する必要がない）', () => {
     const s = stats({});
     expect([s.totalSets, s.totalVolume, s.cardioDays, s.minGroupDays]).toEqual([0, 0, 0, 0]);
+  });
+});
+
+/*
+ * **レップとセッションを同じ語にしない。**
+ *
+ * 日本語ではどちらも「回」なので 1 つのキーに寄せていたが、英語では別の語で、
+ * **10 レップの目標が `10 sessions` と出ていた**（マイ種目の札・目標の欄・種目の合計）。
+ */
+describe('数字に添える単位', () => {
+  it('レップの単位は、英語で reps（sessions ではない）', () => {
+    const en = makeT('en');
+    expect(en(REP_UNIT_KEYS.reps)).toBe('reps');
+    expect(goalUnitOf(en, 'reps', 'reps')).toBe('reps');
+    // セッション数の単位は sessions のまま。別のキーにしてある
+    expect(en('summary.times')).toBe('sessions');
+  });
+
+  it('日本語はどちらも「回」（だから 1 つのキーに寄せられていた）', () => {
+    expect(t(REP_UNIT_KEYS.reps)).toBe('回');
+    expect(t('summary.times')).toBe('回');
+  });
+
+  it('秒で数える種目は秒のまま', () => {
+    expect(goalUnitOf(makeT('en'), 'reps', 'seconds')).toBe('sec');
+    expect(goalUnitOf(t, 'reps', 'seconds')).toBe('秒');
   });
 });

@@ -396,6 +396,7 @@ export const ja = {
   'totals.oneRm': '推定1RM {value} {unit}',
   'totals.bestWeight': '最高重量',
   'totals.bestVolume': '最高挙上量',
+  'totals.noVolume': '挙上量 —',
 
   // --- セット入力 ---
   'set.reps': '回数',
@@ -694,6 +695,7 @@ export const ja = {
   'goalNote.duration': 'その日の合計時間で判定します。',
   'goalEditor.typeOf': '{name}の目標の種類',
   'unit.seconds': '秒',
+  'unit.reps': '回',
 
   'exSettings.subWeightOf': '{name}を{w}で数える',
   'exSettings.closeCalc': '計算方法を閉じる',
