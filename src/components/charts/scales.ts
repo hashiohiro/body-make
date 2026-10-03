@@ -1,4 +1,4 @@
-import { addDays, diffDays, isoToTime, toISO } from '../../lib/date';
+import { addDays, diffDays, isoToTime, startOfWeek, toISO } from '../../lib/date';
 
 export interface NiceScale {
   min: number;
@@ -179,6 +179,26 @@ export function timeTicks(domain: readonly [number, number], count: number): num
   const out: number[] = [];
   for (let i = 0; i < n; i++) {
     out.push(isoToTime(addDays(from, Math.round((i * span) / (n - 1)))));
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * 週ごとのグラフの目盛り。**週の始まり（日曜）にだけ打つ。**
+ *
+ * 日単位の目盛り（`timeTicks`）を週の点に重ねると、点の無い水曜に目盛りが立ち、
+ * 1 点が 1 週を表していることが読めなくなる。週の数より多くは打たない。
+ */
+export function weekTicks(domain: readonly [number, number], count: number): number[] {
+  const [d0, d1] = domain;
+  if (!Number.isFinite(d0) || !Number.isFinite(d1)) return [];
+  const from = startOfWeek(toISO(new Date(d0)));
+  const weeks = Math.max(0, Math.round(diffDays(startOfWeek(toISO(new Date(d1))), from) / 7));
+  if (weeks === 0 || count < 2) return [isoToTime(from)];
+  const n = Math.min(count, weeks + 1);
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    out.push(isoToTime(addDays(from, Math.round((i * weeks) / (n - 1)) * 7)));
   }
   return [...new Set(out)];
 }

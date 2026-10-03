@@ -40,6 +40,8 @@ export function ExerciseTotals({ exercise, point, bodyWeight, previous, best, be
    */
   const t = useT();
   const { label: unitLabel, conv } = useWeightFormat();
+  /** 挙上量の単位。**その日（1 回のトレーニング）の量なので「/日」**を添える（重量は量ではないので添えない） */
+  const volumeUnit = t('goalPeriod.perDay', { unit: unitLabel });
   const volume = conv(point?.volume ?? 0);
   const prevVolume = previous?.point.volume == null ? null : conv(previous.point.volume);
   const delta = prevVolume != null && prevVolume > 0 && volume > 0 ? volume - prevVolume : null;
@@ -163,7 +165,7 @@ export function ExerciseTotals({ exercise, point, bodyWeight, previous, best, be
               打った加重ぶんの挙上量はここに添える。
             */}
             {!byVolume && rawVolume > 0 && (
-              <span>{t('totals.volumeValue', { value: fmtVolume(volume), unit: unitLabel })}</span>
+              <span>{t('totals.volumeValue', { value: fmtVolume(volume), unit: volumeUnit })}</span>
             )}
             {/*
               **太字はその種目の量。**挙上量が量の種目で、まだ出せないときは空にする
@@ -173,7 +175,7 @@ export function ExerciseTotals({ exercise, point, bodyWeight, previous, best, be
               {byVolume ? (
                 rawVolume > 0 ? (
                   <>
-                    {fmtVolume(volume)} {unitLabel}
+                    {fmtVolume(volume)} {volumeUnit}
                     {delta != null && (
                       <span className={`${ui.hint} ${TONE_CLASS[tone]}`}>
                         {' '}
@@ -228,7 +230,7 @@ export function ExerciseTotals({ exercise, point, bodyWeight, previous, best, be
           {best != null && best > 0 && (
             <span>
               {t('totals.bestVolume')} {fmtVolume(conv(best))}
-              {overVolume && <> → {fmtVolume(conv(rawVolume))}</>} {unitLabel}
+              {overVolume && <> → {fmtVolume(conv(rawVolume))}</>} {volumeUnit}
             </span>
           )}
         </div>

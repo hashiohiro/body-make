@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { GroupGoalEditor } from './GroupGoalEditor';
 import { groupColor } from './groupColor';
+import { GroupTrendChart } from './GroupTrendChart';
+import type { GroupValueId } from './groupValues';
 import { VolumeSwatch } from './VolumeSwatch';
 import { volumeBarStyle } from './volumeBar';
 import { fmtVolume } from '../../lib/format';
@@ -9,7 +11,7 @@ import { Modal } from '../Modal';
 import { GROUP_KEYS, GROUP_ORDER, isCardio, isListed } from '../../lib/exerciseCatalog';
 import { addDays, formatMD, startOfWeek, todayISO, weekdayLabel } from '../../lib/date';
 import { cardioWeek, formatSets } from '../../lib/training';
-import type { TrainingStats } from '../../lib/training';
+import type { TrainingStats, WeekSetCount } from '../../lib/training';
 import type { Exercise, GroupGoals, GroupTarget, MuscleGroup, SessionPoint } from '../../types';
 import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
@@ -39,6 +41,8 @@ interface Props {
   /** 有酸素の今週（回数と時間）を数えるために使う */
   sessions: readonly SessionPoint[];
   onSetGroupGoal: (group: MuscleGroup, target: GroupTarget | null) => void;
+  /** 週ごとの部位別の量（推移のグラフに使う） */
+  weeks: readonly WeekSetCount[];
 }
 
 /**
@@ -67,11 +71,15 @@ export function WeeklyVolumeCard({
   exercises,
   sessions,
   onSetGroupGoal,
+  weeks,
 }: Props) {
   const t = useT();
   const { conv } = useWeightFormat();
   /** 開いている部位。押したらそのまま目標を決める面（段は増やさない） */
   const [open, setOpen] = useState<MuscleGroup | null>(null);
+  /** 推移を開いている部位（目標の面の上に重ねる） */
+  const [trendOf, setTrendOf] = useState<MuscleGroup | null>(null);
+  const [trendValue, setTrendValue] = useState<GroupValueId>('sets');
 
   const totalSets = GROUP_ORDER.reduce((sum, g) => sum + stats.thisWeekSetsByGroup[g], 0);
   const thisWeekStart = startOfWeek(todayISO());
@@ -280,6 +288,12 @@ export function WeeklyVolumeCard({
           open
           title={t('exercise.goalOf', { name: t(GROUP_KEYS[current.group]) })}
           onClose={() => setOpen(null)}
+          // 決める前に過去の週を見たい。推移は重ねて出し、閉じるとこの面に戻る
+          action={{
+            label: t('common.trend'),
+            ariaLabel: t('common.trendOf', { name: t(GROUP_KEYS[current.group]) }),
+            onClick: () => setTrendOf(current.group),
+          }}
         >
           <GroupGoalEditor
             group={current.group}
@@ -288,6 +302,22 @@ export function WeeklyVolumeCard({
             volume={current.volume}
             days={current.days}
             onChange={(target) => onSetGroupGoal(current.group, target)}
+          />
+        </Modal>
+      )}
+
+      {/* 部位 1 つの週ごとの量。セット数・挙上量を切り替え、決めてある目標を水平線で添える */}
+      {trendOf && (
+        <Modal
+          open
+          title={t('common.trendOf', { name: t(GROUP_KEYS[trendOf]) })}
+          onClose={() => setTrendOf(null)}
+        >
+          <GroupTrendChart
+            weeks={weeks}
+            valueId={trendValue}
+            onValueChange={setTrendValue}
+            only={{ group: trendOf, target: groupGoals[trendOf] }}
           />
         </Modal>
       )}

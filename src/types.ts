@@ -54,6 +54,11 @@ export interface Settings {
    * 減量と増量を切り替えたとき、前の期間の値を起点にし続けると進捗が読めなくなる。
    */
   startDate: string | null;
+  /**
+   * 種目の目標を数える単位。**全種目で 1 つ**（種目ごとには持たない）。
+   * 'session' ＝ 1 回のトレーニングごと（日次）、'week' ＝ 週ごと（日〜土）。
+   */
+  goalPeriod: GoalPeriod;
   theme: ThemePref;
   /**
    * 表示する言語。**テーマと同じ形**——端末に従うか、名指しか。
@@ -344,6 +349,14 @@ export type GoalType =
   | 'duration'
   /** 速度（m/分）。**大きいほど良い** に揃えるため、ペース（分/km）では持たない */
   | 'speed';
+
+/**
+ * 目標を数える単位。**日次＝1 回のトレーニング（その日）、週次＝その週（日〜土）。**
+ *
+ * 週次の数え方は立て方で決まる：量の目標（挙上量・距離・時間）はその週の**合計**、
+ * 強さの目標（重量・回数・速度）はその週の**最大**（`goalSeries`）。
+ */
+export type GoalPeriod = 'session' | 'week';
 
 export interface ExerciseTarget {
   type: GoalType;

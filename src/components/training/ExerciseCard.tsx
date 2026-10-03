@@ -1,4 +1,5 @@
-import { GROUP_KEYS, exerciseName, goalTypeLabel } from '../../lib/exerciseCatalog';
+import { GROUP_KEYS, exerciseName } from '../../lib/exerciseCatalog';
+import type { ReactNode } from 'react';
 import { ExerciseTotals } from './ExerciseTotals';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { Exercise, ExercisePoint } from '../../types';
@@ -27,6 +28,8 @@ interface Props {
   onOpenGoal: () => void;
   /** セットを打つダイアログを開く。**入力はカードではなく面を分けて置く** */
   onEdit: () => void;
+  /** この部位の今週と部位の目標（`GroupWeekLine`）。有酸素は部位を持たないので渡さない */
+  groupWeek?: ReactNode;
 }
 
 export function ExerciseCard({
@@ -41,6 +44,7 @@ export function ExerciseCard({
   onEdit,
   onOpenDetail,
   onOpenGoal,
+  groupWeek,
 }: Props) {
   const t = useT();
 
@@ -56,9 +60,10 @@ export function ExerciseCard({
         */}
         {exercise.shelf === 'adhoc' && <Tag kind="state">{t('exercise.notAdded')}</Tag>}
         {/* この種目をどうしたいか（維持 / 重量↑ / 挙上量↑ / 回数↑）。打ちながら分かるように */}
-        {exercise.goal && (
-          <Tag kind="chosen">{goalTypeLabel(t, exercise.goal.type, exercise.repUnit, true)}</Tag>
-        )}
+        {/*
+          種目の目標の札は置かない。目標は週次で数えることもあり、その日の量（下の合計）と
+          並べると、1 日ぶんと 1 週ぶんが同じカードで食い違って見える。目標は「目標」ボタンと目標タブが持つ。
+        */}
         <span className={s.exHeadBtns}>
           {/* 並びはやった順。掴むと、その日の種目だけが小さな一覧に畳まれる */}
           {onMove && (
@@ -88,6 +93,8 @@ export function ExerciseCard({
         bestWeight={bestWeight}
       />
 
+      {groupWeek}
+
       {/*
         記録しながら過去の推移を見たくなる。グラフ画面と同じものを開く。
         通算の数字のすぐ下に置く（そこから掘り下げる動線なので）
@@ -111,7 +118,7 @@ export function ExerciseCard({
           aria-label={t('common.trendOf', { name: exerciseName(t, exercise) })}
           onClick={onOpenDetail}
         >
-          {t('common.viewTrend')}
+          {t('common.trend')}
         </button>
         {/*
           打っている最中に「この種目はどこを目指しているか」を決め直したくなる。

@@ -20,7 +20,7 @@ import { fmt } from '../../lib/format';
 import { todayISO } from '../../lib/date';
 import { RECENT_DAYS, STALE_WEEKS } from '../../lib/training';
 import type { ExerciseGoal, TrainingStats } from '../../lib/training';
-import type { Exercise, SessionPoint } from '../../types';
+import type { Exercise, GoalPeriod, SessionPoint } from '../../types';
 import { CardHeader } from '../CardHeader';
 import ui from '../../styles/ui.module.scss';
 import { Tag } from '../Tag';
@@ -44,6 +44,8 @@ interface Props {
    * **入らない道を書かない**（ホームの「記録する」と同じ、導線の作法）。
    */
   onOpenExercises: () => void;
+  /** 数える単位（日次／週次）。全種目で 1 つ（`Settings.goalPeriod`。設定 > トレーニングで決める） */
+  period: GoalPeriod;
 }
 
 /**
@@ -66,6 +68,7 @@ export function ExerciseGoalsCard({
   stats,
   onUpdate,
   onOpenExercises,
+  period,
 }: Props) {
   const t = useT();
   // 目標は kg で導出されている。出す直前に読む単位へ直す
@@ -83,20 +86,18 @@ export function ExerciseGoalsCard({
   const order = new Map(EXERCISE_GROUP_ORDER.map((g, i) => [g, i]));
 
   /*
-   * **並びは進み具合の順**（到達 → 到達率の高い順 → 記録なし）。同じ進み具合なら部位の順 → 名前順。
+   * **並びは部位の順 → その部位の中は名前順。**部位ごとに見出しを付ける。
    *
-   * 以前は部位ごとに見出しを付けて名前順に並べていた。1 本の線で進み具合を描くようにしたので、
-   * 近いものから上に来るほうが一目で読める。どの部位かは行頭の色の丸（今週の量の棒と同じ色）が持つ。
+   * マイ種目の一覧と同じ切り方・同じ並び（探す軸は名前）。進み具合の順に並べると、
+   * 記録するたびに行が入れ替わり、同じ種目を毎回探し直すことになる。
    */
   const collator = new Intl.Collator(t.locale);
-  const rank = (g: ExerciseGoal) => (g.reached ? 2 : g.current == null ? -1 : (g.progress ?? 0));
-  const byGroupName = (a: ExerciseGoal, b: ExerciseGoal) => {
+  const sorted = [...goals].sort((a, b) => {
     const ga = order.get(a.group) ?? 99;
     const gb = order.get(b.group) ?? 99;
     if (ga !== gb) return ga - gb;
     return collator.compare(a.name, b.name);
-  };
-  const sorted = [...goals].sort((a, b) => rank(b) - rank(a) || byGroupName(a, b));
+  });
   /** 数値の目標。1 本の線で出す */
   const tracked = sorted.filter((g) => g.target != null);
   /** 維持は数値を決めないので線を持たない。名前だけを下に並べる */
@@ -141,15 +142,16 @@ export function ExerciseGoalsCard({
         onClick={() => setTrendOf(goal.exerciseId)}
       >
         <span className={s.goalRowHead}>
-          <i
-            className={s.goalRowDot}
-            style={{ background: groupColor(goal.group) }}
-            aria-hidden="true"
-          />
           <span className={s.goalRowName}>{goal.name}</span>
+          {/* いまの値に単位を付け、目標は後ろに「目標 130」と分けて添える（「90 / 130」と並べない） */}
           <b className={nowTone(goal)}>{fmt(unit.conv(goal.current), goal.digits)}</b>
+          <span className={s.goalRowUnit}>
+            {t(goal.period === 'week' ? 'goalPeriod.perWeek' : 'goalPeriod.perDay', {
+              unit: unit.label,
+            })}
+          </span>
           <span className={s.goalRowOf}>
-            {`/ ${fmt(unit.conv(goal.target), goal.digits)} ${unit.label}`}
+            {t('card.goal', { value: fmt(unit.conv(goal.target), goal.digits) })}
           </span>
         </span>
         <GoalTrack goal={goal} label={t('exGoal.rate', { name: goal.name })} />
@@ -198,7 +200,24 @@ export function ExerciseGoalsCard({
         ) : (
           <>
             {tracked.length > 0 && <GoalLegend />}
-            {tracked.map(row)}
+            {EXERCISE_GROUP_ORDER.map((g) => {
+              const items = tracked.filter((goal) => goal.group === g);
+              if (items.length === 0) return null;
+              return (
+                <div key={g}>
+                  <div className={s.manageGroup}>
+                    {/* 部位の色は今週の量の棒と同じ（どの部位の話かを色でもつなぐ） */}
+                    <i
+                      className={ui.swatch}
+                      style={{ background: groupColor(g), marginRight: 6 }}
+                      aria-hidden="true"
+                    />
+                    {t(GROUP_KEYS[g])}
+                  </div>
+                  {items.map(row)}
+                </div>
+              );
+            })}
             {maintained.length > 0 && (
               <div className={s.maintainRow}>
                 <span>{t('goalType.maintain')}</span>
@@ -312,7 +331,12 @@ export function ExerciseGoalsCard({
               この面を差し替えて出す（‹ 戻る で戻る）。
             */
             <>
-              <GoalEditor exercise={openExercise} sessions={sessions} onUpdate={onUpdate} />
+              <GoalEditor
+                exercise={openExercise}
+                sessions={sessions}
+                onUpdate={onUpdate}
+                period={period}
+              />
               <div className={ui.detailRow}>
                 <button
                   type="button"
@@ -340,7 +364,12 @@ export function ExerciseGoalsCard({
           onBack={pickedExercise ? () => setPicked(null) : undefined}
         >
           {pickedExercise ? (
-            <GoalEditor exercise={pickedExercise} sessions={sessions} onUpdate={onUpdate} />
+            <GoalEditor
+              exercise={pickedExercise}
+              sessions={sessions}
+              onUpdate={onUpdate}
+              period={period}
+            />
           ) : (
             <div>
               {/* 選ぶ面はどこも同じ組み（検索・部位チップ・部位ごとの見出し） */}

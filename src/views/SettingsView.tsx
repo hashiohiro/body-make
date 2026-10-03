@@ -3,6 +3,7 @@ import { Modal } from '../components/Modal';
 import { useConfirm } from '../components/ConfirmDialog';
 import { CheckSettingsForm } from '../components/training/CheckSettingsForm';
 import { WeightUnitForm } from '../components/training/WeightUnitForm';
+import { Segmented } from '../components/Segmented';
 import { ExerciseManager } from '../components/training/ExerciseManager';
 import { PresetManager } from '../components/training/PresetManager';
 import { WeekMenuManager } from '../components/training/WeekMenuManager';
@@ -82,6 +83,11 @@ export const TRAINING_PAGES = [
    * ここに置くのは滅多に変えない閾値と、押した許容を戻す場所だけ。
    */
   { id: 'units', key: 'settings.units', hint: 'settings.unitsHint', group: 'config' },
+  /*
+   * 種目の目標を日次で数えるか週次で数えるか。**全種目で 1 つの定義**なので、
+   * 目標を見る面（目標タブ）ではなく、滅多に変えない定義を置くここに置く。
+   */
+  { id: 'goals', key: 'settings.goalCount', hint: 'settings.goalCountHint', group: 'config' },
   { id: 'checks', key: 'settings.checks', hint: 'settings.checksHint', group: 'config' },
 ] as const satisfies readonly {
   id: string;
@@ -320,10 +326,35 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
       checks: data.suppressed.length,
       // 件数で語れるものが無い。行には選んでいる単位を出す（下の count のところ）
       units: 0,
+      // これも件数ではなく、選んでいるもの（日次／週次）を出す
+      goals: 0,
     };
 
     if (page === 'units') {
       return <WeightUnitForm settings={settings} onUpdate={updateSettings} />;
+    }
+
+    if (page === 'goals') {
+      return (
+        <section className={ui.card}>
+          <CardHeader title={t('settings.goalCount')} />
+          <Segmented
+            label={t('exGoal.periodLabel')}
+            value={settings.goalPeriod}
+            options={[
+              { id: 'session', label: t('goalPeriod.session') },
+              { id: 'week', label: t('goalPeriod.week') },
+            ]}
+            onChange={(goalPeriod) => updateSettings({ goalPeriod })}
+          />
+          <p className={ui.note}>
+            {t('settings.goalCountNote')}
+            <br />
+            {t('goalPeriod.weekSumNote')}
+            {t('goalPeriod.weekMaxNote')}
+          </p>
+        </section>
+      );
     }
 
     if (page === 'checks') {
@@ -401,11 +432,13 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
                 <span className={s.count}>
                   {p.id === 'units'
                     ? `${WEIGHT_UNIT_LABEL[settings.inputWeightUnit]} / ${WEIGHT_UNIT_LABEL[settings.displayWeightUnit]}`
-                    : p.id === 'checks'
-                      ? counts[p.id] === 0
-                        ? ''
-                        : t('settings.suppressed', { n: counts[p.id]! })
-                      : t('settings.count', { n: counts[p.id]! })}
+                    : p.id === 'goals'
+                      ? t(settings.goalPeriod === 'week' ? 'goalPeriod.week' : 'goalPeriod.session')
+                      : p.id === 'checks'
+                        ? counts[p.id] === 0
+                          ? ''
+                          : t('settings.suppressed', { n: counts[p.id]! })
+                        : t('settings.count', { n: counts[p.id]! })}
                 </span>
                 <span className={s.chevron} aria-hidden="true">
                   ›

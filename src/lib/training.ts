@@ -4,6 +4,7 @@ import type {
   Exercise,
   ExerciseGroup,
   ExercisePoint,
+  GoalPeriod,
   GoalType,
   MuscleGroup,
   RepUnit,
@@ -988,6 +989,8 @@ export interface ExerciseGoal {
   /** 目標画面の見出し分け。有酸素は 'cardio' */
   group: ExerciseGroup;
   type: GoalType;
+  /** 数える単位（日次／週次）。週次なら current は今週、baseline と best は週ごとの値から */
+  period: GoalPeriod;
   unit: string;
   digits: number;
   /** 現状維持は数値を決めないので null */
@@ -1045,6 +1048,48 @@ export const goalCurrent = (type: GoalType, p: ExercisePoint): number | null => 
   }
 };
 
+/** 週次で**合計**する立て方（量の目標）。ほかは週の**最大**（強さの目標） */
+const WEEK_SUM: ReadonlySet<GoalType> = new Set<GoalType>(['volume', 'distance', 'duration']);
+
+/**
+ * 目標の物差しで並べた値と、「いま」。**日次と週次の数え方はここだけが持つ。**
+ * 目標の一覧（`exerciseGoals`）と決める面（`GoalEditor`）の両方が呼ぶ——
+ * 片方だけ週次を知っていると、「いま」が面ごとに割れる。
+ *
+ *   日次 … 1 回ごとの値。いま＝直近 1 回
+ *   週次 … 週（日〜土）ごとに合計か最大。いま＝**今週**の値（今週まだやっていなければ、
+ *          合計で数える目標は 0、最大で数える目標は無し）
+ */
+export function goalSeries(
+  type: GoalType,
+  period: GoalPeriod,
+  history: readonly ExerciseHistoryPoint[],
+  today: string,
+): { values: number[]; current: number | null } {
+  if (period === 'session') {
+    const values = history
+      .map((h) => goalCurrent(type, h.point))
+      .filter((v): v is number => v != null);
+    return { values, current: values.length ? values[values.length - 1]! : null };
+  }
+
+  const sum = WEEK_SUM.has(type);
+  const byWeek = new Map<string, number>();
+  for (const h of history) {
+    const v = goalCurrent(type, h.point);
+    if (v == null) continue;
+    const week = startOfWeek(h.date);
+    const prev = byWeek.get(week);
+    byWeek.set(week, prev == null ? v : sum ? prev + v : Math.max(prev, v));
+  }
+  const values = [...byWeek.values()];
+  const thisWeek = byWeek.get(startOfWeek(today));
+  return {
+    values,
+    current: thisWeek ?? (sum && values.length > 0 ? 0 : null),
+  };
+}
+
 /** 目標の単位。維持は主指標に合わせる */
 export function goalUnitOf(t: T, type: GoalType, repUnit: RepUnit): string {
   if (type === 'distance') return 'm';
@@ -1060,6 +1105,9 @@ export function exerciseGoals(
   t: T,
   sessions: readonly SessionPoint[],
   exercises: readonly Exercise[],
+  /** 数える単位。全種目で 1 つ（`Settings.goalPeriod`） */
+  period: GoalPeriod = 'session',
+  today: string = todayISO(),
 ): ExerciseGoal[] {
   const goals: ExerciseGoal[] = [];
 
@@ -1068,11 +1116,8 @@ export function exerciseGoals(
     if (goal == null) continue;
 
     const history = exerciseHistory(sessions, exercise.id);
-    const values = history
-      .map((h) => goalCurrent(goal.type, h.point))
-      .filter((v): v is number => v != null);
-
-    const current = values.length ? values[values.length - 1]! : null;
+    // 日次なら 1 回ごと、週次なら週ごとの値（開始値・最大・いまの物差しを 1 つにそろえる）
+    const { values, current } = goalSeries(goal.type, period, history, today);
     const baseline =
       values.length >= BASELINE_SESSIONS
         ? values.slice(0, BASELINE_SESSIONS).reduce((a, b) => a + b, 0) / BASELINE_SESSIONS
@@ -1103,6 +1148,7 @@ export function exerciseGoals(
       name: exerciseName(t, exercise),
       group: exercise.group,
       type: goal.type,
+      period,
       unit: goalUnitOf(t, goal.type, exercise.repUnit),
       // 重量と速度は 0.1 刻みで意味が変わる。距離は m なので整数
       digits: goal.type === 'weight' || goal.type === 'speed' ? 1 : 0,

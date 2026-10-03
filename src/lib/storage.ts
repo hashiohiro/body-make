@@ -60,6 +60,7 @@ export const DEFAULT_SETTINGS: Settings = {
   targetBodyFat: null,
   targetDate: null,
   startDate: null,
+  goalPeriod: 'session',
   theme: 'system',
   locale: 'system',
   waistEnabled: false,
@@ -665,6 +666,7 @@ function sanitizeSettings(raw: unknown): Settings {
     targetBodyFat: parseBodyFat(o.targetBodyFat),
     targetDate: typeof o.targetDate === 'string' && ISO_RE.test(o.targetDate) ? o.targetDate : null,
     startDate: typeof o.startDate === 'string' && ISO_RE.test(o.startDate) ? o.startDate : null,
+    goalPeriod: o.goalPeriod === 'week' ? 'week' : 'session',
     // 知らない配色を持つバックアップは 'system' に落とす
     theme: THEME_IDS.includes(theme as ThemePref) ? (theme as ThemePref) : 'system',
     // 言語も同じ。持っていないバックアップは端末に合わせる

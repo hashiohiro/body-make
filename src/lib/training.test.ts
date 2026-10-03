@@ -9,18 +9,21 @@ import {
   effectiveWeight,
   estimateOneRm,
   exerciseBaseline,
+  goalSeries,
   goalUnitOf,
   personalBest,
   pickOneRm,
   resolveSets,
   summarizeSets,
 } from './training';
+import type { ExerciseHistoryPoint } from './training';
 import { DATA_VERSION, sanitizeData, sanitizeWorkouts } from './storage';
 import { makeT } from './i18n';
 import type {
   CardioSet,
   DailyPoint,
   Exercise,
+  ExercisePoint,
   SessionExercise,
   SessionSet,
   WorkSet,
@@ -806,5 +809,43 @@ describe('数字に添える単位', () => {
   it('秒で数える種目は秒のまま', () => {
     expect(goalUnitOf(makeT('en'), 'reps', 'seconds')).toBe('sec');
     expect(goalUnitOf(t, 'reps', 'seconds')).toBe('秒');
+  });
+});
+
+/*
+ * 種目の目標の日次／週次（`goalSeries`）。週次は量の目標が合計、強さの目標が最大。
+ * いまは今週の値（まだやっていなければ、合計は 0、最大は無し）。
+ */
+describe('目標の日次と週次', () => {
+  const at = (date: string, point: Partial<ExercisePoint>) =>
+    ({ date, time: 0, point: point as ExercisePoint }) as ExerciseHistoryPoint;
+  // 2026-09-27 は日曜。9/20〜9/26 が先週、9/27〜が今週
+  const history = [
+    at('2026-09-20', { volume: 1000, top: { weight: 60 } as never }),
+    at('2026-09-23', { volume: 1500, top: { weight: 70 } as never }),
+    at('2026-09-27', { volume: 800, top: { weight: 65 } as never }),
+  ];
+
+  it('日次は 1 回ごと。いまは直近 1 回', () => {
+    expect(goalSeries('volume', 'session', history, '2026-09-28')).toEqual({
+      values: [1000, 1500, 800],
+      current: 800,
+    });
+  });
+
+  it('週次の挙上量は週の合計。いまは今週', () => {
+    expect(goalSeries('volume', 'week', history, '2026-09-28')).toEqual({
+      values: [2500, 800],
+      current: 800,
+    });
+  });
+
+  it('週次の重量は週の最大', () => {
+    expect(goalSeries('weight', 'week', history, '2026-09-28').values).toEqual([70, 65]);
+  });
+
+  it('今週まだやっていなければ、合計は 0・最大は無し', () => {
+    expect(goalSeries('volume', 'week', history, '2026-10-05').current).toBe(0);
+    expect(goalSeries('weight', 'week', history, '2026-10-05').current).toBeNull();
   });
 });

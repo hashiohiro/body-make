@@ -2,8 +2,8 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useElementWidth } from '../../hooks/useElementWidth';
 import { insideRect, useDismiss } from '../../hooks/useDismiss';
-import { formatMD, formatMDW, toISO } from '../../lib/date';
-import { linePath, linearScale, niceScale, tickDecimals, timeTicks } from './scales';
+import { addDays, formatMD, formatMDW, toISO } from '../../lib/date';
+import { linePath, linearScale, niceScale, tickDecimals, timeTicks, weekTicks } from './scales';
 import { YAxis } from './YAxis';
 import s from './charts.module.scss';
 import { useT } from '../../lib/i18n';
@@ -48,6 +48,11 @@ export interface TimeSeriesChartProps {
    * 端の点とは限らない。まとめて入力した日や、今日まだ記録していない日がある。
    */
   highlight?: number | null;
+  /**
+   * 1 点が何を表すか。'week' なら点は週の始まり（日曜）に置いた 1 週ぶんの値で、
+   * 目盛りを日曜にだけ打ち（「9/20週」）、吹き出しは週の範囲（「9/20〜9/26」）で出す。
+   */
+  step?: 'day' | 'week';
 }
 
 const MARGIN = { top: 14, right: 50, bottom: 24, left: 40 } as const;
@@ -81,6 +86,7 @@ export function TimeSeriesChart({
   emptyMessage,
   legend,
   highlight = null,
+  step = 'day',
 }: TimeSeriesChartProps) {
   const t = useT();
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
@@ -165,7 +171,10 @@ export function TimeSeriesChart({
    * （`timeTicks`）。同じ `domain` を渡したグラフは、記録の密度が違っても
    * 同じ位置に同じ日付が並ぶ。
    */
-  const xTicks = useMemo(() => timeTicks(domain, 4), [domain]);
+  const xTicks = useMemo(
+    () => (step === 'week' ? weekTicks(domain, 4) : timeTicks(domain, 4)),
+    [domain, step],
+  );
 
   const activeTime = active != null ? times[active] : undefined;
 
@@ -255,15 +264,17 @@ export function TimeSeriesChart({
               y2={MARGIN.top + plotH}
             />
 
-            {xTicks.map((t) => (
+            {xTicks.map((tick) => (
               <text
-                key={t}
+                key={tick}
                 className={s.tickLabel}
-                x={x(t)}
+                x={x(tick)}
                 y={MARGIN.top + plotH + 15}
                 textAnchor="middle"
               >
-                {formatMD(toISO(new Date(t)))}
+                {step === 'week'
+                  ? t('chart.weekTick', { md: formatMD(toISO(new Date(tick))) })
+                  : formatMD(toISO(new Date(tick)))}
               </text>
             ))}
 
@@ -424,7 +435,14 @@ export function TimeSeriesChart({
 
         {activeTime != null && (
           <div ref={tipRef} className={`${s.tip} ${s.tipOn}`} style={{ left: tipLeft }}>
-            <div className={s.tipDate}>{formatMDW(t, toISO(new Date(activeTime)))}</div>
+            <div className={s.tipDate}>
+              {step === 'week'
+                ? t('chart.weekRange', {
+                    from: formatMD(toISO(new Date(activeTime))),
+                    to: formatMD(addDays(toISO(new Date(activeTime)), 6)),
+                  })
+                : formatMDW(t, toISO(new Date(activeTime)))}
+            </div>
             {series.map((serie) => {
               const p = serie.points.find((point) => point.t === activeTime);
               return (

@@ -6,7 +6,7 @@ import { goalCurrent, goalUnitOf } from '../../lib/training';
 import type { CardioWeek, ExerciseHistoryPoint } from '../../lib/training';
 import { fmt } from '../../lib/format';
 import { useWeightFormat } from '../../hooks/useWeightUnit';
-import type { Exercise, ExercisePoint, GroupGoals, MuscleGroup } from '../../types';
+import type { Exercise, ExercisePoint, GroupGoals, MuscleGroup, GoalPeriod } from '../../types';
 import s from './training.module.scss';
 import { useT } from '../../lib/i18n';
 
@@ -21,6 +21,13 @@ interface Props {
   /** **その日を含む週**の部位別セット数。今日の週とは限らない（遡って打つ日がある） */
   weekSets: Record<MuscleGroup, number>;
   weekVolume: Record<MuscleGroup, number>;
+  /** 種目の目標を数える単位。週次なら、1 打で跨いだかの行は出さない */
+  goalPeriod: GoalPeriod;
+  /**
+   * 部位の今週の行を出すか。入力ダイアログでは `GroupWeekLine` が同じ部位の今週を出すので、
+   * 重ねないように外す（回復の日・目標の到達はこちらに残る）。
+   */
+  showGroup?: boolean;
   /** 同じ週の部位別挙上量（kg）。部位の目標を挙上量で立てたときに割る相手 */
   groupGoals: GroupGoals;
   /** その日の部位別セット数。**回復と同じ数え方**（`CheckHistory`）を借りる */
@@ -61,6 +68,8 @@ export function ExerciseRipple({
   previous,
   weekSets,
   weekVolume,
+  goalPeriod,
+  showGroup = true,
   groupGoals,
   todayGroupSets,
   cardio,
@@ -115,16 +124,18 @@ export function ExerciseRipple({
       ? t('common.valueUnit', { value: moved, unit: unitLabel })
       : t('common.sets', { n: moved });
 
-    rows.push({
-      key: 'group',
-      label: t('ripple.groupWeek', { group: t(GROUP_KEYS[muscle]) }),
-      value:
-        target == null
-          ? amount
-          : after >= target && before < target
-            ? t('ripple.goalReached', { amount, value: show(target) })
-            : t('ripple.goalOf', { amount, value: show(target) }),
-    });
+    if (showGroup) {
+      rows.push({
+        key: 'group',
+        label: t('ripple.groupWeek', { group: t(GROUP_KEYS[muscle]) }),
+        value:
+          target == null
+            ? amount
+            : after >= target && before < target
+              ? t('ripple.goalReached', { amount, value: show(target) })
+              : t('ripple.goalOf', { amount, value: show(target) }),
+      });
+    }
 
     /*
      * 部位の空き。**変わったときだけ。**
@@ -158,7 +169,11 @@ export function ExerciseRipple({
    * 状態の表示になり、読み飛ばされる。
    */
   const goal = exercise.goal;
-  if (goal?.value != null && point) {
+  /*
+   * 週次の目標は出さない。1 打で跨いだかは「今週のほかの日」まで足さないと決まらず、
+   * この行が持つ比べる相手（前回のセッション）とは物差しが違う。今週の値は目標画面が持つ。
+   */
+  if (goal?.value != null && goalPeriod !== 'week' && point) {
     const current = goalCurrent(goal.type, point);
     const before = previous ? goalCurrent(goal.type, previous.point) : null;
     if (current != null && current >= goal.value && (before == null || before < goal.value)) {
@@ -169,9 +184,10 @@ export function ExerciseRipple({
       rows.push({
         key: 'goal',
         label: t('common.goal'),
+        // 単位に数える単位を添える（ここに来るのは日次だけなので「/日」）
         value: t('ripple.reached', {
           value: fmt(value, digits),
-          unit: kg ? unitLabel : unit,
+          unit: t('goalPeriod.perDay', { unit: kg ? unitLabel : unit }),
         }),
       });
     }

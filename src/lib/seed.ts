@@ -24,6 +24,7 @@ export const SEED_DATA: unknown = {
     targetBodyFat: 10,
     targetDate: '2026-10-31',
     startDate: null,
+    goalPeriod: 'session',
     theme: 'system',
   },
   entries: {

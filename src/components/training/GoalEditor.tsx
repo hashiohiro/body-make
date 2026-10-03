@@ -11,10 +11,10 @@ import {
   TARGET_VOLUME_RANGE,
   TARGET_WEIGHT_RANGE,
 } from '../../lib/storage';
-import { exerciseHistory, goalCurrent, personalBest } from '../../lib/training';
+import { exerciseHistory, goalSeries } from '../../lib/training';
 import { useWeightFormat } from '../../hooks/useWeightUnit';
 import { fromKgForField, rangeIn, toKg } from '../../lib/weight';
-import type { Exercise, ExercisePoint, GoalType, SessionPoint } from '../../types';
+import type { Exercise, GoalPeriod, GoalType, SessionPoint } from '../../types';
 import { Button } from '../Button';
 import { Segmented } from '../Segmented';
 import ui from '../../styles/ui.module.scss';
@@ -29,7 +29,15 @@ interface Props {
   exercise: Exercise;
   sessions: readonly SessionPoint[];
   onUpdate: (exercise: Exercise) => void;
+  /**
+   * 数える単位（日次／週次）。**全種目で 1 つの設定**（`Settings.goalPeriod`）を受け取るだけで、
+   * この面では切り替えない。単位の表示（kg/週）と、いま・最大の数え方に効く。
+   */
+  period: GoalPeriod;
 }
+
+/** 週次で合計する立て方（`goalSeries` と同じ分け方。注記の言い分けにだけ使う） */
+const SUM_TYPES: ReadonlySet<GoalType> = new Set<GoalType>(['volume', 'distance', 'duration']);
 
 const NOTE_KEYS: Record<GoalType, MessageKey> = {
   // どれも 2 行に収まる長さにそろえる（下の goalNote が 2 行ぶんの高さを持つ）
@@ -57,7 +65,7 @@ const NOTE_KEYS: Record<GoalType, MessageKey> = {
  * 「いま」と「過去最大」を添える。100kg を目標にするかは、いま何 kg 挙がっているかを
  * 見ないと決められない。**値は入れない**（アプリが目標を発明することになる）。
  */
-export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
+export function GoalEditor({ exercise, sessions, onUpdate, period }: Props) {
   const t = useT();
   /*
    * 秒で数える種目は重量を記録できない（挙上量に計上されないので入力欄も出していない）。
@@ -128,6 +136,10 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
                 : maintainUnit
               : weightLabel;
   const digits = type === 'weight' || type === 'speed' ? 1 : 0;
+  /** 目標の単位に、数える単位を添える（kg/日・kg/週）。維持は数値を決めないので素のまま */
+  const periodUnit = maintain
+    ? unit
+    : t(period === 'week' ? 'goalPeriod.perWeek' : 'goalPeriod.perDay', { unit });
   /** 打つ欄へ出す値。重量で数えない立て方は素通し。ポンドは第 1 位で丸める */
   const show = (v: number | null) => (v == null || !weighty ? v : fromKgForField(v, weightUnit));
 
@@ -136,10 +148,12 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
    * 以前はここに同じ 7 通りの表を置いていて、片方を直すともう片方が古くなる形だった
    * ——「いま 100kg」と出しているのに、到達率は別の値で計算しうる。
    */
-  const pick = (p: ExercisePoint) => goalCurrent(type, p);
-  const values = history.map((h) => pick(h.point)).filter((v): v is number => v != null);
-  const latest = values.length > 0 ? values[values.length - 1]! : null;
-  const best = personalBest(sessions, exercise.id, todayISO(), pick);
+  /*
+   * 日次なら 1 回ごと、週次なら週ごと（`goalSeries`。一覧の「いま」と同じ数え方）。
+   * 週次のいまは**今週**の値。
+   */
+  const { values, current: latest } = goalSeries(type, period, history, todayISO());
+  const best = values.length > 0 ? Math.max(...values) : null;
 
   const choose = (next: GoalType) => {
     setType(next);
@@ -204,7 +218,7 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
             });
           }}
         />
-        <span className={s.goalUnit}>{unit}</span>
+        <span className={s.goalUnit}>{periodUnit}</span>
       </div>
 
       <p className={s.goalFacts}>
@@ -214,11 +228,11 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
           <>
             {t('goalEditor.now')}{' '}
             <b>
-              {fmt(show(latest), digits)} {unit}
+              {fmt(show(latest), digits)} {periodUnit}
             </b>{' '}
             {t('detail.best')}{' '}
             <b>
-              {fmt(show(best), digits)} {unit}
+              {fmt(show(best), digits)} {periodUnit}
             </b>
           </>
         )}
@@ -237,7 +251,12 @@ export function GoalEditor({ exercise, sessions, onUpdate }: Props) {
         )}
       </div>
 
-      <p className={`${ui.note} ${s.goalNote}`}>{t(NOTE_KEYS[type])}</p>
+      <p className={`${ui.note} ${s.goalNote}`}>
+        {t(NOTE_KEYS[type])}
+        {period === 'week' &&
+          !maintain &&
+          t(SUM_TYPES.has(type) ? 'goalPeriod.weekSumNote' : 'goalPeriod.weekMaxNote')}
+      </p>
     </div>
   );
 }

@@ -26,6 +26,7 @@ const SETTINGS: Settings = {
   targetBodyFat: 15,
   targetDate: null,
   startDate: null,
+  goalPeriod: 'session',
   theme: 'system',
   locale: 'system',
   waistEnabled: true,
@@ -135,6 +136,7 @@ function full(data: AppData) {
       t,
       sessions,
       data.exercises.filter((e) => e.shelf === 'listed'),
+      data.settings.goalPeriod,
     ),
     badgeFacts: computeBadgeFacts(daily, sessions),
   };

@@ -1,7 +1,14 @@
 import { ExerciseGoalsCard } from './ExerciseGoalsCard';
 import { WeeklyVolumeCard } from './WeeklyVolumeCard';
-import type { ExerciseGoal, TrainingStats } from '../../lib/training';
-import type { Exercise, GroupGoals, GroupTarget, MuscleGroup, SessionPoint } from '../../types';
+import type { ExerciseGoal, TrainingStats, WeekSetCount } from '../../lib/training';
+import type {
+  Exercise,
+  GoalPeriod,
+  GroupGoals,
+  GroupTarget,
+  MuscleGroup,
+  SessionPoint,
+} from '../../types';
 
 interface Props {
   goals: readonly ExerciseGoal[];
@@ -11,9 +18,13 @@ interface Props {
   /** 目標を決めるときに「いま」と「過去最大」を出すために使う */
   sessions: readonly SessionPoint[];
   onSetGroupGoal: (group: MuscleGroup, target: GroupTarget | null) => void;
+  /** 週ごとの部位別の量（部位の推移のグラフ） */
+  weeklySets: readonly WeekSetCount[];
   onUpdate: (exercise: Exercise) => void;
   /** マイ種目が空のとき、そこへ行くための導線（画面をまたぐので上から渡す） */
   onOpenExercises: () => void;
+  /** 種目の目標を数える単位（日次／週次）。全種目で 1 つ */
+  goalPeriod: GoalPeriod;
 }
 
 /**
@@ -36,8 +47,10 @@ export function TrainingGoalBoard({
   exercises,
   sessions,
   onSetGroupGoal,
+  weeklySets,
   onUpdate,
   onOpenExercises,
+  goalPeriod,
 }: Props) {
   return (
     <>
@@ -47,6 +60,7 @@ export function TrainingGoalBoard({
         exercises={exercises}
         sessions={sessions}
         onSetGroupGoal={onSetGroupGoal}
+        weeks={weeklySets}
       />
 
       <ExerciseGoalsCard
@@ -56,6 +70,7 @@ export function TrainingGoalBoard({
         stats={stats}
         onUpdate={onUpdate}
         onOpenExercises={onOpenExercises}
+        period={goalPeriod}
       />
     </>
   );

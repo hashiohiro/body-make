@@ -25,6 +25,7 @@ function settings(patch: Partial<Settings>): Settings {
     targetBodyFat: null,
     targetDate: null,
     startDate: null,
+    goalPeriod: 'session',
     theme: 'system',
     locale: 'ja',
     waistEnabled: false,

@@ -20,10 +20,10 @@ import {
   exerciseHistory,
   formatSets,
   formatTopSet,
-  personalBest,
   plateau,
 } from '../../lib/training';
-import { baselineOf, lastOf, metricsFor } from './metrics';
+import { metricSeries, metricsFor } from './metrics';
+import { useGoalPeriod } from '../../hooks/useGoalPeriod';
 import type { Exercise, MuscleGroup, SessionPoint } from '../../types';
 import { TONE_CLASS } from '../tone';
 import ui from '../../styles/ui.module.scss';
@@ -61,6 +61,8 @@ export function ExerciseDetailDialog({
   action,
 }: Props) {
   const [metricId, setMetricId] = useState<string | null>(null);
+  /** 日次／週次（設定 > トレーニング > 種目の目標の数え方）。推移の点もこれに従う */
+  const period = useGoalPeriod();
   const { unit, label: unitLabel, conv, convOrNull } = useWeightFormat();
 
   // 開始比は期間フィルタの影響を受けない（「開始から」なので全履歴で見る）
@@ -165,13 +167,21 @@ export function ExerciseDetailDialog({
     metrics.find((m) => m.id === fallbackId) ??
     metrics[0]!;
 
+  /*
+   * **週次なら、点は週ごと**（日〜土。量は合計、強さは最大。`Metric.weekly`）。
+   * 目標を週次で立てているときに、推移の点・直近・過去最大・開始比だけが 1 回ごとだと、
+   * 目標と同じ物差しで読めない。日次なら 1 回ごと（これまでどおり）。
+   */
+  const weekly = period === 'week';
+  // 推移の一覧と同じ計算（`metricSeries`）。点・開始値・直近・過去最大をここから引く
+  const summary = metricSeries(allHistory, metric, period);
   const points: SeriesPoint[] = [];
-  for (const h of history) {
-    const v = metric.pick(h.point);
-    if (v == null) continue;
-    // 換算元のセットを添える。同じ種目でもレップ帯が変わると外挿量が変わる
-    const note = formatTopSet(h.point, unit);
-    points.push(note ? { t: h.time, v, note } : { t: h.time, v });
+  for (const p of summary.points) {
+    // 期間で絞る。週次の点は週の始まり（日曜）に置くので、週の終わりで見る
+    if ((weekly ? addDays(p.date, 6) : p.date) < from) continue;
+    // 換算元のセットを添える（日次だけ）。同じ種目でもレップ帯が変わると外挿量が変わる
+    const note = p.point ? formatTopSet(p.point, unit) : null;
+    points.push(note ? { t: p.t, v: p.v, note } : { t: p.t, v: p.v });
   }
 
   const series: ChartSeries[] = [
@@ -186,12 +196,13 @@ export function ExerciseDetailDialog({
     },
   ];
 
-  const baseline = baselineOf(allHistory, metric);
-  const current = lastOf(allHistory, metric);
+  const baseline = summary.baseline;
+  const current = summary.current;
   const delta = baseline != null && current != null ? current - baseline : null;
   const stall = metric.weightLike ? plateau(allHistory) : null;
   // 見出しは通算の最高。直近の値は下に添える（伸びしろが一目で分かるのは最高値のほう）
-  const best = personalBest(sessions, exercise.id, todayISO(), metric.pick);
+  // 見出しは通算の最高。直近の値は下に添える（伸びしろが一目で分かるのは最高値のほう）
+  const best = summary.best;
 
   /*
    * 重量の目標は kg で持っている（`lib/weight.ts`）。指標の値のほうは
@@ -206,10 +217,9 @@ export function ExerciseDetailDialog({
       : null;
 
   const today = todayISO();
-  const domain: [number, number] = [
-    isoToTime(history[0]?.date ?? from),
-    isoToTime(history[history.length - 1]?.date ?? today),
-  ];
+  const domain: [number, number] = weekly
+    ? [points[0]?.t ?? isoToTime(from || today), points[points.length - 1]?.t ?? isoToTime(today)]
+    : [isoToTime(history[0]?.date ?? from), isoToTime(history[history.length - 1]?.date ?? today)];
 
   /** 効く部位と、その濃さ。**濃さ＝数えるときの係数**そのもの */
   const muscle = muscleOf(exercise.group);
@@ -265,6 +275,7 @@ export function ExerciseDetailDialog({
         )}
 
         <TimeSeriesChart
+          step={weekly ? 'week' : 'day'}
           series={series}
           domain={domain}
           unit={metric.unit}
@@ -275,7 +286,8 @@ export function ExerciseDetailDialog({
              カレンダーから過去の日を開いたときは、その日を見に来ている。
              下の週の内訳と同じ `refDate` を使うので、グラフと内訳が同じ週を指す。
           */
-          highlight={isoToTime(refDate)}
+          // 週次なら、印は見ている日の週の始まり（点はそこに置いてある）
+          highlight={isoToTime(weekly ? startOfWeek(refDate) : refDate)}
           ariaLabel={t('exTrend.aria', { name: exerciseName(t, exercise), metric: metric.label })}
           emptyMessage={
             metric.needsWeight && exercise.repUnit === 'seconds'
@@ -292,6 +304,12 @@ export function ExerciseDetailDialog({
           }
         />
 
+        {/* 週ごとに見ているときは、何でまとめたかを添える（合計か最大か） */}
+        {weekly && (
+          <p className={ui.note}>
+            {t(metric.weekly === 'sum' ? 'exTrend.weeklySum' : 'exTrend.weeklyMax')}
+          </p>
+        )}
         {metric.id === 'oneRm' && <p className={ui.note}>{t('detail.oneRmNote')}</p>}
 
         {cardioWeek && (

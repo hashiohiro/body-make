@@ -49,8 +49,10 @@ export function GoalsView({ body, domain, onOpenExercises }: Props) {
         exercises={data.exercises}
         sessions={sessions}
         onSetGroupGoal={setGroupGoal}
+        weeklySets={body.weeklySets}
         onUpdate={upsertExercise}
         onOpenExercises={onOpenExercises}
+        goalPeriod={data.settings.goalPeriod}
       />
     );
   }

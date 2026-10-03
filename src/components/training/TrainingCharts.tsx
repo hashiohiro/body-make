@@ -4,7 +4,9 @@ import { ExerciseDetailDialog } from './ExerciseDetailDialog';
 import { ChipGroup } from '../ChipGroup';
 import { GroupChips } from './GroupChips';
 import { FILTER_THRESHOLD, matchesGroup, matchesQuery } from '../../lib/exerciseSearch';
-import { baselineOf, lastOf, metricsFor } from './metrics';
+import { metricSeries, metricsFor } from './metrics';
+import { useGoalPeriod } from '../../hooks/useGoalPeriod';
+import { addDays } from '../../lib/date';
 import { SearchToggle } from './SearchToggle';
 import {
   EXERCISE_GROUP_ORDER,
@@ -43,6 +45,8 @@ interface Props {
  */
 export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Props) {
   const t = useT();
+  /** 日次／週次。一覧の点・直近・開始比もこれに従う（推移のダイアログと同じ） */
+  const period = useGoalPeriod();
   /*
    * 記録のある種目だけを選択肢にする。**並びは名前順。**
    *
@@ -114,16 +118,17 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
   const rows = useMemo(
     () =>
       shown.map((ex) => {
-        const all = exerciseHistory(sessions, ex.id);
-        const points = all
-          .filter((h) => h.date >= from)
-          .map((h) => ({ t: h.time, v: metric.pick(h.point) }))
-          .filter((p): p is { t: number; v: number } => p.v != null);
-        const base = baselineOf(all, metric);
-        const value = lastOf(all, metric);
+        // 日次なら 1 回ごと、週次なら週ごと（設定 > トレーニング > 種目の目標の数え方）
+        const series = metricSeries(exerciseHistory(sessions, ex.id), metric, period);
+        const points = series.points
+          // 週次の点は週の始まり（日曜）に置く。期間の中に週の終わりが入っていれば出す
+          .filter((p) => (period === 'week' ? addDays(p.date, 6) : p.date) >= from)
+          .map((p) => ({ t: p.t, v: p.v }));
+        const value = series.current;
+        const base = series.baseline;
         return { ex, points, value, delta: base != null && value != null ? value - base : null };
       }),
-    [shown, sessions, from, metric],
+    [shown, sessions, from, metric, period],
   );
 
   if (recorded.length === 0) {

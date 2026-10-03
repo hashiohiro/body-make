@@ -2,7 +2,8 @@ import { BASELINE_SESSIONS, pickOneRm, pickTopWeight, pickVolume } from '../../l
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import { WEIGHT_UNIT_LABEL, fromKgOrNull } from '../../lib/weight';
 import type { WeightUnit } from '../../lib/weight';
-import type { ExercisePoint } from '../../types';
+import type { ExercisePoint, GoalPeriod } from '../../types';
+import { isoToTime, startOfWeek } from '../../lib/date';
 import type { MessageKey, T } from '../../lib/i18n';
 
 /** 種目の推移で切り替えられる指標。一覧とダイアログの両方が同じ定義を使う */
@@ -17,6 +18,11 @@ export interface Metric {
   cardioOnly?: boolean;
   /** 目標の参照線と進捗を出す指標。実際に扱えた最大重量だけが目標と直接比較できる */
   weightLike?: boolean;
+  /**
+   * 週ごとに見るときのまとめ方。**量（挙上量・セット数・本数・距離・時間）は合計、
+   * 強さ（最大重量・最大レップ・推定1RM・速度）は最大。**種目の目標の週次と同じ分け方（`goalSeries`）。
+   */
+  weekly: 'sum' | 'max';
   pick: (point: ExercisePoint) => number | null;
 }
 
@@ -32,16 +38,25 @@ const WEIGHT_METRICS = new Set(['volume', 'maxWeight', 'oneRm']);
 const BASE_METRICS: Metric[] = [
   {
     id: 'volume',
+    weekly: 'sum',
     label: 'metric.volume',
     unit: 'kg',
     digits: 0,
     needsWeight: true,
     pick: pickVolume,
   },
-  { id: 'sets', label: 'metric.sets', unit: 'metric.setsUnit', digits: 0, pick: (p) => p.workSets },
+  {
+    id: 'sets',
+    weekly: 'sum',
+    label: 'metric.sets',
+    unit: 'metric.setsUnit',
+    digits: 0,
+    pick: (p) => p.workSets,
+  },
   // 有酸素は本数（インターバルの本数、サーキットのラウンド数）
   {
     id: 'bouts',
+    weekly: 'sum',
     label: 'metric.bouts',
     unit: 'metric.boutsUnit',
     digits: 0,
@@ -53,6 +68,7 @@ const BASE_METRICS: Metric[] = [
   // 最大重量と目標は「バーに載せた数字」で見る。挙上量と推定1RM は換算後の負荷
   {
     id: 'maxWeight',
+    weekly: 'max',
     label: 'metric.maxWeight',
     unit: 'kg',
     digits: 1,
@@ -60,8 +76,23 @@ const BASE_METRICS: Metric[] = [
     needsWeight: true,
     pick: pickTopWeight,
   },
-  { id: 'maxReps', label: 'metric.maxReps', unit: '', digits: 0, pick: (p) => p.maxReps },
-  { id: 'oneRm', label: 'metric.oneRm', unit: 'kg', digits: 1, needsWeight: true, pick: pickOneRm },
+  {
+    id: 'maxReps',
+    weekly: 'max',
+    label: 'metric.maxReps',
+    unit: '',
+    digits: 0,
+    pick: (p) => p.maxReps,
+  },
+  {
+    id: 'oneRm',
+    weekly: 'max',
+    label: 'metric.oneRm',
+    unit: 'kg',
+    digits: 1,
+    needsWeight: true,
+    pick: pickOneRm,
+  },
 
   /*
    * 有酸素。距離が「量」、速度が「強度」で、筋トレの 挙上量 / 推定1RM にあたる。
@@ -69,6 +100,7 @@ const BASE_METRICS: Metric[] = [
    */
   {
     id: 'distance',
+    weekly: 'sum',
     label: 'metric.distance',
     // 入力欄と同じ m。桁を合わせ直さずに読める
     unit: 'm',
@@ -79,6 +111,7 @@ const BASE_METRICS: Metric[] = [
   },
   {
     id: 'minutes',
+    weekly: 'sum',
     label: 'metric.duration',
     unit: 'metric.durationUnit',
     digits: 0,
@@ -87,6 +120,7 @@ const BASE_METRICS: Metric[] = [
   },
   {
     id: 'speed',
+    weekly: 'max',
     label: 'metric.speed',
     unit: 'metric.speedUnit',
     digits: 1,
@@ -122,21 +156,62 @@ export function metricsFor(t: T, unit: WeightUnit): Metric[] {
   });
 }
 
-/** 開始値は最初の 3 セッションの平均。初回 1 点だと当日の調子が以後すべての差分に乗る */
-export function baselineOf(
+/**
+ * 週（日〜土）ごとにまとめた値。並びは週の順。値の無い週は持たない。
+ * まとめ方は指標が持つ（`Metric.weekly`）。
+ */
+function weeklyValues(
   history: readonly ExerciseHistoryPoint[],
   metric: Metric,
-): number | null {
-  const values = history.map((h) => metric.pick(h.point)).filter((v): v is number => v != null);
-  if (values.length < BASELINE_SESSIONS) return null;
-  const head = values.slice(0, BASELINE_SESSIONS);
-  return head.reduce((a, b) => a + b, 0) / head.length;
+): { start: string; value: number }[] {
+  const byWeek = new Map<string, number>();
+  for (const h of history) {
+    const v = metric.pick(h.point);
+    if (v == null) continue;
+    const start = startOfWeek(h.date);
+    const prev = byWeek.get(start);
+    byWeek.set(start, prev == null ? v : metric.weekly === 'sum' ? prev + v : Math.max(prev, v));
+  }
+  return [...byWeek].map(([start, value]) => ({ start, value }));
 }
 
-export function lastOf(history: readonly ExerciseHistoryPoint[], metric: Metric): number | null {
-  for (let i = history.length - 1; i >= 0; i--) {
-    const v = metric.pick(history[i]!.point);
-    if (v != null) return v;
-  }
-  return null;
+/**
+ * 1 種目の指標の並びと、開始値・直近・過去最大。**日次なら 1 回ごと、週次なら週ごと。**
+ * 推移の一覧（`TrainingCharts`）と推移のダイアログ（`ExerciseDetailDialog`）の両方がこれを使う——
+ * 片方だけ週次を知っていると、同じ種目の「直近」が画面ごとに割れる。
+ *
+ * 開始値は最初の 3 つ（日次なら 3 回、週次なら 3 週）の平均。過去最大は並び全体の最大。
+ */
+export function metricSeries(
+  history: readonly ExerciseHistoryPoint[],
+  metric: Metric,
+  period: GoalPeriod,
+): {
+  points: { date: string; t: number; v: number; point: ExercisePoint | null }[];
+  baseline: number | null;
+  current: number | null;
+  best: number | null;
+} {
+  const points =
+    period === 'week'
+      ? weeklyValues(history, metric).map((w) => ({
+          date: w.start,
+          t: isoToTime(w.start),
+          v: w.value,
+          point: null,
+        }))
+      : history.flatMap((h) => {
+          const v = metric.pick(h.point);
+          return v == null ? [] : [{ date: h.date, t: h.time, v, point: h.point }];
+        });
+  const values = points.map((p) => p.v);
+  return {
+    points,
+    baseline:
+      values.length >= BASELINE_SESSIONS
+        ? values.slice(0, BASELINE_SESSIONS).reduce((a, b) => a + b, 0) / BASELINE_SESSIONS
+        : null,
+    current: values.length ? values[values.length - 1]! : null,
+    best: values.length ? Math.max(...values) : null,
+  };
 }

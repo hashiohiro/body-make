@@ -6,6 +6,8 @@ import { ChipGroup } from '../ChipGroup';
 import { groupValuesFor } from './groupValues';
 import type { GroupValueId } from './groupValues';
 import type { WeekSetCount } from '../../lib/training';
+import type { GroupTarget, MuscleGroup } from '../../types';
+import { fromKg } from '../../lib/weight';
 import ui from '../../styles/ui.module.scss';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
 import { useT } from '../../lib/i18n';
@@ -15,6 +17,11 @@ interface Props {
   /** 「部位別の配分」と同じ値を見る。選択は親が持つ */
   valueId: GroupValueId;
   onValueChange: (id: GroupValueId) => void;
+  /**
+   * 1 部位だけを描く（部位の目標の面から開いたとき）。決めてある目標を水平線で添える。
+   * 渡さなければ全部位（「部位別の配分」から開いたとき）。
+   */
+  only?: { group: MuscleGroup; target: GroupTarget | null } | undefined;
 }
 
 /**
@@ -27,24 +34,41 @@ interface Props {
  * 6 本を同時に描くため、色は配色に依らず固定する（GROUP_COLORS）。
  * 記録の無い部位は線を出さない。0 が横に伸びるだけで場所を取る
  */
-export function GroupTrendChart({ weeks, valueId, onValueChange }: Props) {
+export function GroupTrendChart({ weeks, valueId, onValueChange, only }: Props) {
   const t = useT();
-  const values = groupValuesFor(t, useWeightUnit());
+  const weightUnit = useWeightUnit();
+  const values = groupValuesFor(t, weightUnit);
   const value = values.find((v) => v.id === valueId)!;
 
   if (weeks.length === 0) {
     return <p className={ui.emptyState}>{t('group.noRecords')}</p>;
   }
 
-  const series: ChartSeries[] = GROUP_ORDER.filter((g) =>
-    weeks.some((w) => value.pick(w, g) > 0),
-  ).map((g) => ({
-    id: g,
-    label: t(GROUP_KEYS[g]),
-    color: GROUP_COLORS[g],
-    kind: 'line',
-    points: weeks.map((w) => ({ t: isoToTime(w.start), v: value.pick(w, g) })),
-  }));
+  const series: ChartSeries[] = (only ? [only.group] : GROUP_ORDER)
+    .filter((g) => only != null || weeks.some((w) => value.pick(w, g) > 0))
+    .map((g) => ({
+      id: g,
+      label: t(GROUP_KEYS[g]),
+      color: GROUP_COLORS[g],
+      kind: 'line',
+      points: weeks.map((w) => ({ t: isoToTime(w.start), v: value.pick(w, g) })),
+    }));
+
+  /*
+   * 1 部位のときは、いま見ている軸の目標を水平線で添える（セット数なら週のセット数、
+   * 挙上量なら週の挙上量）。挙上量は kg で持っているので、読む単位へ直す。
+   */
+  const goal =
+    only?.target == null ? null : valueId === 'volume' ? only.target.volume : only.target.sets;
+  const reference =
+    goal == null
+      ? null
+      : {
+          value: valueId === 'volume' ? fromKg(goal, weightUnit) : goal,
+          label: t('volume.targetLine', {
+            n: valueId === 'volume' ? Math.round(fromKg(goal, weightUnit)) : goal,
+          }),
+        };
 
   const first = weeks[0]!;
   const last = weeks[weeks.length - 1]!;
@@ -60,11 +84,14 @@ export function GroupTrendChart({ weeks, valueId, onValueChange }: Props) {
       />
 
       <TimeSeriesChart
+        // 点は週ごと（週の始まりの日曜に置いてある）
+        step="week"
         series={series}
         domain={domain}
         unit={value.unit}
         digits={value.digits}
-        legend
+        legend={only == null}
+        reference={reference}
         // 週次なので、印を付けるのは今週の始まり（日曜）
         highlight={isoToTime(startOfWeek(todayISO()))}
         ariaLabel={t('group.trendAria', { value: value.label })}

@@ -125,7 +125,7 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
         {/* 表からは増減の向きが読めない。必要なときだけ線で開く */}
         <div className={ui.btnRow}>
           <Button size="sub" onClick={() => setOpenTrend(true)}>
-            {t('group.openTrend')}
+            {t('common.trend')}
           </Button>
         </div>
       </section>

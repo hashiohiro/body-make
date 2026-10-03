@@ -35,6 +35,7 @@ import {
 import { HomeView } from './HomeView';
 import { TrainingView } from './TrainingView';
 import { useBodyData } from '../hooks/useBodyData';
+import { GoalPeriodProvider } from '../hooks/useGoalPeriod';
 import { useTheme } from '../hooks/useTheme';
 import { formatMD, startOfWeek, todayISO, weekdayLabel } from '../lib/date';
 import { CATALOG, fromCatalog } from '../lib/exerciseCatalog';
@@ -400,15 +401,16 @@ describe('トレ画面', () => {
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     expand('ベンチプレス');
 
-    // 打つ前は矢印を出さない（0 → 0 は読むものが増えるだけ）
-    expect(ripple().getByText('胸 今週')).toBeTruthy();
+    // 入力ダイアログの「この部位の今週」（カードと同じ、ラベルと値）
+    const groupWeek = () =>
+      within(topDialogAny().getByText('胸 今週').closest<HTMLElement>('[data-group-week]')!);
     // 単位は詰める（ほかの画面の `3セット` と同じ `common.sets`）
-    expect(ripple().getByText('0セット')).toBeTruthy();
+    expect(groupWeek().getByText('0セット')).toBeTruthy();
 
     typeSet(setRows()[0]!, '60', '10');
 
-    // 跨ぐ線が無くても出す。立てていない人には、これが唯一の「外に及んだ」情報
-    expect(ripple().getByText('0 → 1セット')).toBeTruthy();
+    // 目標を立てていなくても出す。打ったぶんだけ数が動く
+    expect(groupWeek().getByText('1セット')).toBeTruthy();
   });
 
   /*
@@ -543,7 +545,7 @@ describe('トレ画面', () => {
      * 「前回より重く」を確かめるのに、いちいち閉じて戻らなくてよいように
      */
     expect(screen.getAllByText('最高重量 60.0 kg')).toHaveLength(2);
-    expect(screen.getAllByText('最高挙上量 600 kg')).toHaveLength(2);
+    expect(screen.getAllByText('最高挙上量 600 kg/日')).toHaveLength(2);
 
     /*
      * 残り（あと N kg）は出さない。その日の合計はすぐ上の行にあり、
@@ -551,7 +553,7 @@ describe('トレ画面', () => {
      */
     typeSet(setRows()[0]!, '60', '7');
     expect(screen.queryByText(/あと /)).toBeNull();
-    expect(screen.getAllByText('最高挙上量 600 kg')).toHaveLength(2);
+    expect(screen.getAllByText('最高挙上量 600 kg/日')).toHaveLength(2);
   });
 
   it('✓ をもう一度押すとその日から外れる', () => {
@@ -757,8 +759,8 @@ describe('トレ画面', () => {
     fireEvent.click(screen.getByRole('button', { name: '維持' }));
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
-    // 決めた立て方は、そのままカードのバッジに出る
-    expect(screen.getByText('維持')).toBeTruthy();
+    // カードに目標の札は置かない。決めたことは「目標」ボタンの名前（決める → 変える）で読める
+    expect(screen.getByRole('button', { name: /ベンチプレス.*の目標を変える/ })).toBeTruthy();
     const stored = await storedData();
     expect(stored.exercises[0]!.goal).toEqual({ type: 'maintain', value: null });
   });
@@ -1141,7 +1143,7 @@ describe('種目管理（設定タブ）', () => {
     expect(screen.getByRole('button', { name: /ベンチプレス.*の設定/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /ベンチプレス.*を非表示にする/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /ベンチプレス.*を削除/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /ベンチプレス.*の推移を見る/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /ベンチプレス.*の推移$/ })).toBeTruthy();
   });
 
   it('目標の値は「目標」と書いてから出す', async () => {
@@ -1356,8 +1358,12 @@ describe('設定（カテゴリ別の画面遷移）', () => {
       'presets',
       'week',
       'units',
+      'goals',
       'checks',
     ]);
+    // 日次／週次は件数ではなく、選んでいるものを出す
+    expect(screen.getByText('種目の目標の数え方')).toBeTruthy();
+    expect(screen.getByText('日次')).toBeTruthy();
     // **区切りの見出しは中身の名前にする。**探しに来た人が使う言葉に寄せる
     expect(screen.getByText('種目とメニュー')).toBeTruthy();
     expect(screen.getByText('記録のしかた')).toBeTruthy();
@@ -1399,7 +1405,7 @@ describe('設定（カテゴリ別の画面遷移）', () => {
     });
     render(<SettingsHarness section="training" page="exercises" />);
 
-    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移を見る/ }));
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移$/ }));
     expect(screen.getByText('元データ')).toBeTruthy();
   });
 
@@ -1416,7 +1422,7 @@ describe('設定（カテゴリ別の画面遷移）', () => {
     fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*を非表示にする/ }));
     expect(screen.getByRole('button', { name: /ベンチプレス.*を表示に戻す/ })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移を見る/ }));
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移$/ }));
     expect(screen.getByText('元データ')).toBeTruthy();
   });
 
@@ -1796,7 +1802,7 @@ describe('体組成の推移を記録から開く', () => {
     render(<RecordsHarness />);
     expect(openDialog()).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
+    fireEvent.click(screen.getByRole('button', { name: '推移' }));
 
     const dialog = within(openDialog()!);
     expect(dialog.getByRole('heading', { name: '体重の推移' })).toBeTruthy();
@@ -1810,7 +1816,7 @@ describe('体組成の推移を記録から開く', () => {
   it('開いている日の点に印が付く', () => {
     seedDays();
     render(<RecordsHarness />);
-    fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
+    fireEvent.click(screen.getByRole('button', { name: '推移' }));
 
     expect(openDialog()!.querySelectorAll('[data-now]').length).toBeGreaterThan(0);
   });
@@ -1822,7 +1828,7 @@ describe('体組成の推移を記録から開く', () => {
   it('推移画面と同じひとそろいが出る', () => {
     seedDays();
     render(<RecordsHarness />);
-    fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
+    fireEvent.click(screen.getByRole('button', { name: '推移' }));
 
     const dialog = within(openDialog()!);
     expect(dialog.getByRole('heading', { name: '週平均の体組成' })).toBeTruthy();
@@ -1833,7 +1839,7 @@ describe('体組成の推移を記録から開く', () => {
   it('腹囲はオンのときだけ、独立したカードで出る', () => {
     seedDays({ waistEnabled: true }, true);
     render(<RecordsHarness />);
-    fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
+    fireEvent.click(screen.getByRole('button', { name: '推移' }));
 
     const dialog = within(openDialog()!);
     expect(dialog.getByRole('heading', { name: '腹囲の推移' })).toBeTruthy();
@@ -1845,7 +1851,7 @@ describe('体組成の推移を記録から開く', () => {
   it('腹囲がオフなら、グラフごと出ない', () => {
     seedDays({}, true);
     render(<RecordsHarness />);
-    fireEvent.click(screen.getByRole('button', { name: '推移を見る' }));
+    fireEvent.click(screen.getByRole('button', { name: '推移' }));
 
     expect(within(openDialog()!).queryByLabelText('日平均腹囲と7日移動平均の推移')).toBeNull();
   });
@@ -1883,6 +1889,7 @@ describe('推移の横軸目盛り', () => {
     targetBodyFat: null,
     targetDate: null,
     startDate: null,
+    goalPeriod: 'session' as const,
     theme: 'system' as const,
     locale: 'system' as const,
     waistEnabled: true,
@@ -4189,7 +4196,7 @@ describe('ホームの部位別の配分', () => {
 
     const card = within(screen.getByText('部位別の配分').closest('section')!);
     fireEvent.click(card.getByRole('button', { name: '挙上量' }));
-    fireEvent.click(card.getByRole('button', { name: '推移をグラフで見る' }));
+    fireEvent.click(card.getByRole('button', { name: '推移' }));
     expect(dialogOpen()).toBe(true);
 
     // 表で挙上量を選んでいたら、線も挙上量から始まる
@@ -4342,14 +4349,17 @@ describe('目標画面', () => {
     /* 1 行に「いま / 目標」を並べる——片方だけでは近いのかどうか読めない */
     const card = screen.getByText('ベンチプレス（バーベル）').closest<HTMLElement>('button')!;
     expect(card.textContent).toContain('60.0');
-    expect(card.textContent).toContain('/ 100.0 kg');
+    // 日次の目標は「kg/日」（週次なら「kg/週」）
+    // いまの値に単位、目標は後ろに分けて（「60.0 / 100.0」と並べない）
+    expect(card.textContent).toContain('kg/日');
+    expect(card.textContent).toContain('目標 100.0');
 
     /*
      * **行を押すと推移。**目標を決める面は、推移の見出し（閉じるの左）の「目標」から開く。
      * 一覧の行にはボタンを置かない（行き先を 1 つにする）。
      */
     expect(within(card).queryAllByRole('button')).toHaveLength(0);
-    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移を見る$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移$/ }));
     expect(screen.getByText('元データ')).toBeTruthy();
 
     const trend = [...document.querySelectorAll('dialog')].find((d) =>
@@ -4382,7 +4392,7 @@ describe('目標画面', () => {
    * 並び順だけ部位の順にしていた頃は、切れ目が読めず、
    * どこまでが同じ部位なのかを行の右の札で数えることになっていた。
    */
-  it('種目の目標は見出しで束ねず、部位は行頭の色の丸で示す', async () => {
+  it('種目の目標は部位ごとに見出しを付けて束ねる', async () => {
     const today = todayISO();
     seedData(['ex_bench', 'ex_curl'], {
       [today]: [
@@ -4404,10 +4414,10 @@ describe('目標画面', () => {
     }
 
     const card = screen.getByText('種目の目標').closest('section')!;
-    // 見出しは付けない（並びは進み具合の順。部位は色の丸が持つ）
-    expect(card.querySelectorAll('[class*="_manageGroup_"]')).toHaveLength(0);
-    const dots = [...card.querySelectorAll<HTMLElement>('[class*="_goalRowDot_"]')];
-    expect(dots.map((d) => d.style.background)).toEqual(['var(--g-chest)', 'var(--g-arms)']);
+    const heads = [...card.querySelectorAll('[class*="_manageGroup_"]')].map(
+      (el) => el.textContent,
+    );
+    expect(heads).toEqual(['胸', '腕']);
   });
 
   it('量と目標を別のカードに分ける（部位と種目を混ぜない）', async () => {
@@ -5453,7 +5463,7 @@ describe('一覧の並び（名前順にそろえる）', () => {
     seedChest();
     render(<GoalsHarness />);
 
-    expect(labels(/の推移を見る$/, 'の推移を見る')).toEqual([
+    expect(labels(/の推移$/, 'の推移')).toEqual([
       'インクラインベンチプレス（バーベル）',
       'ベンチプレス（バーベル）',
     ]);
@@ -5806,7 +5816,8 @@ describe('種目の目標を決める', () => {
 
     fireEvent.click(type.getByRole('button', { name: '回数' }));
     expect(type.getByRole('button', { name: '回数', pressed: true })).toBeTruthy();
-    expect(screen.getByText('回')).toBeTruthy();
+    // 単位には数える単位を添える（日次なら「/日」）
+    expect(screen.getByText('回/日')).toBeTruthy();
     expect(screen.getByText(/最大レップ数で判定/)).toBeTruthy();
   });
 
@@ -5819,8 +5830,8 @@ describe('種目の目標を決める', () => {
     openEditor();
 
     // いまは直近の 60、過去最大は 65。目標そのものは空のまま
-    expect(screen.getByText('60.0 kg')).toBeTruthy();
-    expect(screen.getByText('65.0 kg')).toBeTruthy();
+    expect(screen.getByText('60.0 kg/日')).toBeTruthy();
+    expect(screen.getByText('65.0 kg/日')).toBeTruthy();
     expect((goalField(/ベンチプレス.*の目標$/) as HTMLInputElement).value).toBe('');
   });
 
@@ -5859,7 +5870,7 @@ describe('種目の目標を決める', () => {
     expect(types.queryByRole('button', { name: '挙上量' })).toBeNull();
     expect(types.getByRole('button', { name: '秒数' })).toBeTruthy();
     expect(types.getByRole('button', { name: '維持' })).toBeTruthy();
-    expect(screen.getByText('秒')).toBeTruthy();
+    expect(screen.getByText('秒/日')).toBeTruthy();
     expect(screen.getByText(/最大レップ数で判定/)).toBeTruthy();
   });
 
@@ -7816,7 +7827,7 @@ describe('目標を足した直後', () => {
 
     // 一覧に出る。「まだ目標がありません」は消える
     expect(screen.queryByText(/まだ目標がありません/)).toBeNull();
-    expect(screen.getAllByText(/100\.0 kg/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/目標 100\.0/).length).toBeGreaterThan(0);
     // 候補が無くなったので、理由付きで無効になる
     expect(screen.getByText(/すべてのマイ種目に目標を決めています/)).toBeTruthy();
   });
@@ -8310,4 +8321,170 @@ describe('プリセットの既定セット', () => {
     const weight = within(setRows()[0]!).getByLabelText(/セット目の重量/) as HTMLInputElement;
     expect(weight.placeholder).toBe('—');
   });
+});
+
+describe('推移の入口（週の目標・記録の入力）', () => {
+  function GoalsHarness2() {
+    const body = useBodyData(seeded);
+    return (
+      <WeightUnitProvider unit={body.data.settings.displayWeightUnit}>
+        <GoalsView body={body} domain="training" onOpenExercises={() => {}} />
+      </WeightUnitProvider>
+    );
+  }
+
+  /** 週の目標の面の見出しに「推移」。開くとその部位だけの週ごとの量 */
+  it('週の目標の面から、その部位の週ごとの量の推移を開ける', () => {
+    seedData(['ex_bench'], {
+      [todayISO()]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+    });
+    render(<GoalsHarness2 />);
+    fireEvent.click(screen.getByRole('button', { name: '胸の今週の量' }));
+    fireEvent.click(screen.getByRole('button', { name: '胸の推移' }));
+    const trend = [...document.querySelectorAll('dialog')].find(
+      (d) => d.querySelector('h2')?.textContent === '胸の推移',
+    )!;
+    expect(trend).toBeTruthy();
+    // セット数と挙上量を切り替えられる
+    expect(within(trend).getByRole('button', { name: 'セット数', pressed: true })).toBeTruthy();
+    expect(within(trend).getByRole('button', { name: '挙上量' })).toBeTruthy();
+  });
+
+  /** 日次／週次は全種目で 1 つ。切り替えると、目標の行の単位が「/週」になり、設定に残る */
+  it('種目の目標の日次／週次は、1 つの切り替えで全種目に効く', async () => {
+    const today = todayISO();
+    const exercises = ['ex_bench', 'ex_curl'].map((id, i) => ({
+      ...fromCatalog(
+        CATALOG.find((c) => c.id === id)!,
+        i,
+      ),
+      goal: { type: 'volume', value: 5000 },
+    }));
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      exercises,
+      workouts: {
+        [today]: [
+          { exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] },
+          { exerciseId: 'ex_curl', sets: [{ weight: 10, reps: 10 }] },
+        ],
+      },
+    });
+    // 切り替えは設定 > トレーニング > 種目の目標の数え方（全種目で 1 つの定義）
+    window.location.hash = '#settings/training/goals';
+    render(<App initial={seeded} />);
+    expect(screen.getByRole('button', { name: '日次', pressed: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '週次' }));
+    expect((await storedData()).settings.goalPeriod).toBe('week');
+
+    // 目標タブでは 2 種目とも単位が「/週」になる（種目ごとには切り替えない）
+    cleanup();
+    seeded = sanitizeData(await storedData());
+    render(<GoalsHarness2 />);
+    const card = within(screen.getByText('種目の目標').closest('section')!);
+    expect(card.getAllByText(/kg\/週/)).toHaveLength(2);
+    expect(card.queryAllByText(/kg\/日/)).toHaveLength(0);
+    // 目標タブには切り替えを置かない
+    expect(card.queryByRole('button', { name: '週次' })).toBeNull();
+  });
+
+  /** 週次にしたら、推移の点・過去最大も週ごと（目標と同じ物差し） */
+  it('週次のときは、推移の過去最大も週ごとの値', () => {
+    // 先週の日曜と月曜に 1 回ずつ（どちらも過去の日）
+    const start = isoAdd(startOfWeek(todayISO()), -7);
+    const bench = {
+      ...fromCatalog(
+        CATALOG.find((c) => c.id === 'ex_bench')!,
+        0,
+      ),
+      goal: { type: 'volume', value: 5000 },
+    };
+    // 今週に 2 回（600kg と 500kg）。1 回ごとの最大は 600、週の合計は 1,100
+    seedRaw({
+      version: 7,
+      settings: { goalPeriod: 'week' },
+      entries: {},
+      exercises: [bench],
+      workouts: {
+        [start]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+        [isoAdd(start, 1)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 50, reps: 10 }] }],
+      },
+    });
+    function Weekly() {
+      const body = useBodyData(seeded);
+      return (
+        <GoalPeriodProvider period={body.data.settings.goalPeriod}>
+          <GoalsView body={body} domain="training" onOpenExercises={() => {}} />
+        </GoalPeriodProvider>
+      );
+    }
+    render(<Weekly />);
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*の推移$/ }));
+    const trend = topDialogAny();
+    expect(trend.getByText(/週ごと（日曜〜土曜）の合計/)).toBeTruthy();
+    // 過去最大は週の合計（600 + 500）。1 回ごとの最大（600）ではない
+    expect(trend.getByText('1100')).toBeTruthy();
+  });
+
+  /** 記録の入力ダイアログの見出しに「推移」。打ちながら種目の推移を重ねて見る */
+  it('記録の入力ダイアログから、その種目の推移を開ける', () => {
+    seedData(['ex_bench'], {
+      [todayISO()]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
+    });
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: /ベンチプレス.*のセットを編集/ }));
+    // 入力ダイアログの見出しにある「推移」（カードの同じボタンとは別）
+    fireEvent.click(topDialogAny().getByRole('button', { name: /ベンチプレス.*の推移$/ }));
+    expect(screen.getByText('元データ')).toBeTruthy();
+  });
+});
+
+/** 記録のカードに、主部位の今週の量と部位の目標を 1 行で添える（目標タブへ行かずに読める） */
+it('記録のカードに、主部位の今週と部位の目標が出る', () => {
+  seedRaw({
+    version: 7,
+    settings: {},
+    entries: {},
+    exercises: [
+      fromCatalog(
+        CATALOG.find((c) => c.id === 'ex_bench')!,
+        0,
+      ),
+    ],
+    workouts: { [todayISO()]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }] },
+    // 保存してある古い形（立て方を 1 つ選ぶ形）でも読める
+    groupGoals: { chest: { type: 'sets', value: 15 } },
+  });
+  render(<Harness />);
+  const card = within(document.getElementById('ex-card-ex_bench')!);
+  expect(card.getByText('胸 今週')).toBeTruthy();
+  // いまの量に単位、目標はかっこで（「1 / 15セット」と並べない）
+  expect(card.getByText('1セット（目標 15）')).toBeTruthy();
+  // ゲージは置かない（ラベルと値の文字だけ）
+  expect(card.queryByRole('progressbar')).toBeNull();
+});
+
+/** 記録のカードに種目の目標の札は置かない（その日の量と週の目標が並んで食い違って見えるため） */
+it('記録のカードに、種目の目標の札を出さない', () => {
+  seedRaw({
+    version: 7,
+    settings: { goalPeriod: 'week' },
+    entries: {},
+    exercises: [
+      {
+        ...fromCatalog(
+          CATALOG.find((c) => c.id === 'ex_bench')!,
+          0,
+        ),
+        goal: { type: 'volume', value: 15000 },
+      },
+    ],
+    workouts: { [todayISO()]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }] },
+  });
+  render(<Harness />);
+  const card = within(document.getElementById('ex-card-ex_bench')!);
+  expect(card.queryByText(/目標 15,?000/)).toBeNull();
+  expect(card.queryByText(/挙上量↑/)).toBeNull();
 });

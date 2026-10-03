@@ -3,6 +3,7 @@ import { EMPTY_BADGE_FACTS, computeBadgeFacts } from './badgeFacts';
 import { findLastIndex } from './array';
 import type {
   AppData,
+  GoalPeriod,
   DailyPoint,
   Exercise,
   MuscleGroup,
@@ -171,7 +172,7 @@ export function deriveAll(t: T, data: AppData, cache: DeriveCache): Derived {
   }
 
   const body = combineBody(bodyWeeks, data.settings);
-  const training = combineTraining(t, trainingWeeks, data.exercises);
+  const training = combineTraining(t, trainingWeeks, data.exercises, data.settings.goalPeriod);
   return {
     ...body,
     ...training,
@@ -198,7 +199,7 @@ function empty(t: T, data: AppData): Derived {
      * 「すべてのマイ種目に目標を決めています」と出る、という食い違いになる）。
      * すぐ上の `buildCheckHistory` は種目を渡しているのに、ここだけ抜けていた。
      */
-    trainingGoals: exerciseGoals(t, [], data.exercises.filter(isListed)),
+    trainingGoals: exerciseGoals(t, [], data.exercises.filter(isListed), data.settings.goalPeriod),
     badgeFacts: EMPTY_BADGE_FACTS,
   };
 }
@@ -409,6 +410,7 @@ function combineTraining(
   t: T,
   built: readonly TrainingWeek[],
   exercises: readonly Exercise[],
+  goalPeriod: GoalPeriod,
 ): Pick<Derived, 'sessions' | 'weeklySets' | 'trainingStats' | 'checkHistory' | 'trainingGoals'> {
   const sessions = built.flatMap((w) => w.sessions);
 
@@ -466,6 +468,7 @@ function combineTraining(
       t,
       sessions,
       exercises.filter((e) => isListed(e)),
+      goalPeriod,
     ),
   };
 }

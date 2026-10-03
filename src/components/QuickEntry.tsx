@@ -139,7 +139,7 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
       {onOpenTrend && (
         <div className={ui.detailRow}>
           <button type="button" className={ui.detailBtn} onClick={onOpenTrend}>
-            {t('common.viewTrend')}
+            {t('common.trend')}
           </button>
         </div>
       )}

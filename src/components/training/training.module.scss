@@ -881,7 +881,8 @@
 
 .goalUnit {
   flex: none;
-  width: 2.5em;
+  /* 「kg/週」「回/日」まで収まる幅。短い単位でも欄の幅が動かないよう最小幅は残す */
+  min-width: 2.5em;
   font-size: 13px;
   color: var(--ink-muted);
 }
@@ -1686,19 +1687,17 @@
   }
 }
 
-.goalRowDot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  align-self: center;
-}
-
 .goalRowName {
   flex: 1;
   min-width: 0;
   font-size: 13px;
   @include truncate;
+}
+
+.goalRowUnit {
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
 }
 
 .goalRowOf {

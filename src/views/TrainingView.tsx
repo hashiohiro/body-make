@@ -5,6 +5,7 @@ import { ExerciseRipple } from '../components/training/ExerciseRipple';
 import { TrainingAside } from '../components/training/TrainingAside';
 import type { PresetOption } from '../components/training/PresetCard';
 import { ExerciseCard } from '../components/training/ExerciseCard';
+import { GroupWeekLine } from '../components/training/GroupWeekLine';
 import { ExerciseSetEditor } from '../components/training/ExerciseSetEditor';
 import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialog';
 import { ExercisePicker } from '../components/training/ExercisePicker';
@@ -14,7 +15,7 @@ import type { WeightUnit } from '../lib/weight';
 import { defaultSetsFor } from '../lib/preset';
 import { useConfirm } from '../components/ConfirmDialog';
 import { OrderList } from '../components/training/OrderList';
-import { byName, exerciseName, groupsOf, isCardio } from '../lib/exerciseCatalog';
+import { byName, exerciseName, groupsOf, isCardio, muscleOf } from '../lib/exerciseCatalog';
 import { addDays, startOfWeek, weekdayIndex } from '../lib/date';
 import {
   buildBodyWeightLookup,
@@ -405,6 +406,18 @@ export function TrainingView({ body, date }: Props) {
               onOpenGoal={() => setGoalId(entry.exerciseId)}
               onEdit={() => setEditId(entry.exerciseId)}
               onRemove={() => removeExercise(entry.exerciseId)}
+              groupWeek={(() => {
+                // 主部位の今週（見ている日の週）と部位の目標。有酸素は部位を持たない
+                const muscle = muscleOf(exercise.group);
+                return muscle == null ? undefined : (
+                  <GroupWeekLine
+                    group={muscle}
+                    sets={(weekOfDate?.setsByGroup ?? NO_WEEK)[muscle]}
+                    volume={(weekOfDate?.volumeByGroup ?? NO_WEEK)[muscle]}
+                    target={data.groupGoals[muscle]}
+                  />
+                );
+              })()}
               // 1 種目しか無い日に、動かしようのない操作を出さない
               onMove={dayEntries.length > 1 ? () => setMoving(entry.exerciseId) : undefined}
             />
@@ -441,7 +454,21 @@ export function TrainingView({ body, date }: Props) {
         打っている欄が指の下から逃げる。一覧の面と同じ理由で、件数に高さを預けない。
       */}
       {editExercise && editEntry && (
-        <Modal open title={exerciseName(t, editExercise)} tall onClose={() => setEditId(null)}>
+        <Modal
+          open
+          title={exerciseName(t, editExercise)}
+          tall
+          onClose={() => setEditId(null)}
+          /*
+            打ちながら過去を見たい（前回・過去最大までどれくらいか）。推移は重ねて出し、
+            閉じると打っていた面に戻る。入口は見出しの「閉じる」の左（目標画面の推移と同じ位置）。
+          */
+          action={{
+            label: t('common.trend'),
+            ariaLabel: t('common.trendOf', { name: exerciseName(t, editExercise) }),
+            onClick: () => setDetailId(editExercise.id),
+          }}
+        >
           {/*
             その日の種目。**閉じずに移れるようにする**（`docs/design-ripple.md` §4）。
             1 種目打つたびに 閉じる → スクロール → 次のカードを探す → 開く を
@@ -484,18 +511,34 @@ export function TrainingView({ body, date }: Props) {
               組み立てるのはここ——週の配分も部位の回復も、入力の面は持っていない。
             */
             ripple={
-              <ExerciseRipple
-                exercise={editExercise}
-                date={date}
-                point={session?.exercises.find((p) => p.exerciseId === editExercise.id) ?? null}
-                previous={previousPoint(sessions, editExercise.id, date)}
-                weekSets={weekOfDate?.setsByGroup ?? NO_WEEK}
-                weekVolume={weekOfDate?.volumeByGroup ?? NO_WEEK}
-                groupGoals={data.groupGoals}
-                // 回復と同じ数え方を借りる。ここで数え直すと回復カードと食い違う
-                todayGroupSets={checkHistory.groupSets.get(date) ?? null}
-                cardio={cardioOfWeek}
-              />
+              <>
+                {/* カードと同じ「この部位の今週」（ラベルと値）。打つたびに数が動く */}
+                {(() => {
+                  const muscle = muscleOf(editExercise.group);
+                  return muscle == null ? null : (
+                    <GroupWeekLine
+                      group={muscle}
+                      sets={(weekOfDate?.setsByGroup ?? NO_WEEK)[muscle]}
+                      volume={(weekOfDate?.volumeByGroup ?? NO_WEEK)[muscle]}
+                      target={data.groupGoals[muscle]}
+                    />
+                  );
+                })()}
+                <ExerciseRipple
+                  showGroup={false}
+                  exercise={editExercise}
+                  date={date}
+                  point={session?.exercises.find((p) => p.exerciseId === editExercise.id) ?? null}
+                  previous={previousPoint(sessions, editExercise.id, date)}
+                  weekSets={weekOfDate?.setsByGroup ?? NO_WEEK}
+                  weekVolume={weekOfDate?.volumeByGroup ?? NO_WEEK}
+                  goalPeriod={data.settings.goalPeriod}
+                  groupGoals={data.groupGoals}
+                  // 回復と同じ数え方を借りる。ここで数え直すと回復カードと食い違う
+                  todayGroupSets={checkHistory.groupSets.get(date) ?? null}
+                  cardio={cardioOfWeek}
+                />
+              </>
             }
             // 自重種目の「足される側」。その日以前の直近の体重を引く
             bodyWeight={bodyWeightAt(date)}
@@ -523,7 +566,12 @@ export function TrainingView({ body, date }: Props) {
           title={t('exercise.goalOf', { name: exerciseName(t, goalExercise) })}
           onClose={() => setGoalId(null)}
         >
-          <GoalEditor exercise={goalExercise} sessions={sessions} onUpdate={upsertExercise} />
+          <GoalEditor
+            exercise={goalExercise}
+            sessions={sessions}
+            onUpdate={upsertExercise}
+            period={data.settings.goalPeriod}
+          />
         </Modal>
       )}
 
