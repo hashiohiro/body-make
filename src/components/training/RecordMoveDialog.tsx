@@ -225,6 +225,8 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
       pressed={chosen || toId === c.id}
       label={t('move.toOf', { name: c.name })}
       onClick={() => setToId(chosen ? null : c.id)}
+      e2e="move-target"
+      e2eKey={c.id}
     >
       {chosen && '✓ '}
       {c.name}
@@ -323,6 +325,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
                 label={t('move.pickLabel')}
                 showLabel
                 tight
+                e2e="move-source"
               />
             </div>
 
@@ -407,6 +410,7 @@ export function RecordMoveDialog({ body, from, onClose }: Props) {
             tone="primary"
             disabled={target == null || needsDate || moving === 0}
             onClick={submit}
+            e2e="move-do"
           >
             {t('move.do')}
           </Button>

@@ -76,7 +76,7 @@ export function CheckCard({
         中身が入った日にも枠として読み飛ばされる。出るときだけ出るから目に入る。
       */}
       {warnings.length > 0 && (
-        <section className={ui.card}>
+        <section className={ui.card} data-e2e="check-card">
           <CardHeader
             title={t('check.title')}
             hint={<>{t('settings.count', { n: warnings.length })}</>}

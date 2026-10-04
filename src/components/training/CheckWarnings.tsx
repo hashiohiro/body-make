@@ -31,7 +31,7 @@ export function CheckWarnings({ warnings, onSuppress }: Props) {
   return (
     <ul className={s.warnList}>
       {warnings.map((w) => (
-        <li key={w.key} className={s.warnItem}>
+        <li key={w.key} className={s.warnItem} data-e2e="check-warning" data-e2e-key={w.key}>
           <div className={s.warnBody}>
             <span className={s.warnMessage}>{w.message}</span>
             <small className={s.warnDetail}>{w.detail}</small>
@@ -48,6 +48,7 @@ export function CheckWarnings({ warnings, onSuppress }: Props) {
               size="sub"
               label={t('warn.suppressOf', { message: w.message })}
               onClick={() => onSuppress(w.key)}
+              e2e="check-suppress"
             >
               {t('warn.suppress')}
             </Button>

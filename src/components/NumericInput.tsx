@@ -27,6 +27,10 @@ interface Props {
   className?: string | undefined;
   /** 見出しラベルを置けない場所（一覧の行の中など）で使う */
   ariaLabel?: string | undefined;
+  /**
+   * E2E の目印（`data-e2e`）。画面の組み立てや文言が変わっても、テストが同じ部品を引けるようにする
+   */
+  e2e?: string | undefined;
   onCommit: (value: number | null) => void;
 }
 
@@ -53,6 +57,7 @@ export function NumericInput({
   fallback,
   className,
   ariaLabel,
+  e2e,
   onCommit,
 }: Props) {
   const field = useNumericField(value, min, max, onCommit, decimals);
@@ -68,6 +73,7 @@ export function NumericInput({
       max={max}
       placeholder={placeholder ?? (fallback == null ? '—' : String(fallback))}
       aria-label={ariaLabel}
+      data-e2e={e2e}
       value={field.text}
       onChange={(e) => field.handleChange(e.target.value)}
       onBlur={field.handleBlur}

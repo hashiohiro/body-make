@@ -47,6 +47,7 @@ export function SearchToggle({ query, onQuery, label }: Props) {
         type="button"
         className={s.searchBtn}
         aria-label={label}
+        data-e2e="search-open"
         onClick={() => setOpen(true)}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden>
@@ -66,6 +67,7 @@ export function SearchToggle({ query, onQuery, label }: Props) {
         value={query}
         placeholder={label}
         aria-label={label}
+        data-e2e="search-input"
         onChange={(e) => onQuery(e.target.value)}
         // 絞り込みは打つたびに効くので、Enter に確定させるものが無い。Esc は閉じる
         onKeyDown={(e) => onEnter(e, undefined, close)}

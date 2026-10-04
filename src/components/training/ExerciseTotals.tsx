@@ -107,7 +107,7 @@ export function ExerciseTotals({ exercise, point, bodyWeight, previous, best, be
 
   return (
     <>
-      <div className={s.exFoot}>
+      <div className={s.exFoot} data-e2e="exercise-totals">
         {/*
           有酸素の 1 行は「セット」ではなく **1 本**（インターバルの 400m×5本、
           サーキットのラウンド数）。筋トレの言葉のままにはしない。
@@ -200,7 +200,11 @@ export function ExerciseTotals({ exercise, point, bodyWeight, previous, best, be
         体重が乗る種目で、体重の記録が無いまま加重だけ打った日。
         **指示ではなく事実**を書く（§1.2）——入れれば遡って出し直すのは仕組みの側の話。
       */}
-      {partialVolume && <p className={ui.note}>{t('totals.noBodyWeight')}</p>}
+      {partialVolume && (
+        <p className={ui.note} data-e2e="exercise-partial-volume">
+          {t('totals.noBodyWeight')}
+        </p>
+      )}
 
       {/*
         通算の最高。前回との差は上の行が持っているので、ここは通算で見る。
@@ -210,7 +214,7 @@ export function ExerciseTotals({ exercise, point, bodyWeight, previous, best, be
         1 行に 2 つ並ぶ（前回比と残り）。
       */}
       {!cardio && (bestWeight != null || (best != null && best > 0)) && (
-        <div className={s.exPrev}>
+        <div className={s.exPrev} data-e2e="exercise-best">
           {/*
             その日が通算の最高を超えたら、**この行そのものを `60.0 → 62.5` にする。**
 

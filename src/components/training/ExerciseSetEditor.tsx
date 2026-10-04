@@ -169,7 +169,7 @@ export function ExerciseSetEditor({
 
   return (
     <div>
-      <div className={s.prev}>
+      <div className={s.prev} data-e2e="set-previous">
         {previous ? (
           <>
             <span>
@@ -179,7 +179,12 @@ export function ExerciseSetEditor({
               })}
             </span>
             {empty && (
-              <button type="button" className={s.prevBtn} onClick={onCopyPrevious}>
+              <button
+                type="button"
+                className={s.prevBtn}
+                onClick={onCopyPrevious}
+                data-e2e="set-copy-previous"
+              >
                 {t('set.copyPrevious')}
               </button>
             )}
@@ -262,6 +267,7 @@ export function ExerciseSetEditor({
                 type="button"
                 className={s.unitToggle}
                 aria-label={t('set.unitToggle', { unit: unitLabel })}
+                data-e2e="set-unit-toggle"
                 onClick={() => onWeightUnitChange(weightUnit === 'kg' ? 'lb' : 'kg')}
               >
                 ⇄
@@ -328,7 +334,7 @@ export function ExerciseSetEditor({
 
       <div className={s.setActions}>
         {repeated && (
-          <button type="button" className={s.addSet} onClick={onAddSet}>
+          <button type="button" className={s.addSet} onClick={onAddSet} data-e2e="set-add">
             <span aria-hidden="true">＋ </span>
             {cardio ? t('set.addBout') : t('set.addSet')}
           </button>
@@ -341,6 +347,7 @@ export function ExerciseSetEditor({
             className={s.weightToggle}
             aria-pressed={addWeight}
             onClick={() => setAddWeight((v) => !v)}
+            data-e2e="set-toggle-weighted"
           >
             {!addWeight && <span aria-hidden="true">＋ </span>}
             {addWeight ? t('set.stopWeighted') : t('set.addWeighted')}

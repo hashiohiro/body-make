@@ -8,6 +8,10 @@ interface Props {
   label?: string | undefined;
   pressed?: boolean | undefined;
   disabled?: boolean | undefined;
+  /** E2E の目印（`data-e2e`） */
+  e2e?: string | undefined;
+  /** 並んだうちのどれか（`data-e2e-key`） */
+  e2eKey?: string | undefined;
 }
 
 /**
@@ -19,7 +23,7 @@ interface Props {
  *
  * 何をするかは呼び出し側が持つ。ここが持つのは的の大きさと見た目だけ。
  */
-export function MiniButton({ children, onClick, label, pressed, disabled }: Props) {
+export function MiniButton({ children, onClick, label, pressed, disabled, e2e, e2eKey }: Props) {
   return (
     <button
       type="button"
@@ -27,6 +31,8 @@ export function MiniButton({ children, onClick, label, pressed, disabled }: Prop
       {...(label == null ? {} : { 'aria-label': label })}
       {...(pressed == null ? {} : { 'aria-pressed': pressed })}
       disabled={disabled}
+      data-e2e={e2e}
+      data-e2e-key={e2eKey}
       onClick={onClick}
     >
       {children}

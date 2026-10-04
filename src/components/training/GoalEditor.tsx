@@ -178,6 +178,7 @@ export function GoalEditor({ exercise, sessions, onUpdate, period }: Props) {
           label: id === 'reps' && seconds ? t('set.seconds') : t(GOAL_TYPE_KEYS[id]),
         }))}
         onChange={choose}
+        e2e="goal-type"
       />
 
       {/*
@@ -195,6 +196,7 @@ export function GoalEditor({ exercise, sessions, onUpdate, period }: Props) {
       >
         <NumericInput
           id={`goal-value-${exercise.id}`}
+          e2e="goal-value"
           className={s.goalValue}
           ariaLabel={t('exercise.goalOf', { name: exerciseName(t, exercise) })}
           value={show(exercise.goal?.value ?? null)}
@@ -218,7 +220,9 @@ export function GoalEditor({ exercise, sessions, onUpdate, period }: Props) {
             });
           }}
         />
-        <span className={s.goalUnit}>{periodUnit}</span>
+        <span className={s.goalUnit} data-e2e="goal-unit">
+          {periodUnit}
+        </span>
       </div>
 
       <p className={s.goalFacts}>

@@ -120,6 +120,8 @@ export function ExercisePicker({
         key={e.id}
         pressed={used}
         dashed={adhoc}
+        e2e="pick-item"
+        e2eKey={e.id}
         // ✓ はトグル。押しても外れないと、間違えて入れたものを
         // ここで取り消せず、閉じてカードの × を探すことになる
         onClick={() => onToggle(e.id)}
@@ -149,7 +151,12 @@ export function ExercisePicker({
   );
 
   const menuItem = (id: Panel, name: string, hint: string) => (
-    <button type="button" className={s.menuItem} onClick={() => setPanel(id)}>
+    <button
+      type="button"
+      className={s.menuItem}
+      onClick={() => setPanel(id)}
+      data-e2e={`picker-menu-${id}`}
+    >
       <span className={s.menuName}>{name}</span>
       <span className={s.menuHint}>{hint}</span>
       <span className={s.menuChevron} aria-hidden="true">
@@ -170,6 +177,7 @@ export function ExercisePicker({
         type="button"
         className={s.fab}
         aria-label={t('picker.menu')}
+        data-e2e="picker-fab"
         style={fab.style}
         onPointerDown={fab.onPointerDown}
         onPointerMove={fab.onPointerMove}
@@ -270,6 +278,7 @@ export function ExercisePicker({
               {
                 label: t('manage.add'),
                 tone: 'primary',
+                e2e: 'keep-yes',
                 onSelect: () => {
                   if (pending) onAddFromCatalog(pending, true);
                   setPending(null);
@@ -278,6 +287,7 @@ export function ExercisePicker({
               },
               {
                 label: t('picker.keepNo'),
+                e2e: 'keep-no',
                 onSelect: () => {
                   if (pending) onAddFromCatalog(pending, false);
                   setPending(null);

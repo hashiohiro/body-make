@@ -138,6 +138,8 @@ export function ExerciseGoalsCard({
         key={goal.exerciseId}
         type="button"
         className={s.goalRow}
+        data-e2e="goal-row"
+        data-e2e-key={goal.exerciseId}
         aria-label={t('common.trendOf', { name: goal.name })}
         onClick={() => setTrendOf(goal.exerciseId)}
       >
@@ -168,7 +170,7 @@ export function ExerciseGoalsCard({
 
   return (
     <>
-      <section className={ui.card}>
+      <section className={ui.card} data-e2e="exercise-goals">
         <CardHeader
           title={t('exGoal.title')}
           hint={
@@ -226,6 +228,8 @@ export function ExerciseGoalsCard({
                     key={goal.exerciseId}
                     type="button"
                     className={s.maintainChip}
+                    data-e2e="goal-maintain"
+                    data-e2e-key={goal.exerciseId}
                     aria-label={t('common.trendOf', { name: goal.name })}
                     onClick={() => setTrendOf(goal.exerciseId)}
                   >
@@ -252,7 +256,7 @@ export function ExerciseGoalsCard({
         */}
         {noListed ? (
           <div className={ui.btnRow}>
-            <Button adds tone="primary" onClick={onOpenExercises}>
+            <Button adds tone="primary" onClick={onOpenExercises} e2e="goal-add-exercise">
               {t('exGoal.addExercise')}
             </Button>
           </div>
@@ -270,6 +274,7 @@ export function ExerciseGoalsCard({
             <Button
               tone={goals.length === 0 ? 'primary' : undefined}
               onClick={() => setPicking(true)}
+              e2e="goal-add"
             >
               {t('exGoal.addTitle')}
             </Button>

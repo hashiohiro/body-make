@@ -40,6 +40,10 @@ interface Props {
    * 色や大きさをここから足すと、軸を 1 つにした意味が無くなる。
    */
   className?: string | undefined;
+  /**
+   * E2E の目印（`data-e2e`）。画面の組み立てや文言が変わっても、テストが同じ部品を引けるようにする
+   */
+  e2e?: string | undefined;
 }
 
 const TONE_CLASS: Record<Tone, string> = {
@@ -69,6 +73,7 @@ export function Button({
   expanded,
   adds,
   className,
+  e2e,
 }: Props) {
   return (
     <button
@@ -77,6 +82,7 @@ export function Button({
         .filter(Boolean)
         .join(' ')}
       disabled={disabled}
+      data-e2e={e2e}
       {...(label == null ? {} : { 'aria-label': label })}
       {...(pressed == null ? {} : { 'aria-pressed': pressed })}
       {...(expanded == null ? {} : { 'aria-expanded': expanded })}

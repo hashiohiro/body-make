@@ -19,6 +19,9 @@ interface Props {
   small?: boolean | undefined;
   /** 輪郭を破線にする。手元にない種目など、状態への断りがあるとき */
   dashed?: boolean | undefined;
+  /** E2E の目印（`data-e2e`）と、並んだうちのどれか（`data-e2e-key`） */
+  e2e?: string | undefined;
+  e2eKey?: string | undefined;
 }
 
 /**
@@ -32,7 +35,7 @@ interface Props {
  * 揃えてしまうと、押せるものと押せないものが見分けられない。
  * 見た目はここ、何を選ぶのかは呼び出し側（種目・部位・係数）が持つ。
  */
-export function Pill({ children, onClick, pressed, label, small, dashed }: Props) {
+export function Pill({ children, onClick, pressed, label, small, dashed, e2e, e2eKey }: Props) {
   const shape = `${s.pill} ${small ? s.small : ''} ${dashed ? s.dashed : ''}`;
 
   /*
@@ -46,6 +49,8 @@ export function Pill({ children, onClick, pressed, label, small, dashed }: Props
         className={shape}
         {...(pressed == null ? {} : { 'data-picked': String(pressed) })}
         {...(label == null ? {} : { 'aria-label': label })}
+        data-e2e={e2e}
+        data-e2e-key={e2eKey}
       >
         {children}
       </span>
@@ -58,6 +63,8 @@ export function Pill({ children, onClick, pressed, label, small, dashed }: Props
       className={shape}
       {...(pressed == null ? {} : { 'aria-pressed': pressed })}
       {...(label == null ? {} : { 'aria-label': label })}
+      data-e2e={e2e}
+      data-e2e-key={e2eKey}
       onClick={onClick}
     >
       {children}

@@ -51,6 +51,7 @@ export function ConfirmDialog({
         choices={[
           {
             label: request.confirmLabel,
+            e2e: 'confirm-ok',
             tone: request.destructive ? 'danger' : undefined,
             onSelect: () => {
               request.onConfirm();

@@ -51,7 +51,7 @@ export function NameEntryRow({
   disabled,
 }: Props) {
   return (
-    <div className={s.row}>
+    <div className={s.row} data-e2e="name-entry">
       <TextField
         className={s.input}
         value={value}
@@ -62,10 +62,10 @@ export function NameEntryRow({
         onCommit={disabled ? undefined : onCommit}
         onCancel={onCancel}
       />
-      <MiniButton label={commitLabel} disabled={disabled} onClick={onCommit}>
+      <MiniButton label={commitLabel} disabled={disabled} onClick={onCommit} e2e="name-commit">
         ✓
       </MiniButton>
-      <MiniButton label={cancelLabel} onClick={onCancel}>
+      <MiniButton label={cancelLabel} onClick={onCancel} e2e="name-cancel">
         ×
       </MiniButton>
     </div>

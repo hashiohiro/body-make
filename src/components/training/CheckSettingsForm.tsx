@@ -55,6 +55,7 @@ export function CheckSettingsForm({
             pressed={checks.enabled}
             label={t('checks.show')}
             onClick={() => onUpdate({ enabled: !checks.enabled })}
+            e2e="checks-enabled"
           >
             {checks.enabled ? t('settings.on') : t('settings.off')}
           </Pill>
@@ -77,6 +78,7 @@ export function CheckSettingsForm({
                 <small>{t('checks.limitHint')}</small>
                 <NumericInput
                   id="check-session-minutes"
+                  e2e="checks-limit"
                   value={checks.sessionMinutes}
                   min={SESSION_MINUTES_RANGE[0]}
                   max={SESSION_MINUTES_RANGE[1]}

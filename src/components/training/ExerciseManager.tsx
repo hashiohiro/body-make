@@ -267,6 +267,8 @@ export function ExerciseManager({
               pressed={editing === ex.id}
               label={t('exercise.settingsOf', { name: exerciseName(t, ex) })}
               onClick={() => openDetail(ex)}
+              e2e="manage-settings"
+              e2eKey={ex.id}
             >
               {t('common.settings')}
             </MiniButton>
@@ -484,7 +486,7 @@ export function ExerciseManager({
               */}
               {(usage.get(settingsExercise.id) ?? 0) > 0 && (
                 <div className={ui.btnRow}>
-                  <Button size="sub" onClick={() => setMoving(true)}>
+                  <Button size="sub" onClick={() => setMoving(true)} e2e="move-open">
                     {t('manage.moveRecords')}
                   </Button>
                 </div>

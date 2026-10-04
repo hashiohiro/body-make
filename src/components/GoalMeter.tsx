@@ -52,6 +52,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate, line }: Props
         <span className={ui.inputUnit}>
           <NumericInput
             id="target-weight"
+            e2e="goal-target-weight"
             value={settings.targetWeight}
             min={WEIGHT_RANGE[0]}
             max={WEIGHT_RANGE[1]}
@@ -67,6 +68,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate, line }: Props
         <span className={ui.inputUnit}>
           <NumericInput
             id="target-bf"
+            e2e="goal-target-bf"
             value={settings.targetBodyFat}
             min={BODYFAT_RANGE[0]}
             max={BODYFAT_RANGE[1]}
@@ -85,6 +87,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate, line }: Props
         {/* 目標日は外せる（決めていない状態がある）ので、空を受ける */}
         <DateField
           id="target-date"
+          e2e="goal-target-date"
           value={settings.targetDate ?? ''}
           clearable
           onChange={(value) => onUpdate({ targetDate: value || null })}
@@ -114,7 +117,11 @@ export function GoalMeter({ settings, stats, projection, onUpdate, line }: Props
         ここに欄を作らないのは、同じ値を直す場所を 2 つにしないため。
         入れていない人には、どこにあるかだけ書く。
       */}
-      {settings.heightCm == null && <p className={ui.note}>{t('goal.heightHint')}</p>}
+      {settings.heightCm == null && (
+        <p className={ui.note} data-e2e="goal-height-hint">
+          {t('goal.heightHint')}
+        </p>
+      )}
     </div>
   );
 
@@ -132,12 +139,12 @@ export function GoalMeter({ settings, stats, projection, onUpdate, line }: Props
   if (target == null || current == null) {
     return (
       <section className={ui.card}>
-        <p className={ui.emptyState}>
+        <p className={ui.emptyState} data-e2e="goal-empty">
           {target == null ? t('goal.needTarget') : t('goal.needRecord')}
         </p>
 
         <div className={ui.btnRow}>
-          <Button tone="primary" onClick={() => setEditing(true)}>
+          <Button tone="primary" onClick={() => setEditing(true)} e2e="goal-edit">
             {target == null ? t('goal.set') : t('goal.change')}
           </Button>
         </div>
@@ -151,14 +158,14 @@ export function GoalMeter({ settings, stats, projection, onUpdate, line }: Props
 
   return (
     <section className={ui.card}>
-      <div className={s.head}>
+      <div className={s.head} data-e2e="goal-head">
         <span>{t('goal.remaining', { n: fmt(Math.max(0, remaining)) })}</span>
         <span className={s.pct}>{fmtPercent(progress)}</span>
       </div>
 
       <Meter value={progress} label={t('goal.progressBar')} size="card" tinted animated />
 
-      <div className={s.foot}>
+      <div className={s.foot} data-e2e="goal-foot">
         <span>
           {startDate
             ? t('goal.startOn', { date: formatMD(startDate), n: fmt(stats.startWeight) })
@@ -174,7 +181,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate, line }: Props
       <PacePanel gap={paceGap(projection)} line={line} targetDate={settings.targetDate} />
 
       <div className={s.eta}>
-        <div className={s.etaRow}>
+        <div className={s.etaRow} data-e2e="goal-eta">
           <span>{t('goal.eta')}</span>
           <span>
             {projection.etaDate && projection.etaDays != null ? (
@@ -190,7 +197,7 @@ export function GoalMeter({ settings, stats, projection, onUpdate, line }: Props
 
         {/* 体脂肪率の目標は「目標の体組成」のカードが棒で出す（同じ値を 2 か所に出さない） */}
         {settings.heightCm != null && stats.bmi != null && (
-          <div className={s.etaRow}>
+          <div className={s.etaRow} data-e2e="goal-bmi">
             <span>{t('goal.bmi', { height: fmt(settings.heightCm, 0) })}</span>
             <span>
               <b>{fmt(stats.bmi)}</b>
@@ -200,11 +207,15 @@ export function GoalMeter({ settings, stats, projection, onUpdate, line }: Props
       </div>
 
       {settings.targetDate && diffDays(settings.targetDate, todayISO()) <= 0 && (
-        <p className={ui.note}>{t('goal.datePassed')}</p>
+        <p className={ui.note} data-e2e="goal-date-passed">
+          {t('goal.datePassed')}
+        </p>
       )}
 
       <div className={ui.btnRow}>
-        <Button onClick={() => setEditing(true)}>{t('goal.change')}</Button>
+        <Button onClick={() => setEditing(true)} e2e="goal-edit">
+          {t('goal.change')}
+        </Button>
       </div>
       {dialog}
     </section>

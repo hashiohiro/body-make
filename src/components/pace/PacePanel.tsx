@@ -33,7 +33,7 @@ export function PacePanel({ gap, line, targetDate }: Props) {
       <Gauge gap={gap} />
 
       <div className={s.pair}>
-        <div className={s.tile}>
+        <div className={s.tile} data-e2e="pace-actual">
           <span className={s.tileLabel}>
             <Marker kind="actual" />
             {t('pace.actual')}
@@ -49,7 +49,7 @@ export function PacePanel({ gap, line, targetDate }: Props) {
             <span>{t('pace.needRecords')}</span>
           )}
         </div>
-        <div className={s.tile}>
+        <div className={s.tile} data-e2e="pace-required">
           <span className={s.tileLabel}>
             <Marker kind="required" />
             {targetDate

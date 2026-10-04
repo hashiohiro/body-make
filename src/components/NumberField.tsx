@@ -11,6 +11,8 @@ interface Props {
   min: number;
   max: number;
   onCommit: (value: number | null) => void;
+  /** E2E の目印（`NumericInput` の `e2e`） */
+  e2e?: string | undefined;
 }
 
 /**
@@ -20,7 +22,7 @@ interface Props {
  * （上に小さく置いて、数字は大きく中央に出す）。
  * 1 行に 2 つ並べるので、ラベルを横に置くと数字の幅が削られる。
  */
-export function NumberField({ label, value, fallback, step, min, max, onCommit }: Props) {
+export function NumberField({ label, value, fallback, step, min, max, onCommit, e2e }: Props) {
   const id = useId();
 
   return (
@@ -37,6 +39,7 @@ export function NumberField({ label, value, fallback, step, min, max, onCommit }
         min={min}
         max={max}
         onCommit={onCommit}
+        e2e={e2e}
       />
     </div>
   );

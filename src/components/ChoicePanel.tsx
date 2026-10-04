@@ -8,6 +8,8 @@ import { useT } from '../lib/i18n';
 export interface Choice {
   label: string;
   onSelect: () => void;
+  /** E2E の目印（`Button` の `e2e`） */
+  e2e?: string | undefined;
   /**
    * 答えの性質。**1 つだけ**（`Button` の `tone` と同じ軸）。
    *   primary … 勧める答え。1 つだけ
@@ -68,7 +70,7 @@ export function ChoicePanel({
 
       <div className={ui.btnRow}>
         {choices.map((c) => (
-          <Button key={c.label} tone={c.tone} onClick={c.onSelect}>
+          <Button key={c.label} tone={c.tone} onClick={c.onSelect} e2e={c.e2e}>
             {c.label}
           </Button>
         ))}
@@ -78,7 +80,7 @@ export function ChoicePanel({
 
       {onCancel && (
         <div className={ui.btnRow}>
-          <Button tone="ghost" onClick={onCancel}>
+          <Button tone="ghost" onClick={onCancel} e2e="choice-cancel">
             {cancelLabel ?? t('common.stop')}
           </Button>
         </div>

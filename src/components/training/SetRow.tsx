@@ -22,6 +22,7 @@ interface NumberCellProps {
   max: number;
   integer?: boolean;
   ariaLabel: string;
+  e2e: string;
   onCommit: (value: number | null) => void;
 }
 
@@ -32,7 +33,16 @@ interface NumberCellProps {
  * （幅いっぱい・中央寄せ・ラベルは読み上げだけ）。
  * 刻みは端末に任せる——重量は 2.5kg プレートで 0.5 刻みになる。
  */
-function NumberCell({ value, fallback, min, max, integer, ariaLabel, onCommit }: NumberCellProps) {
+function NumberCell({
+  value,
+  fallback,
+  min,
+  max,
+  integer,
+  ariaLabel,
+  e2e,
+  onCommit,
+}: NumberCellProps) {
   return (
     <NumericInput
       className={s.input}
@@ -43,6 +53,7 @@ function NumberCell({ value, fallback, min, max, integer, ariaLabel, onCommit }:
       step="any"
       integer={integer}
       ariaLabel={ariaLabel}
+      e2e={e2e}
       onCommit={onCommit}
     />
   );
@@ -120,7 +131,12 @@ export function SetRow({
   const work = set as WorkSet;
 
   return (
-    <div className={`${s.setRow} ${rowClass}`} data-set-row={index}>
+    <div
+      className={`${s.setRow} ${rowClass}`}
+      data-set-row={index}
+      data-e2e="set-row"
+      data-e2e-key={index + 1}
+    >
       {/* TOP は「いちばん重かったセット」の印。有酸素にその概念はない */}
       {showIndex && (
         <span className={`${s.setIndex} ${role === 'top' && !cardio ? s.setIndexTop : ''}`}>
@@ -141,6 +157,7 @@ export function SetRow({
             min={DURATION_SEC_RANGE[0] / 60}
             max={DURATION_SEC_RANGE[1] / 60}
             ariaLabel={t('setRow.duration', { n: index + 1 })}
+            e2e="set-duration"
             // 打つのは分、持つのは秒。90 秒を 1.5 と書けて、丸めも起きない
             onCommit={(v) => onValue('seconds', v == null ? null : Math.round(v * 60))}
           />
@@ -157,6 +174,7 @@ export function SetRow({
             min={DISTANCE_M_RANGE[0]}
             max={DISTANCE_M_RANGE[1]}
             ariaLabel={t('setRow.distance', { n: index + 1 })}
+            e2e="set-distance"
             onCommit={(v) => onValue('meters', v)}
           />
         </>
@@ -170,6 +188,7 @@ export function SetRow({
             min={repRangeOf(repUnit)[0]}
             max={repRangeOf(repUnit)[1]}
             ariaLabel={t('setRow.field', { n: index + 1, field: t(FIELD_KEYS[repUnit]) })}
+            e2e="set-reps"
             onCommit={(v) => onValue('reps', v)}
           />
 
@@ -211,6 +230,7 @@ export function SetRow({
                           unit: WEIGHT_UNIT_LABEL[weightUnit],
                         })
                   }
+                  e2e="set-weight"
                   onCommit={(v) => onValue('weight', toKgOrNull(v, weightUnit))}
                 />
               </span>
@@ -226,6 +246,7 @@ export function SetRow({
             type="button"
             className={s.rowBtn}
             aria-label={t('setRow.remove', { n: index + 1 })}
+            data-e2e="set-remove"
             onClick={onRemove}
           >
             ×

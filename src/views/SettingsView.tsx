@@ -289,6 +289,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
           <span className={ui.inputUnit}>
             <NumericInput
               id="height"
+              e2e="settings-height"
               value={settings.heightCm}
               min={HEIGHT_RANGE[0]}
               max={HEIGHT_RANGE[1]}
@@ -346,6 +347,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
               { id: 'week', label: t('goalPeriod.week') },
             ]}
             onChange={(goalPeriod) => updateSettings({ goalPeriod })}
+            e2e="settings-goal-period"
           />
           <p className={ui.note}>
             {t('settings.goalCountNote')}
@@ -465,6 +467,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
           <label htmlFor="locale">{t('settings.language')}</label>
           <Select
             id="locale"
+            e2e="settings-locale"
             value={settings.locale}
             options={LOCALE_OPTIONS.map((o) => ({ id: o.id, label: t(o.key) }))}
             dividerAfter="system"
@@ -570,6 +573,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
                 },
               })
             }
+            e2e="settings-delete-records"
           >
             {t('settings.clearRecordsConfirm')}
           </Button>
@@ -587,6 +591,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
                 },
               })
             }
+            e2e="settings-delete-all"
           >
             {t('settings.deleteAll')}
           </Button>

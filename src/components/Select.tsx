@@ -21,6 +21,8 @@ interface Props<T extends string> {
    * 古いブラウザは無視するだけで、選択肢は壊れない。
    */
   dividerAfter?: T | undefined;
+  /** E2E の目印（`data-e2e`） */
+  e2e?: string | undefined;
 }
 
 /**
@@ -41,11 +43,13 @@ export function Select<T extends string>({
   label,
   id,
   dividerAfter,
+  e2e,
 }: Props<T>) {
   return (
     <select
       id={id}
       value={value}
+      data-e2e={e2e}
       {...(label == null ? {} : { 'aria-label': label })}
       onChange={(e) => onChange(e.target.value as T)}
     >

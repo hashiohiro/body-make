@@ -147,7 +147,7 @@ export function WeeklyVolumeCard({
 
   return (
     <>
-      <section className={ui.card}>
+      <section className={ui.card} data-e2e="volume-week">
         <CardHeader
           title={t('volume.thisWeek')}
           hint={
@@ -199,6 +199,8 @@ export function WeeklyVolumeCard({
                 className={s.volCol}
                 aria-label={t('volume.ofGroup', { name })}
                 onClick={() => setOpen(row.group)}
+                data-e2e="volume-group"
+                data-e2e-key={row.group}
               >
                 <span className={s.volPlot}>
                   {row.target != null && (
@@ -264,7 +266,7 @@ export function WeeklyVolumeCard({
           「›」も出さない（形から押せないことが読める）。
         */}
         {hasCardio && (
-          <div className={s.volRow}>
+          <div className={s.volRow} data-e2e="volume-cardio">
             <span className={s.volName}>{t(GROUP_KEYS.cardio)}</span>
             <span className={s.volWide}>
               {t('volume.cardio', { times: cardio.days, minutes: cardio.minutes })}

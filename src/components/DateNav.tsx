@@ -36,6 +36,7 @@ export function DateNav({ date, today, onChange }: Props) {
         className={s.nav}
         onClick={() => onChange(addDays(date, -1))}
         aria-label={t('records.prevDay')}
+        data-e2e="date-prev"
       >
         ‹
       </button>
@@ -59,6 +60,7 @@ export function DateNav({ date, today, onChange }: Props) {
         className={s.nav}
         onClick={() => onChange(addDays(date, 1))}
         aria-label={t('records.nextDay')}
+        data-e2e="date-next"
       >
         ›
       </button>
@@ -81,6 +83,7 @@ export function DateNav({ date, today, onChange }: Props) {
           size="sub"
           disabled={date === today}
           onClick={() => onChange(today)}
+          data-e2e="date-today"
           className={s.today}
         >
           {t('common.today')}

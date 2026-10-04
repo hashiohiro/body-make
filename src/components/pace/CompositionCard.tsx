@@ -72,7 +72,7 @@ export function CompositionCard({ composition, currentBodyFat, targetBodyFat }: 
   const open = shown == null ? null : parts[shown];
 
   return (
-    <section className={ui.card}>
+    <section className={ui.card} data-e2e="goal-composition">
       <CardHeader title={t('composition.title')} hint="kg" />
 
       <div className={s.chart} ref={ref}>

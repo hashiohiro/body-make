@@ -196,10 +196,10 @@ export function ExerciseRipple({
   if (rows.length === 0) return null;
 
   return (
-    <dl className={s.ripple} data-ripple>
+    <dl className={s.ripple} data-ripple data-e2e="ripple">
       {/* 上限 3 行。外へ及んだ順に置いてあるので、溢れたら後ろから落ちる */}
       {rows.slice(0, 3).map((row) => (
-        <div key={row.key} className={s.rippleRow}>
+        <div key={row.key} className={s.rippleRow} data-e2e="ripple-row" data-e2e-key={row.key}>
           <dt className={s.rippleLabel}>{row.label}</dt>
           <dd className={s.rippleValue}>{row.value}</dd>
         </div>

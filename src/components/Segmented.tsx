@@ -7,6 +7,8 @@ interface Props<T extends string> {
   onChange: (value: T) => void;
   /** 何を選ぶ列か。読み上げに出す */
   label: string;
+  /** E2E の目印。各ボタンは `data-e2e-key` に選択肢の id を持つ */
+  e2e?: string | undefined;
 }
 
 /**
@@ -21,15 +23,16 @@ interface Props<T extends string> {
  * `ChipGroup` を作ったときに 15 か所で見たのと同じ形で、
  * 写すたびに読み上げの名前が抜ける余地がある。
  */
-export function Segmented<T extends string>({ options, value, onChange, label }: Props<T>) {
+export function Segmented<T extends string>({ options, value, onChange, label, e2e }: Props<T>) {
   return (
-    <div className={ui.segmented} role="group" aria-label={label}>
+    <div className={ui.segmented} role="group" aria-label={label} data-e2e={e2e}>
       {options.map((o) => (
         <button
           key={o.id}
           type="button"
           className={ui.segment}
           aria-pressed={value === o.id}
+          data-e2e-key={o.id}
           onClick={() => onChange(o.id)}
         >
           {o.label}

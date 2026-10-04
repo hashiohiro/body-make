@@ -49,7 +49,12 @@ export function ExerciseCard({
   const t = useT();
 
   return (
-    <section className={ui.card} id={`ex-card-${exercise.id}`}>
+    <section
+      className={ui.card}
+      id={`ex-card-${exercise.id}`}
+      data-e2e="exercise-card"
+      data-e2e-key={exercise.id}
+    >
       <div className={s.exHead}>
         <span className={s.exName}>{exerciseName(t, exercise)}</span>
         <Tag>{t(GROUP_KEYS[exercise.group])}</Tag>
@@ -70,6 +75,7 @@ export function ExerciseCard({
             <MiniButton
               label={t('exercise.reorderOf', { name: exerciseName(t, exercise) })}
               onClick={onMove}
+              e2e="exercise-move"
             >
               ⇅
             </MiniButton>
@@ -77,6 +83,7 @@ export function ExerciseCard({
           <MiniButton
             label={t('exercise.removeFromDay', { name: exerciseName(t, exercise) })}
             onClick={onRemove}
+            e2e="exercise-remove"
           >
             ×
           </MiniButton>
@@ -108,6 +115,7 @@ export function ExerciseCard({
           type="button"
           className={`${ui.detailBtn} ${s.editBtn}`}
           aria-label={t('exercise.editSetsOf', { name: exerciseName(t, exercise) })}
+          data-e2e="exercise-edit"
           onClick={onEdit}
         >
           {t('common.edit')}
@@ -116,6 +124,7 @@ export function ExerciseCard({
           type="button"
           className={ui.detailBtn}
           aria-label={t('common.trendOf', { name: exerciseName(t, exercise) })}
+          data-e2e="exercise-trend"
           onClick={onOpenDetail}
         >
           {t('common.trend')}
@@ -133,6 +142,7 @@ export function ExerciseCard({
               : t('exercise.setGoalOf', { name: exerciseName(t, exercise) })
           }
           onClick={onOpenGoal}
+          data-e2e="exercise-goal"
         >
           {t('common.goal')}
         </button>

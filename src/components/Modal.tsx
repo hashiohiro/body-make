@@ -181,7 +181,7 @@ export function Modal({ open, title, onClose, onBack, tall, action, children }: 
     >
       <div className={s.head}>
         {onBack && (
-          <button type="button" className={s.back} onClick={onBack}>
+          <button type="button" className={s.back} onClick={onBack} data-e2e="dialog-back">
             ‹ {t('common.back')}
           </button>
         )}
@@ -202,6 +202,7 @@ export function Modal({ open, title, onClose, onBack, tall, action, children }: 
           type="button"
           className={`${s.close} ${action ? s.closeAfterAction : ''}`}
           onClick={onClose}
+          data-e2e="dialog-close"
         >
           {t('common.close')}
         </button>

@@ -67,6 +67,7 @@ export function GroupGoalEditor({ group, target, sets, volume, days, onChange }:
         <div className={s.goalValueRow}>
           <NumericInput
             id={id}
+            e2e={`group-goal-${kind}`}
             className={s.goalValue}
             ariaLabel={t(isVolume ? 'groupGoal.volumeOf' : 'exercise.goalOf', { name })}
             value={value}

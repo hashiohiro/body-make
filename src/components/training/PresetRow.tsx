@@ -25,7 +25,14 @@ export function PresetRow({ name, groups, count, label, onClick }: Props) {
   const t = useT();
 
   return (
-    <button type="button" className={s.presetPick} aria-label={label} onClick={onClick}>
+    <button
+      type="button"
+      className={s.presetPick}
+      aria-label={label}
+      onClick={onClick}
+      data-e2e="preset-apply"
+      data-e2e-key={name}
+    >
       <span className={s.presetName}>{name}</span>
       <span className={s.presetGroups}>{groups}</span>
       <span className={s.presetCount}>{t('training.exercises', { n: count })}</span>

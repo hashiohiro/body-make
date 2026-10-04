@@ -156,6 +156,8 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selection, includeOwn
       <Pill
         key={id}
         pressed={picked}
+        e2e="catalog-item"
+        e2eKey={id}
         onClick={() =>
           picked && selection
             ? selection.onToggle(id)
@@ -198,6 +200,8 @@ export function CatalogPicker({ exercises, onAdd, usedIds, selection, includeOwn
       <Pill
         key={exercise.id}
         pressed={picked}
+        e2e="catalog-item"
+        e2eKey={exercise.id}
         onClick={() =>
           picked && selection
             ? selection.onToggle(exercise.id)

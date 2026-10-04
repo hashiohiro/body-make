@@ -97,6 +97,7 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
 
               <NumberField
                 label={t('records.fieldWeight')}
+                e2e={`body-${slot.id}-weight`}
                 value={measurement.weight}
                 fallback={prevWeight}
                 step={0.1}
@@ -106,6 +107,7 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
               />
               <NumberField
                 label={t('records.fieldBodyFat')}
+                e2e={`body-${slot.id}-bodyfat`}
                 value={measurement.bodyFat}
                 fallback={prevBodyFat}
                 step={0.1}
@@ -116,6 +118,7 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
               {waistEnabled && (
                 <NumberField
                   label={t('records.fieldWaist')}
+                  e2e={`body-${slot.id}-waist`}
                   value={measurement.waist}
                   fallback={prevWaist}
                   step={0.1}
@@ -131,7 +134,7 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
 
       <div className={s.summary}>
         <span>{t('records.dayAverage')}</span>
-        <b>
+        <b data-e2e="body-day-average">
           {fmt(avgWeight)} kg / {fmt(avgBodyFat)} %{waistEnabled && <> / {fmt(avgWaist)} cm</>}
         </b>
       </div>

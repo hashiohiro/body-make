@@ -215,14 +215,19 @@ function AppShell({ body }: { body: BodyData }) {
                     className={s.back}
                     onClick={back}
                     aria-label={t('common.back')}
+                    data-e2e="page-back"
                   >
                     ‹ {backLabel}
                   </button>
-                  <h1 className={s.title}>{title}</h1>
+                  <h1 className={s.title} data-e2e="page-title">
+                    {title}
+                  </h1>
                 </>
               ) : (
                 <>
-                  <h1 className={s.title}>{t(TITLE_KEYS[route.tab])}</h1>
+                  <h1 className={s.title} data-e2e="page-title">
+                    {t(TITLE_KEYS[route.tab])}
+                  </h1>
                   {/* 記録タブでは日付そのものが操作対象なので、日付ナビをヘッダに出す */}
                   {route.tab === 'records' ? (
                     <DateNav date={date} today={today} onChange={setDate} />
@@ -241,6 +246,7 @@ function AppShell({ body }: { body: BodyData }) {
             {route.tab !== 'settings' && (
               <Segmented
                 label={t('nav.domain')}
+                e2e="domain"
                 value={domain}
                 options={[
                   { id: 'body', label: t('nav.body') },

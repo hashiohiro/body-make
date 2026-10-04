@@ -36,7 +36,7 @@ export function GroupWeekLine({ group, sets, volume, target }: Props) {
   );
 
   return (
-    <dl className={s.ripple} data-group-week>
+    <dl className={s.ripple} data-group-week data-e2e="group-week">
       <div className={s.rippleRow}>
         <dt className={s.rippleLabel}>{t('ripple.groupWeek', { group: t(GROUP_KEYS[group]) })}</dt>
         <dd className={s.rippleValue}>{setsValue}</dd>

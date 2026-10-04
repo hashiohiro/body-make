@@ -43,6 +43,8 @@ interface Props<T> {
    *   流せると分からなければ、隠れたチップは無いのと同じ）
    */
   scrollable?: boolean | undefined;
+  /** E2E の目印。各チップは `data-e2e-key` に選択肢の id を持つ */
+  e2e?: string | undefined;
 }
 
 /**
@@ -91,6 +93,7 @@ export function ChipGroup<T extends string | number>({
   showLabel,
   tight,
   scrollable,
+  e2e,
 }: Props<T>) {
   const id = useId();
   const rowRef = useRef<HTMLDivElement>(null);
@@ -141,6 +144,7 @@ export function ChipGroup<T extends string | number>({
       ref={rowRef}
       className={`${ui.chipRow} ${tight ? s.tight : ''} ${scrollable ? s.inScroller : ''} ${fade}`}
       role="group"
+      data-e2e={e2e}
       onScroll={scrollable ? measure : undefined}
       {...(showLabel ? { 'aria-labelledby': id } : { 'aria-label': label })}
     >
@@ -150,6 +154,7 @@ export function ChipGroup<T extends string | number>({
           type="button"
           className={ui.chip}
           aria-pressed={value === o.id}
+          data-e2e-key={o.id}
           onClick={() => onChange(o.id)}
         >
           {o.label}

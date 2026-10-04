@@ -16,6 +16,8 @@ interface Props {
    * 消せてよい欄（目標日）だけが明示的に手を挙げる。
    */
   clearable?: boolean | undefined;
+  /** E2E の目印（`data-e2e`） */
+  e2e?: string | undefined;
 }
 
 /**
@@ -24,12 +26,13 @@ interface Props {
  * 持っているのは「空にできるか」と、字の大きさ（`field-text`）。
  * 端末のピッカーが出るので、見た目の作り込みはしない。
  */
-export function DateField({ value, onChange, label, id, className, clearable }: Props) {
+export function DateField({ value, onChange, label, id, className, clearable, e2e }: Props) {
   return (
     <input
       id={id}
       className={className}
       type="date"
+      data-e2e={e2e}
       value={value}
       {...(label == null ? {} : { 'aria-label': label })}
       onChange={(e) => {
