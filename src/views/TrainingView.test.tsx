@@ -4631,6 +4631,137 @@ describe('プリセット（種目の組み合わせ）', () => {
     expect(screen.queryByText('未保存')).toBeNull();
   });
 
+  /** 帯の値（プリセット）。文字で引くと、同じ名前の一覧の行と取り違える */
+  const presetBand = () =>
+    document.querySelector('[data-e2e="aside-presets-value"]')?.textContent ?? null;
+
+  /*
+   * **保存の状態は、どのプリセットかで言う。**「保存済み」だけでは、
+   * 今日どの組み合わせでやっているかが帯から読めない。
+   * 決めるのは中身の一致なので、開き直しても（呼んだ記録が消えても）名前が出る。
+   */
+  it('組み合わせがプリセットと同じなら、帯にその名前が出る', async () => {
+    seedExercises('ex_bench', 'ex_pullup');
+    render(<Harness />);
+    addTwo();
+    save('押す日');
+    expect(presetBand()).toBe('押す日');
+
+    await remount();
+    render(<Harness />);
+    expect(presetBand()).toBe('押す日');
+  });
+
+  /** 呼んだあとに組み替えたら、元の名前に「変更あり」を添える（保存とずれたことも読める） */
+  it('呼び出したプリセットから組み替えると、帯に「変更あり」が出る', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      exercises: ['ex_bench', 'ex_pullup', 'ex_squat'].map((id, i) =>
+        fromCatalog(
+          CATALOG.find((c) => c.id === id)!,
+          i,
+        ),
+      ),
+      workouts: {},
+      presets: [{ id: 'p1', name: '押す日', exerciseIds: ['ex_bench'] }],
+    });
+    render(<Harness />);
+
+    openPresetAdd();
+    fireEvent.click(screen.getByRole('button', { name: '押す日をこの日に入れる' }));
+    expect(presetBand()).toBe('押す日');
+
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ スクワット/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expect(presetBand()).toBe('押す日（変更あり）');
+  });
+
+  /** 同じ中身のプリセットがある日は、保存の下書きにその名前を入れる（帯と同じものを指す） */
+  it('同じ中身のプリセットがあれば、保存の下書きはその名前になる', () => {
+    seedExercises('ex_bench', 'ex_pullup');
+    render(<Harness />);
+    addTwo();
+    save('押す日');
+
+    openPresets();
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットに保存' }));
+    expect((screen.getByLabelText('プリセットの名前') as HTMLInputElement).value).toBe('押す日');
+  });
+
+  /** 名前も中身も同じなら変わるものが無い。上書きの確認を出さず、増やしもしない */
+  it('名前も中身も同じまま保存すると、確認を出さずに閉じる', async () => {
+    seedExercises('ex_bench', 'ex_pullup');
+    render(<Harness />);
+    addTwo();
+    save('押す日');
+
+    openPresets();
+    fireEvent.click(screen.getByRole('button', { name: 'プリセットに保存' }));
+    fireEvent.click(screen.getByRole('button', { name: 'この名前で保存' }));
+    expect(screen.queryByText('同じ名前のプリセットがあります。')).toBeNull();
+    expect(screen.queryByLabelText('プリセットの名前')).toBeNull();
+
+    const saved = await storedData();
+    expect(saved.presets.map((p) => p.name)).toEqual(['押す日']);
+  });
+
+  /** 組み替えた日の「別の名前で保存」は、呼んだ名前を入れない（同じ名前で直すのは「更新」） */
+  it('組み替えた日の「別の名前で保存」は、呼んだ名前を下書きにしない', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      exercises: ['ex_bench', 'ex_pullup', 'ex_squat'].map((id, i) =>
+        fromCatalog(
+          CATALOG.find((c) => c.id === id)!,
+          i,
+        ),
+      ),
+      workouts: {},
+      presets: [{ id: 'p1', name: '押す日', exerciseIds: ['ex_bench'] }],
+    });
+    render(<Harness />);
+    openPresetAdd();
+    fireEvent.click(screen.getByRole('button', { name: '押す日をこの日に入れる' }));
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ スクワット/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+
+    openPresets();
+    fireEvent.click(screen.getByRole('button', { name: '別の名前で保存' }));
+    expect((screen.getByLabelText('プリセットの名前') as HTMLInputElement).value).not.toBe(
+      '押す日',
+    );
+  });
+
+  /** 同じ中身が 2 つあるなら、その日に呼んだほうの名前を出す */
+  it('同じ中身のプリセットが 2 つあるときは、呼び出したほうの名前が出る', () => {
+    seedRaw({
+      version: 7,
+      settings: {},
+      entries: {},
+      exercises: ['ex_bench', 'ex_pullup'].map((id, i) =>
+        fromCatalog(
+          CATALOG.find((c) => c.id === id)!,
+          i,
+        ),
+      ),
+      workouts: {},
+      presets: [
+        { id: 'p1', name: '押す日A', exerciseIds: ['ex_bench'] },
+        { id: 'p2', name: '押す日B', exerciseIds: ['ex_bench'] },
+      ],
+    });
+    render(<Harness />);
+
+    openPresetAdd();
+    fireEvent.click(screen.getByRole('button', { name: '押す日Bをこの日に入れる' }));
+    expect(presetBand()).toBe('押す日B');
+  });
+
   /**
    * **上書きの相手は ID で決める。**名前で突き合わせていたときは、名前を変えた
    * 瞬間に別のプリセットが増えていた。呼び出した日のあいだだけ覚えておく。

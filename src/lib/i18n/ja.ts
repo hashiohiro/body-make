@@ -468,7 +468,7 @@ export const ja = {
   'aside.presets': 'プリセットを開く',
   'aside.recovered': '回復済み',
   'aside.unsaved': '未保存',
-  'aside.saved': '保存済み',
+  'aside.edited': '{name}（変更あり）',
 
   // --- 記録画面（トレーニング） ---
   'training.removeTitle': 'この日から外しますか？',

@@ -450,7 +450,7 @@ export const en: Record<MessageKey, string> = {
   'aside.presets': 'Open presets',
   'aside.recovered': 'Recovered',
   'aside.unsaved': 'Unsaved',
-  'aside.saved': 'Saved',
+  'aside.edited': '{name} (edited)',
 
   'training.removeTitle': 'Remove from this day?',
   'training.removeNote': 'The sets you entered are deleted too. Other days are untouched.',

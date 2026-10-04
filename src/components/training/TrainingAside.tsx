@@ -1,7 +1,6 @@
-import { sameSet } from '../../lib/array';
 import { useState } from 'react';
 import { Modal } from '../Modal';
-import { PresetCard } from './PresetCard';
+import { PresetCard, matchingPreset } from './PresetCard';
 import type { PresetOption } from './PresetCard';
 import type { Preset } from '../../types';
 import { RecoveryDialog, recoverySummary } from './Recovery';
@@ -62,16 +61,24 @@ export function TrainingAside({
    * **押した先にあるものを言う。**まだ空の日は一覧が出るので件数を、
    * 組んだあとは保存の面が出るので保存の状態を出す。
    * 一度は空の日を「—」にしていたが、その頃は押した先に一覧が無かった。
+   *
+   * **保存の状態は、どのプリセットかで言う。**「保存済み」だけでは、
+   * 今日どの組み合わせでやっているかが帯から読めない。
+   * どれに合うかの決め方は `matchingPreset`（保存の下書きと同じものを指す）。
+   * 呼んだあとに組み替えてどれとも合わなくなったら、元の名前に「変更あり」を添える。
    */
-  const unsaved = composing && !presets.some((p) => sameSet(p.exerciseIds, currentIds));
+  const matched = matchingPreset(presets, applied, currentIds);
+  const unsaved = composing && matched == null;
   const pickable = presets.length + (todayMenu ? 1 : 0);
   const presetValue = !composing
     ? pickable === 0
       ? '—'
       : t('settings.count', { n: pickable })
-    : unsaved
-      ? t('aside.unsaved')
-      : t('aside.saved');
+    : matched
+      ? matched.name
+      : applied
+        ? t('aside.edited', { name: applied.name })
+        : t('aside.unsaved');
 
   return (
     <>
@@ -80,11 +87,12 @@ export function TrainingAside({
           type="button"
           className={s.asideItem}
           aria-label={t('aside.recovery')}
+          data-e2e="aside-recovery"
           onClick={() => setOpen('recovery')}
         >
           {/* 出しているのは回復した部位だけなので、見出しでそう言う（値は名前だけ） */}
           <span className={s.asideLabel}>{t('aside.recovered')}</span>
-          <span className={s.asideValue}>
+          <span className={s.asideValue} data-e2e="aside-recovery-value">
             {recoverySummary(t, history, date) ?? t('recovery.none')}
           </span>
           <span className={s.asideChevron} aria-hidden="true">
@@ -96,10 +104,16 @@ export function TrainingAside({
           type="button"
           className={s.asideItem}
           aria-label={t('aside.presets')}
+          data-e2e="aside-presets"
           onClick={() => setOpen('presets')}
         >
           <span className={s.asideLabel}>{t('settings.presets')}</span>
-          <span className={`${s.asideValue} ${unsaved ? s.asideAlert : ''}`}>{presetValue}</span>
+          <span
+            className={`${s.asideValue} ${unsaved ? s.asideAlert : ''}`}
+            data-e2e="aside-presets-value"
+          >
+            {presetValue}
+          </span>
           <span className={s.asideChevron} aria-hidden="true">
             ›
           </span>

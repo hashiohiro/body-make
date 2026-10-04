@@ -16,6 +16,22 @@ export interface PresetOption extends Preset {
   groupsLabel: string;
 }
 
+/**
+ * いまの組み合わせと同じ中身のプリセット。無ければ null。
+ *
+ * 決めるのは中身の一致（呼んだ記録は読み込み直すと消えるので、それには頼らない）。
+ * 同じ中身が複数あるときは、その日に呼んだもの → 一覧で先のもの。
+ * 帯の値と保存の下書きが同じものを指すように、決め方はここ 1 か所に置く。
+ */
+export function matchingPreset<P extends Preset>(
+  presets: readonly P[],
+  applied: P | null,
+  currentIds: readonly string[],
+): P | null {
+  if (applied != null && sameSet(applied.exerciseIds, currentIds)) return applied;
+  return presets.find((preset) => sameSet(preset.exerciseIds, currentIds)) ?? null;
+}
+
 interface Props {
   presets: readonly PresetOption[];
   /** その日にいま入っている種目 */
@@ -77,7 +93,8 @@ export function PresetCard({
 
   const composing = currentIds.length > 0;
   // いまの組み合わせがそのまま残っているなら、保存しても同じものが増えるだけ
-  const alreadySaved = presets.some((preset) => sameSet(preset.exerciseIds, currentIds));
+  const matched = matchingPreset(presets, applied, currentIds);
+  const alreadySaved = matched != null;
   /** 呼び出したあとに中身を変えたか。変えていなければ上書きする意味がない */
   const changed = applied != null && !sameSet(applied.exerciseIds, currentIds);
 
@@ -147,10 +164,18 @@ export function PresetCard({
              * 同じ名前があれば上書きする。黙って 2 つ並べると、
              * 一覧で名前から見分けられないものが増える（手がかりが部位と件数しかない）。
              * 消えるのは前の中身なので、上書きすることは先に伝える。
+             *
+             * **名前も中身も同じなら、何もせずに閉じる。**上書きしても変わるものが無いのに
+             * 「前の組み合わせは戻せません」と聞くと、何かが消えるように読める。
              */
             const trimmed = name.trim().slice(0, PRESET_NAME_MAX);
-            if (!presets.some((preset) => preset.name === trimmed)) {
+            const taken = presets.find((preset) => preset.name === trimmed);
+            if (taken == null) {
               save();
+              return;
+            }
+            if (sameSet(taken.exerciseIds, currentIds)) {
+              setSaving(false);
               return;
             }
             ask({
@@ -186,6 +211,7 @@ export function PresetCard({
               <Button
                 tone="primary"
                 onClick={() => onUpdate({ ...applied, exerciseIds: [...currentIds] })}
+                e2e="preset-update"
               >
                 {t('preset.updateNamed', { name: applied.name })}
               </Button>
@@ -193,10 +219,15 @@ export function PresetCard({
             <Button
               tone={changed ? undefined : 'primary'}
               onClick={() => {
-                // 下書きは部位から作る。そのまま使ってもいいし、書き換えてもいい
-                setName(currentName);
+                /*
+                 * 下書きは、同じ中身のプリセットがあればその名前、無ければ部位から作る。
+                 * 組み替えた日（「別の名前で保存」）は、呼んだ名前を入れない——
+                 * 同じ名前で直すのは「更新」の役目で、ここは別の名前を付ける入口。
+                 */
+                setName(!changed && matched ? matched.name : currentName);
                 setSaving(true);
               }}
+              e2e="preset-save"
             >
               {changed ? t('preset.saveAsOther') : t('preset.save')}
             </Button>
