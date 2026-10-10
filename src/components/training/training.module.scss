@@ -337,14 +337,14 @@
   background: var(--dot-on);
 }
 
-/* 端数（1/4 単位）。目標の内側は残りを「まだ」の色で塗る */
+/* 端数（1/4 単位）。左から縦に塗る。目標の内側は残りを「まだ」の色で塗る */
 .dotPart {
-  background: conic-gradient(var(--dot-on) 0 var(--fill), var(--border) var(--fill) 360deg);
+  background: linear-gradient(to right, var(--dot-on) var(--fill), var(--border) var(--fill));
 }
 
 /* 目標の外側・目標の無い部位の端数。残りは空ける（「まだ」ではない） */
 .dotPartOver {
-  background: conic-gradient(var(--dot-on) 0 var(--fill), transparent var(--fill) 360deg);
+  background: linear-gradient(to right, var(--dot-on) var(--fill), transparent var(--fill));
 }
 
 /* ---- 種目ピッカー / 種目管理 ---- */

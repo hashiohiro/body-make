@@ -18,25 +18,25 @@ const kinds = () =>
   );
 
 /*
- * 補助部位の係数で半端なセット数になる。端数は 1/4 単位で欠けた丸にし、
+ * 補助部位の係数で半端なセット数になる。端数は 1/4 単位で左から縦に塗った丸にし、
  * 「まだ」の色は目標に届いていない丸だけに使う（2026/10/10、利用者の指摘）。
  */
 describe('GroupWeekDots', () => {
   it('目標に届いていれば、超えた端数の丸に「まだ」を出さない', () => {
     render(<GroupWeekDots group="shoulders" sets={2.5} target={{ sets: 2, volume: null }} />);
-    expect(kinds()).toEqual(['on', 'on', 'over 180deg']);
+    expect(kinds()).toEqual(['on', 'on', 'over 50%']);
     expect(screen.getByRole('img').className).toMatch(/dotsReached/);
   });
 
   it('目標の内側の端数は、残りを「まだ」の色で塗る', () => {
     render(<GroupWeekDots group="shoulders" sets={1.75} target={{ sets: 3, volume: null }} />);
-    expect(kinds()).toEqual(['on', 'part 270deg', 'open']);
+    expect(kinds()).toEqual(['on', 'part 75%', 'open']);
   });
 
   it('端数は 1/4 単位に丸める', () => {
     render(<GroupWeekDots group="shoulders" sets={1.3} target={null} />);
     // 1.3 → 1.25。目標が無いので残りは空ける
-    expect(kinds()).toEqual(['on', 'over 90deg']);
+    expect(kinds()).toEqual(['on', 'over 25%']);
   });
 
   it('目標どおりなら、丸は目標の数だけですべて塗る', () => {
