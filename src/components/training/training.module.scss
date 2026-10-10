@@ -325,12 +325,26 @@
   background: var(--border);
 }
 
-.dotOn {
-  background: var(--s-weight);
+.dots {
+  --dot-on: var(--s-weight);
 }
 
-.dotsReached .dotOn {
-  background: var(--good-text);
+.dotsReached {
+  --dot-on: var(--good-text);
+}
+
+.dotOn {
+  background: var(--dot-on);
+}
+
+/* 端数（1/4 単位）。目標の内側は残りを「まだ」の色で塗る */
+.dotPart {
+  background: conic-gradient(var(--dot-on) 0 var(--fill), var(--border) var(--fill) 360deg);
+}
+
+/* 目標の外側・目標の無い部位の端数。残りは空ける（「まだ」ではない） */
+.dotPartOver {
+  background: conic-gradient(var(--dot-on) 0 var(--fill), transparent var(--fill) 360deg);
 }
 
 /* ---- 種目ピッカー / 種目管理 ---- */
