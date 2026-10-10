@@ -1,4 +1,4 @@
-import { deltaTone, fmt, fmtDelta, fmtVolume } from '../../lib/format';
+import { deltaTone, fmtDelta, fmtVolume } from '../../lib/format';
 import { REP_UNIT_KEYS, catalogEquipment, countsReps, isCardio } from '../../lib/exerciseCatalog';
 import type { ExerciseHistoryPoint } from '../../lib/training';
 import type { Exercise, ExercisePoint } from '../../types';
@@ -23,20 +23,16 @@ interface Props {
   best: number | null;
   /** 同じくその日より前の、記録した重量の最高値 */
   bestWeight: number | null;
-  /**
-   * 記録のカードに置く形。**その日の量の数字 1 つと前回との差だけ**を大きく出す
-   * （2026/10/10、利用者の指摘：文字が多い）。推定1RM・回数・通算の最高は出さない
-   * ——入力ダイアログ（この部品の通常の形）と「推移」が持つ。
-   */
-  compact?: boolean | undefined;
+  /** 入力ダイアログに置く。右に寄せ、数字を少し控えめにする（主役は入力欄） */
+  inEditor?: boolean | undefined;
 }
 
 /**
- * その日の合計と、通算の最高。**カードとセット入力の両方で同じものを出す。**
+ * その日の量。**数字 1 つと前回との差（+ / −）、最高を超えたら ★ の印。**
+ * カードとセット入力の両方で同じものを出す（別々に組むと数字の出し方がずれる）。
  *
- * 打ちながら「前回を超えたか」「最高に届くか」を見たくなる。入力はダイアログに
- * 移したので、そこに無いと、確かめるたびに閉じてカードへ戻ることになる。
- * 別々に組むと数字の出し方がずれるので、同じ部品を両方に置く。
+ * 推定1RM・合計の回数・通算の最高の文字は置かない（2026/10/10、利用者の指摘：文字が多い）。
+ * 数字は「推移」が持つ。
  */
 export function ExerciseTotals({
   exercise,
@@ -45,7 +41,7 @@ export function ExerciseTotals({
   previous,
   best,
   bestWeight,
-  compact,
+  inEditor,
 }: Props) {
   /*
    * 記録は kg で持っている（`lib/weight.ts`）。ここは読む場所なので、
@@ -91,14 +87,8 @@ export function ExerciseTotals({
    * 重量を打った瞬間に太字が「30回」から「600 kg」へすり替わり、
    * 出せない種目には何を書くべきかが場面ごとの判断になっていた。
    *
-   * **同じ事実を 2 か所に出さない。**量が回数の種目では回数を左に添えない
-   * （太字がそれを言っている）。逆に挙上量が量の種目では、回数を左に出す。
    */
   const count = point?.reps ?? 0;
-  const countLabel = t('totals.amount', {
-    n: count,
-    unit: t(REP_UNIT_KEYS[exercise.repUnit]),
-  });
 
   /*
    * 挙上量を量にできる種目か。**打てば出る／体重を入れれば出る**ものだけ。
@@ -129,182 +119,58 @@ export function ExerciseTotals({
     </p>
   );
 
-  if (compact) {
-    // 量は通常の形の太字と同じ決め方（挙上量 / 総レップ・総秒数 / 距離・時間）
-    const big = cardio
-      ? point?.meters != null
-        ? { label: t('metric.distance'), value: String(point.meters), unit: 'm' }
-        : (point?.minutes ?? 0) > 0
-          ? {
-              label: t('metric.duration'),
-              value: String(point?.minutes),
-              unit: t('metric.durationUnit'),
-            }
-          : null
-      : byVolume
-        ? rawVolume > 0
-          ? { label: t('metric.volume'), value: fmtVolume(volume), unit: volumeUnit }
-          : null
-        : count > 0
-          ? { label: null, value: String(count), unit: t(REP_UNIT_KEYS[exercise.repUnit]) }
-          : null;
-    // 差は ▲▼ と色で見せる。挙上量のときだけ（前回比を持つのは挙上量）
-    const arrow = big && byVolume && !cardio && delta != null ? delta : null;
-    return (
-      <>
-        <div className={s.exBig} data-e2e="exercise-totals">
-          {big == null ? (
-            // まだ何も打っていない。0 と書かず、セット数だけを出す
-            <span className={s.exBigEmpty}>{t('common.sets', { n: point?.workSets ?? 0 })}</span>
-          ) : (
-            <>
-              {big.label && <span className={s.exBigLabel}>{big.label}</span>}
-              <b className={s.exBigValue}>{big.value}</b>
-              <span className={s.exBigUnit}>{big.unit}</span>
-              {arrow != null && (
-                <span
-                  className={`${s.exBigDelta} ${TONE_CLASS[tone]}`}
-                  aria-label={fmtDelta(arrow, 0)}
-                >
-                  <span aria-hidden="true">{arrow > 0 ? '▲' : arrow < 0 ? '▼' : '±'}</span>
-                  {fmtVolume(Math.abs(arrow))}
-                </span>
-              )}
-            </>
-          )}
-        </div>
-        {partialNote}
-      </>
-    );
-  }
-
+  const big = cardio
+    ? point?.meters != null
+      ? { label: t('metric.distance'), value: String(point.meters), unit: 'm' }
+      : (point?.minutes ?? 0) > 0
+        ? {
+            label: t('metric.duration'),
+            value: String(point?.minutes),
+            unit: t('metric.durationUnit'),
+          }
+        : null
+    : byVolume
+      ? rawVolume > 0
+        ? { label: t('metric.volume'), value: fmtVolume(volume), unit: volumeUnit }
+        : null
+      : count > 0
+        ? { label: null, value: String(count), unit: t(REP_UNIT_KEYS[exercise.repUnit]) }
+        : null;
+  // 差は符号と色で見せる。挙上量のときだけ（前回比を持つのは挙上量）
+  const arrow = big && byVolume && !cardio && delta != null ? delta : null;
   return (
     <>
-      <div className={s.exFoot} data-e2e="exercise-totals">
-        {/*
-          有酸素の 1 行は「セット」ではなく **1 本**（インターバルの 400m×5本、
-          サーキットのラウンド数）。筋トレの言葉のままにはしない。
-
-          **1 本のときは数を出さない。**ランニングはふつう通しで 1 回走るもので、
-          そこで知りたいのは「どれだけ走ったか」。「1 本」は読むものが増えるだけになる。
-          分けて打ったときだけ、本数そのものが量として意味を持つ。
-        */}
-        <span>
-          {cardio
-            ? (point?.workSets ?? 0) > 1
-              ? t('totals.cardioSets', { n: point?.workSets ?? 0 })
-              : ''
-            : t('common.sets', { n: point?.workSets ?? 0 })}
-        </span>
-        {/*
-          有酸素は挙上量を持たない。**0 kg と書かない。**
-          出すのはその日の合計距離と、そこから出した速度（筋トレの 挙上量 / 推定1RM にあたる）。
-        */}
-        {cardio ? (
-          <>
-            {point?.speed != null && <span>{t('common.speed', { n: fmt(point.speed) })}</span>}
-            <b>
-              {point?.meters != null
-                ? `${point.meters} m`
-                : t('totals.minutes', { n: point?.minutes ?? 0 })}
-            </b>
-          </>
+      <div className={`${s.exBig} ${inEditor ? s.exBigEditor : ''}`} data-e2e="exercise-totals">
+        {big == null ? (
+          // まだ何も打っていない。0 と書かず、セット数だけを出す
+          <span className={s.exBigEmpty}>{t('common.sets', { n: point?.workSets ?? 0 })}</span>
         ) : (
           <>
-            {/*
-              推定1RM は**元にしたセットを添えない。**その日のセットはすぐ下に並んでいて、
-              どれが最大かは見れば分かる。「（60kg × 10 から）」まで置くと読むものが増える。
-            */}
-            {point?.oneRm != null && (
-              <span>
-                {t('totals.oneRm', { value: fmt(conv(point.oneRm)), unit: unitLabel })}
-                {point.measured ? ' *' : ''}
+            {big.label && <span className={s.exBigLabel}>{big.label}</span>}
+            <b className={s.exBigValue} data-e2e="exercise-amount">
+              {big.value}
+            </b>
+            <span className={s.exBigUnit}>{big.unit}</span>
+            {arrow != null && (
+              <span className={`${s.exBigDelta} ${TONE_CLASS[tone]}`} data-e2e="exercise-delta">
+                {/* 符号は + / −（▲▼ より読み慣れている。2026/10/10、利用者の指摘）。桁区切りは量と同じ */}
+                {fmtDelta(arrow, 0).slice(0, 1)}
+                {fmtVolume(Math.abs(arrow))}
+                {/* 入力ダイアログでは何との差かを添える（2026/10/10、利用者の指摘） */}
+                {inEditor && <span className={s.exBigDeltaNote}>（{t('totals.vsPrevious')}）</span>}
               </span>
             )}
-            {/*
-              **持っていない指標を 0 と書かない。**有酸素で 0 kg を出さないのと同じ理由。
-
-              挙上量が出ないのは 3 通りある。どれも「掛ける相手がない」で、
-              やっていないという意味ではない。
-                重量が空のセットしかない          … 重量 × 回数 の重量が無い
-                秒で数える種目（プランク）        … 重量 × 秒 は挙上量にならない
-                体重を乗せない自重種目（レッグレイズ）… 重量欄が空なら 0 × 回数
-              代わりに、その種目が実際に持っている量（合計の回数・秒数）を出す。
-            */}
-            {/* 回数は、挙上量が量の種目でだけ左に添える（量が回数なら太字が言っている） */}
-            {byVolume && count > 0 && <span>{countLabel}</span>}
-            {/*
-              器具を使わない自重種目で加重した日。**量は総レップのまま**なので、
-              打った加重ぶんの挙上量はここに添える。
-            */}
-            {!byVolume && rawVolume > 0 && (
-              <span>{t('totals.volumeValue', { value: fmtVolume(volume), unit: volumeUnit })}</span>
+            {/* 通算の最高（重量か挙上量）を超えた日。数字ではなく印で知らせる */}
+            {!cardio && (overVolume || overWeight) && (
+              <span className={s.exBigBest} data-e2e="exercise-new-best">
+                <span aria-hidden="true">★</span>
+                {t('totals.newBest')}
+              </span>
             )}
-            {/*
-              **太字はその種目の量。**挙上量が量の種目で、まだ出せないときは空にする
-              （`0 kg` も `—` も書かない。打てば同じ位置が kg になる）。
-            */}
-            <b>
-              {byVolume ? (
-                rawVolume > 0 ? (
-                  <>
-                    {/* 何の数字か分かるように「挙上量」を添える（2026/10/10、利用者の指摘） */}
-                    {t('totals.volumeValue', { value: fmtVolume(volume), unit: volumeUnit })}
-                    {delta != null && (
-                      <span className={`${ui.hint} ${TONE_CLASS[tone]}`}>
-                        {' '}
-                        {fmtDelta(delta, 0)}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  ''
-                )
-              ) : count > 0 ? (
-                countLabel
-              ) : (
-                ''
-              )}
-            </b>
           </>
         )}
       </div>
-
       {partialNote}
-
-      {/*
-        通算の最高。前回との差は上の行が持っているので、ここは通算で見る。
-
-        **残り（あと N kg）は出さない。**その日の合計はすぐ上の行にあり、
-        並べれば届いたかどうかは読める。差を書くと、打つたびに動く数字が
-        1 行に 2 つ並ぶ（前回比と残り）。
-      */}
-      {!cardio && (bestWeight != null || (best != null && best > 0)) && (
-        <div className={s.exPrev} data-e2e="exercise-best">
-          {/*
-            その日が通算の最高を超えたら、**この行そのものを `60.0 → 62.5` にする。**
-
-            超えた事実を別の行で足すと、すぐ上と同じことを 2 回言うことになる
-            （`bestWeight` は「その日より前」の最高なので、並べれば超えたことは
-            読めるが、読む側に引き算をさせる）。行は増やさない。
-
-            **残り（あと N kg）は出さない**のは今までどおり。出すのは跨いだ事実だけで、
-            距離ではない。
-          */}
-          {bestWeight != null && (
-            <span>
-              {t('totals.bestWeight')} {fmt(conv(bestWeight))}
-              {overWeight && <> → {fmt(conv(topWeight!))}</>} {unitLabel}
-            </span>
-          )}
-          {best != null && best > 0 && (
-            <span>
-              {t('totals.bestVolume')} {fmtVolume(conv(best))}
-              {overVolume && <> → {fmtVolume(conv(rawVolume))}</>} {volumeUnit}
-            </span>
-          )}
-        </div>
-      )}
     </>
   );
 }

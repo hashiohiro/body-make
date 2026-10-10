@@ -1,9 +1,9 @@
-import { GROUP_KEYS, REP_UNIT_KEYS, exerciseName, isCardio } from '../../lib/exerciseCatalog';
+import { GROUP_KEYS, exerciseName, isCardio } from '../../lib/exerciseCatalog';
 import type { ReactNode } from 'react';
 import { ExerciseTotals } from './ExerciseTotals';
 import type { ExerciseHistoryPoint } from '../../lib/training';
-import type { Exercise, ExercisePoint, RepUnit } from '../../types';
-import { useWeightFormat } from '../../hooks/useWeightUnit';
+import type { Exercise, ExercisePoint } from '../../types';
+import { SetChips } from './SetChips';
 import ui from '../../styles/ui.module.scss';
 import { MiniButton } from '../MiniButton';
 import { Tag } from '../Tag';
@@ -29,7 +29,7 @@ interface Props {
   onOpenGoal: () => void;
   /** セットを打つダイアログを開く。**入力はカードではなく面を分けて置く** */
   onEdit: () => void;
-  /** この部位の今週と部位の目標（`GroupWeekLine`）、この種目の目標（`ExerciseGoalLine`） */
+  /** この種目の目標の棒（`ExerciseGoalBar`）と、部位の今週の丸（`GroupWeekDots`） */
   groupWeek?: ReactNode;
 }
 
@@ -94,7 +94,6 @@ export function ExerciseCard({
         推定1RM・回数・通算の最高は、入力ダイアログと「推移」が持つ。
       */}
       <ExerciseTotals
-        compact
         exercise={exercise}
         point={point}
         bodyWeight={bodyWeight}
@@ -153,34 +152,5 @@ export function ExerciseCard({
         </button>
       </div>
     </section>
-  );
-}
-
-/**
- * その日のセットを「60 kg × 10回」で並べる。重量の無いセット（自重・秒）は「10回」「30秒」。
- * 重量は打った値を読むときの単位で出し、小数は要るときだけ付ける（60 / 62.5）。
- */
-function SetChips({ point, repUnit }: { point: ExercisePoint | null; repUnit: RepUnit }) {
-  const t = useT();
-  const { label: unitLabel, conv } = useWeightFormat();
-  const sets = (point?.sets ?? []).filter((x) => x.reps != null || x.weight != null);
-  if (sets.length === 0) return null;
-  // 回数には単位が付くので、重量にも付ける（「9×10」では何の 9 か読めない。2026/10/10、利用者の指摘）
-  const amount = (n: number | null) =>
-    n == null ? '—' : t('totals.amount', { n, unit: t(REP_UNIT_KEYS[repUnit]) });
-  return (
-    <ul className={s.setChips} data-e2e="exercise-set-chips">
-      {sets.map((x) => (
-        <li key={x.index}>
-          {x.weight != null
-            ? t('card.setOf', {
-                weight: Number(conv(x.weight).toFixed(1)),
-                unit: unitLabel,
-                amount: amount(x.reps),
-              })
-            : amount(x.reps)}
-        </li>
-      ))}
-    </ul>
   );
 }

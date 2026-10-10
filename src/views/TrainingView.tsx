@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCard } from '../components/training/CheckCard';
 import { ChipGroup } from '../components/ChipGroup';
-import { ExerciseRipple } from '../components/training/ExerciseRipple';
 import { TrainingAside } from '../components/training/TrainingAside';
 import type { PresetOption } from '../components/training/PresetCard';
 import { ExerciseCard } from '../components/training/ExerciseCard';
-import { GroupWeekDots, GroupWeekLine } from '../components/training/GroupWeekLine';
-import { ExerciseGoalBar, ExerciseGoalLine } from '../components/training/ExerciseGoalLine';
+import { GroupWeekDots } from '../components/training/GroupWeekDots';
+import { ExerciseGoalBar } from '../components/training/ExerciseGoalBar';
 import { ExerciseSetEditor } from '../components/training/ExerciseSetEditor';
 import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialog';
 import { ExercisePicker } from '../components/training/ExercisePicker';
@@ -20,7 +19,6 @@ import { byName, exerciseName, groupsOf, isCardio, muscleOf } from '../lib/exerc
 import { addDays, startOfWeek, weekdayIndex } from '../lib/date';
 import {
   buildBodyWeightLookup,
-  cardioWeek,
   personalBest,
   pickTopWeight,
   pickVolume,
@@ -95,7 +93,6 @@ export function TrainingView({ body, date }: Props) {
     () => weeklySets.find((w) => w.start === startOfWeek(date)) ?? null,
     [weeklySets, date],
   );
-  const cardioOfWeek = useMemo(() => cardioWeek(sessions, startOfWeek(date)), [sessions, date]);
   /*
    * その日に使える体重。自重種目の「足される側」を出すのに要る。
    * 集計側と**同じ引き当て**（その日 → その日の移動平均 → 直近過去）を使う。
@@ -517,44 +514,6 @@ export function TrainingView({ body, date }: Props) {
             onWeightUnitChange={setInputUnit}
             // 既定のセット。**薄く出すだけ**で、打つまで記録には入らない
             defaultSets={defaultSetsFor(data.presets, editExercise.id, date)}
-            /*
-              その一打が、この種目の外に動かしたもの（`docs/design-ripple.md` §2）。
-              組み立てるのはここ——週の配分も部位の回復も、入力の面は持っていない。
-            */
-            ripple={
-              <>
-                {/* カードと同じ「この部位の今週」（ラベルと値）。打つたびに数が動く */}
-                {(() => {
-                  const muscle = muscleOf(editExercise.group);
-                  return muscle == null ? null : (
-                    <GroupWeekLine
-                      group={muscle}
-                      sets={(weekOfDate?.setsByGroup ?? NO_WEEK)[muscle]}
-                      target={data.groupGoals[muscle]}
-                    />
-                  );
-                })()}
-                {/* カードと同じ、この種目の目標。打つたびにいまの値が動く */}
-                <ExerciseGoalLine
-                  exercise={editExercise}
-                  sessions={sessions}
-                  date={date}
-                  goalPeriod={data.settings.goalPeriod}
-                />
-                <ExerciseRipple
-                  showGroup={false}
-                  exercise={editExercise}
-                  date={date}
-                  point={session?.exercises.find((p) => p.exerciseId === editExercise.id) ?? null}
-                  weekSets={weekOfDate?.setsByGroup ?? NO_WEEK}
-                  weekVolume={weekOfDate?.volumeByGroup ?? NO_WEEK}
-                  groupGoals={data.groupGoals}
-                  // 回復と同じ数え方を借りる。ここで数え直すと回復カードと食い違う
-                  todayGroupSets={checkHistory.groupSets.get(date) ?? null}
-                  cardio={cardioOfWeek}
-                />
-              </>
-            }
             // 自重種目の「足される側」。その日以前の直近の体重を引く
             bodyWeight={bodyWeightAt(date)}
             onValue={(index, field, value) =>

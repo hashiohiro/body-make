@@ -261,13 +261,18 @@ function setRows(): HTMLElement[] {
 }
 
 /**
- * 波及行だけを見る。
- *
- * 同じ数字がすぐ上の合計（`ExerciseTotals`）とカードにも出るので、
- * 画面全体から引くと、どれを見ているのか決まらない。
+ * その日の量（`ExerciseTotals`）の文字。見出し・数字・単位・差を空白でつなぐ（`挙上量 600 kg/日 +100`）。
+ * カードと入力ダイアログの両方に出るので、出ているぶんをすべて返す。
  */
-function ripple() {
-  return within(document.querySelector<HTMLElement>('[data-ripple]')!);
+function totalsTexts(root: ParentNode = document): string[] {
+  return [...root.querySelectorAll('[data-e2e="exercise-totals"]')].map((el) =>
+    [...el.childNodes].map((n) => n.textContent ?? '').join(' '),
+  );
+}
+
+/** 入力ダイアログのその日の量 */
+function dialogTotals(): string {
+  return totalsTexts(document.querySelector('dialog[open]')!)[0] ?? '';
 }
 
 /**
@@ -333,13 +338,11 @@ describe('トレ画面', () => {
 
     typeSet(rows[1]!, '60', '9');
 
-    // 60×10 + 60×9 = 1,140 kg（種目カードの小計）
-    expect(screen.getAllByText(/1,140 kg/).length).toBeGreaterThan(0);
-    // 推定1RM はベンチの分母 40 で 60 × (1 + 10/40) = 75.0。
-    // 打っている面（セット入力）にだけ出る。カードは数字 1 つと形にした（2026/10/10）
-    expect(screen.getAllByText(/推定1RM 75\.0 kg/)).toHaveLength(1);
-    // 換算元のセットは併記しない。その日のセットは編集の面に並んでいる
-    expect(screen.queryByText(/から）/)).toBeNull();
+    // 60×10 + 60×9 = 1,140 kg。打っている面とカードの両方に、大きな数字で出る
+    expect(dialogTotals()).toBe('挙上量 1,140 kg/日');
+    expect(totalsTexts()).toHaveLength(2);
+    // 推定1RM は置かない（数字 1 つと形にした。2026/10/10、利用者の指摘：文字が多い）
+    expect(screen.queryByText(/推定1RM/)).toBeNull();
   });
 
   /*
@@ -389,9 +392,8 @@ describe('トレ画面', () => {
   });
 
   /*
-   * 波及行（`docs/design-ripple.md` §2）。**その一打が種目の外に動かしたぶん。**
-   * 新しい計算は持たない——週の配分も回復も目標も、すでにどこかに出ている値を
-   * 打っている場所で引き直している。
+   * 部位の今週は、カードの丸が持つ（入力ダイアログには置かない。2026/10/10、利用者の指摘）。
+   * 目標を立てていなくても、やったぶんの丸と数が出る。
    */
   it('部位の今週は、部位の目標を立てていなくても出る', () => {
     seedExercises('ex_bench');
@@ -401,27 +403,21 @@ describe('トレ画面', () => {
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     expand('ベンチプレス');
 
-    // 入力ダイアログの「この部位の今週」（カードと同じ、ラベルと値）
-    const groupWeek = () =>
-      within(topDialogAny().getByText('胸 今週').closest<HTMLElement>('[data-group-week]')!);
-    // 単位は詰める（ほかの画面の `3セット` と同じ `common.sets`）
-    expect(groupWeek().getByText('0セット')).toBeTruthy();
+    const card = () => within(document.getElementById('ex-card-ex_bench')!);
+    expect(card().getByRole('img', { name: '胸 今週 0セット' })).toBeTruthy();
+    // 入力ダイアログには部位の行を出さない
+    expect(inDialog().queryByText(/胸/)).toBeNull();
 
     typeSet(setRows()[0]!, '60', '10');
 
-    // 目標を立てていなくても出す。打ったぶんだけ数が動く
-    expect(groupWeek().getByText('1セット')).toBeTruthy();
+    // 打ったぶんだけ数が動く。見出しは「セット数（胸）」
+    expect(card().getByRole('img', { name: '胸 今週 1セット' })).toBeTruthy();
+    expect(card().getByText('セット数（胸）')).toBeTruthy();
+    expect(card().getByText('1セット')).toBeTruthy();
   });
 
-  /*
-   * 部位の空きの行。**答えは日付だけ。**
-   *
-   * 以前は「胸の次 9/25（11 セット）」だった。ラベルが何の「次」か言っておらず、
-   * 添えたセット数は**すぐ上の行（`胸 今週`）がすでに言っている**ので、
-   * 答えである日付が埋もれていた。
-   */
-  it('部位が回復する日は、日付だけを出す', async () => {
-    const { addDays, formatMD, todayISO } = await import('../lib/date');
+  /* 入力ダイアログは入力に絞る。回復の日・目標の行は置かない（2026/10/10、利用者の指摘） */
+  it('入力ダイアログには、回復の日と目標の行を出さない', () => {
     seedExercises('ex_bench');
     render(<Harness />);
     openPicker();
@@ -431,12 +427,62 @@ describe('トレ画面', () => {
 
     typeSet(setRows()[0]!, '60', '10');
 
-    // 1 セットなら 1 日空け（`RECOVERY_STEPS`）
-    const label = ripple().getByText('胸が回復する日');
-    expect(label.nextElementSibling?.textContent).toBe(formatMD(addDays(todayISO(), 1)));
+    expect(inDialog().queryByText(/回復/)).toBeNull();
+    expect(inDialog().queryByRole('progressbar')).toBeNull();
   });
 
-  it('通算の最高を超えたら、最高の行そのものが変わる（行は増えない）', async () => {
+  /* 前回のセットは、カードと同じ札を薄く並べる（文で読ませない。2026/10/10、利用者の指摘） */
+  it('入力ダイアログに、前回のセットを札で並べる', async () => {
+    const { addDays, formatMD, todayISO } = await import('../lib/date');
+    const day = addDays(todayISO(), -2);
+    seedData(['ex_bench'], {
+      [day]: [
+        {
+          exerciseId: 'ex_bench',
+          sets: [
+            { weight: 60, reps: 10 },
+            { weight: 60, reps: 8 },
+          ],
+        },
+      ],
+    });
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
+
+    expect(inDialog().getByText(`前回 ${formatMD(day)}`)).toBeTruthy();
+    const chips = document.querySelector('dialog[open] [data-e2e="set-previous-chips"]')!;
+    expect([...chips.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      '60 kg × 10回',
+      '60 kg × 8回',
+    ]);
+  });
+
+  it('前回との差は + / − で添える', async () => {
+    const { addDays, todayISO } = await import('../lib/date');
+    seedData(['ex_bench'], {
+      [addDays(todayISO(), -2)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 50, reps: 10 }] }],
+    });
+    render(<Harness />);
+    openPicker();
+    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expand('ベンチプレス');
+
+    typeSet(setRows()[0]!, '60', '10');
+    // 入力ダイアログでは何との差かを添える
+    expect(dialogTotals()).toBe('挙上量 600 kg/日 +100（前回との差） ★最高');
+    typeSet(setRows()[0]!, '40', '10');
+    expect(dialogTotals()).toBe('挙上量 400 kg/日 −100（前回との差）');
+    // カードは差だけ
+    expect(totalsTexts(document.getElementById('ex-card-ex_bench')!)).toEqual([
+      '挙上量 400 kg/日 −100',
+    ]);
+  });
+
+  it('通算の最高を超えたら、★ の印が出る', async () => {
     const { addDays, todayISO } = await import('../lib/date');
     const today = todayISO();
     seedData(['ex_bench'], {
@@ -448,14 +494,14 @@ describe('トレ画面', () => {
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     expand('ベンチプレス');
 
-    expect(inDialog().getByText(/^最高重量 60\.0/)).toBeTruthy();
+    // 最高の数字は文字で並べない（「推移」が持つ）
+    expect(inDialog().queryByText(/最高重量/)).toBeNull();
+    typeSet(setRows()[0]!, '60', '8');
+    expect(inDialog().queryByText('最高')).toBeNull();
 
+    // 重量が通算の最高（60）を超えた。挙上量（500）は超えていなくても印が出る
     typeSet(setRows()[0]!, '62.5', '8');
-
-    // すぐ上の行と同じことを 2 回言わない。行を足さず、その行を書き換える
-    expect(inDialog().getByText(/最高重量 60\.0 → 62\.5/)).toBeTruthy();
-    // 最高の行は 2 つのまま（重量と挙上量）。波及行の側は部位の話しか持たない
-    expect(ripple().queryByText(/最高/)).toBeNull();
+    expect(inDialog().getByText('最高')).toBeTruthy();
   });
 
   /*
@@ -499,7 +545,7 @@ describe('トレ画面', () => {
     typeSet(setRows()[1]!, '100', '5');
 
     // 60×5 + 100×5 = 800 kg。軽い側を勝手に外したりしない
-    expect(screen.getAllByText(/800 kg/).length).toBeGreaterThan(0);
+    expect(dialogTotals()).toBe('挙上量 800 kg/日');
     expect(screen.queryByText(/ウォームアップ/)).toBeNull();
   });
 
@@ -523,37 +569,6 @@ describe('トレ画面', () => {
     // そのまま打ち直せる
     fireEvent.click(screen.getByText('セットを追加'));
     expect(setRows().length).toBe(1);
-  });
-
-  it('総重量の下に通算の最高重量・最高挙上量を出す', async () => {
-    const { addDays, todayISO } = await import('../lib/date');
-    const today = todayISO();
-    // 過去最高（600）と前回（500）を別の日にして、前回ではなく通算の最高を見ていることを確かめる
-    seedData(['ex_bench'], {
-      [addDays(today, -2)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }],
-      [addDays(today, -1)]: [{ exerciseId: 'ex_bench', sets: [{ weight: 50, reps: 10 }] }],
-    });
-    render(<Harness />);
-    openPicker();
-    fireEvent.click(screen.getByText(/^＋ ベンチプレス/));
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expand('ベンチプレス');
-
-    /*
-     * 最高重量は換算後ではなく、バーに載せた数字。
-     * 打っている面（セット入力のダイアログ）に出す。カードは数字 1 つと形にしたので
-     * 通算の最高は置かない（2026/10/10、利用者の指摘：文字が多い）
-     */
-    expect(screen.getAllByText('最高重量 60.0 kg')).toHaveLength(1);
-    expect(screen.getAllByText('最高挙上量 600 kg/日')).toHaveLength(1);
-
-    /*
-     * 残り（あと N kg）は出さない。その日の合計はすぐ上の行にあり、
-     * 並べれば届いたかどうかは読める。
-     */
-    typeSet(setRows()[0]!, '60', '7');
-    expect(screen.queryByText(/あと /)).toBeNull();
-    expect(screen.getAllByText('最高挙上量 600 kg/日')).toHaveLength(1);
   });
 
   it('✓ をもう一度押すとその日から外れる', () => {
@@ -808,8 +823,7 @@ describe('トレ画面', () => {
    * 重量を打った瞬間に太字が「30回」から「600 kg」へすり替わっていた。
    * **持っていない指標は書かない**（`0 kg` も `合計 0回` も出さない）。
    */
-  const foot = () =>
-    [...document.querySelectorAll('[class*="_exFoot_"]')].map((el) => el.textContent ?? '');
+  const foot = () => totalsTexts();
 
   const openAndExpand = (label: RegExp, name: string) => {
     openPicker();
@@ -824,16 +838,11 @@ describe('トレ画面', () => {
     openAndExpand(/^＋ ベンチプレス/, 'ベンチプレス');
 
     fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '10' } });
-    // 回数は左に出る。量（太字）はまだ出せないので空にする
-    expect(screen.getAllByText('10回').length).toBeGreaterThan(0);
-    expect(foot().every((x) => !x.includes('kg'))).toBe(true);
-    // 同じ事実を 2 か所に出さない（左に出したものを太字にも置かない）
-    expect(foot().every((x) => x.split('10回').length - 1 === 1)).toBe(true);
+    // 量（挙上量）はまだ出せないので、数字にせずセット数だけ。回数にすり替えない
+    expect(foot().every((x) => !x.includes('kg') && !x.includes('回'))).toBe(true);
 
     fireEvent.change(screen.getByLabelText(/1セット目の重量/), { target: { value: '60' } });
-    expect(foot().some((x) => x.includes('600 kg'))).toBe(true);
-    // 回数は左に残る（太字とすり替わらない）
-    expect(screen.getAllByText('10回').length).toBeGreaterThan(0);
+    expect(foot()).toContain('挙上量 600 kg/日');
   });
 
   it('値を 1 つも打っていないときは、セット数だけを出す', () => {
@@ -851,18 +860,16 @@ describe('トレ画面', () => {
     openAndExpand(/^＋ Vアップ/, 'Vアップ');
 
     fireEvent.change(screen.getByLabelText('1セット目の回数'), { target: { value: '20' } });
-    expect(screen.getAllByText('20回').length).toBeGreaterThan(0);
-    // 量が回数の種目では、回数を左に添えない（太字がそれを言っている）
-    expect(foot().every((x) => x.split('20回').length - 1 === 1)).toBe(true);
+    expect(foot()).toContain('20 回');
     // 体重が乗らないので重量欄そのものが出ない。挙上量の語も出さない
     expect(screen.queryByLabelText(/1セット目の重量/)).toBeNull();
     expect(foot().every((x) => !x.includes('挙上量'))).toBe(true);
 
-    // 加重した日は、打った加重ぶんの挙上量を左に添える（量は総レップのまま）
+    // 加重した日も、量は総レップのまま（日によって数字の意味を変えない）
     fireEvent.click(screen.getByRole('button', { name: '加重' }));
     fireEvent.change(screen.getByLabelText(/1セット目の(追加)?重量/), { target: { value: '10' } });
-    expect(foot().some((x) => x.includes('挙上量 200 kg'))).toBe(true);
-    expect(screen.getAllByText('20回').length).toBeGreaterThan(0);
+    expect(foot()).toContain('20 回');
+    expect(foot().every((x) => !x.includes('kg'))).toBe(true);
   });
 
   it('秒で数える種目は、量が総秒数', () => {
@@ -875,7 +882,7 @@ describe('トレ画面', () => {
     fireEvent.change(screen.getByLabelText('2セット目の秒数'), { target: { value: '45' } });
 
     // 同じ量はカードとセット入力の両方に出る（ExerciseTotals を共有している）
-    expect(screen.getAllByText('105秒').length).toBeGreaterThan(0);
+    expect(foot()).toEqual(['105 秒', '105 秒']);
     expect(foot().every((x) => !x.includes('kg'))).toBe(true);
   });
 
@@ -6425,8 +6432,8 @@ describe('有酸素', () => {
     render(<Harness />);
     expand('水泳');
 
-    // 打っている面に出る（カードは距離の数字 1 つだけ）
-    expect(screen.getAllByText(/2\s*本/)).toHaveLength(1);
+    // 本数は数字で書かない（行がそのまま本数）。量は合計の距離 1 つ
+    expect(dialogTotals()).toBe('距離 50 m');
     expect(screen.queryByText(/2\s*セット/)).toBeNull();
     expect(screen.getByRole('button', { name: '本を追加' })).toBeTruthy();
   });
@@ -6456,9 +6463,8 @@ describe('有酸素', () => {
     expect(screen.queryByRole('button', { name: '本を追加' })).toBeNull();
     expect(screen.queryByRole('button', { name: '1セット目を削除' })).toBeNull();
     expect(screen.queryByText(/1\s*本/)).toBeNull();
-    expect(screen.getAllByText(/5200\s*m/)).toHaveLength(1);
-    // カードは距離を大きな数字で出す
-    expect(within(document.getElementById('ex-card-ex_running')!).getByText('5200')).toBeTruthy();
+    // カードと打っている面の両方に、距離を大きな数字で出す
+    expect(totalsTexts()).toEqual(['距離 5200 m', '距離 5200 m']);
   });
 
   it('繰り返すかどうかはカタログが決める', async () => {
@@ -6490,10 +6496,7 @@ describe('有酸素', () => {
     expand('サーキット');
 
     // 距離は出ないので、量は時間と本数で見る
-    expect(screen.getAllByText(/3\s*本/)).toHaveLength(1);
-    expect(screen.getAllByText(/18.7\s*分/)).toHaveLength(1);
-    // カードは時間を大きな数字で出す
-    expect(within(document.getElementById('ex-card-ex_circuit')!).getByText('18.7')).toBeTruthy();
+    expect(dialogTotals()).toBe('時間 18.7 分');
   });
 
   it('部位の回復には出ない（筋肥大の回復モデルに乗せない）', () => {
@@ -7692,7 +7695,7 @@ describe('ウエイトの単位', () => {
     fireEvent.blur(within(setRows()[0]!).getByLabelText(/回数$/));
 
     // 61.23kg × 10 = 612kg
-    expect(screen.getAllByText(/612 kg/).length).toBeGreaterThan(0);
+    expect(dialogTotals()).toBe('挙上量 612 kg/日');
   });
 
   it('表示をポンドにすると、合計も最高もポンドで出る', () => {
@@ -7703,8 +7706,7 @@ describe('ウエイトの単位', () => {
     fireEvent.blur(within(setRows()[0]!).getByLabelText(/回数$/));
 
     // 135lb × 10。打った数字のまま出る
-    expect(screen.getAllByText(/1,350 lb/).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/612 kg/)).toBeNull();
+    expect(dialogTotals()).toBe('挙上量 1,350 lb/日');
   });
 });
 
@@ -7770,7 +7772,7 @@ describe('自重種目の計算が読めること', () => {
     expand('腕立て伏せ');
 
     // 20 × 8 = 160。0 kg にはしない
-    expect(screen.getAllByText(/160 kg/).length).toBeGreaterThan(0);
+    expect(dialogTotals()).toBe('挙上量 160 kg/日');
     expect(screen.getAllByText(/自重ぶんを 0 で数えて/).length).toBeGreaterThan(0);
   });
 
@@ -7780,7 +7782,7 @@ describe('自重種目の計算が読めること', () => {
     expand('腕立て伏せ');
 
     // (75 × 0.65 + 20) × 8 = 550
-    expect(screen.getAllByText(/550 kg/).length).toBeGreaterThan(0);
+    expect(dialogTotals()).toBe('挙上量 550 kg/日');
     expect(screen.queryAllByText(/自重ぶんを 0 で数えて/)).toHaveLength(0);
   });
 
@@ -8577,6 +8579,41 @@ describe('推移の入口（週の目標・記録の入力）', () => {
 });
 
 /** 記録のカードに、主部位の今週の量と部位の目標を 1 行で添える（目標タブへ行かずに読める） */
+it('部位の目標を超えたぶんも、丸を足して塗る', () => {
+  seedRaw({
+    version: 7,
+    settings: {},
+    entries: {},
+    exercises: [
+      fromCatalog(
+        CATALOG.find((c) => c.id === 'ex_bench')!,
+        0,
+      ),
+    ],
+    workouts: {
+      [todayISO()]: [
+        {
+          exerciseId: 'ex_bench',
+          sets: [
+            { weight: 60, reps: 10 },
+            { weight: 60, reps: 10 },
+            { weight: 60, reps: 10 },
+          ],
+        },
+      ],
+    },
+    groupGoals: { chest: { sets: 2, volume: null } },
+  });
+  render(<Harness />);
+  const dots = within(document.getElementById('ex-card-ex_bench')!).getByRole('img', {
+    name: '胸 今週 3セット（目標 2）',
+  });
+  // 目標 2 に対して 3 セット。丸は 3 つ、すべて塗る（届いた色）
+  expect(dots.querySelectorAll('i')).toHaveLength(3);
+  expect(dots.querySelectorAll('i[class*="dotOn"]')).toHaveLength(3);
+  expect(dots.className).toMatch(/dotsReached/);
+});
+
 it('記録のカードに、主部位の今週と部位の目標が出る', () => {
   seedRaw({
     version: 7,

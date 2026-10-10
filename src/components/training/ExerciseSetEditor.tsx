@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { ReactNode } from 'react';
 import { ExerciseTotals } from './ExerciseTotals';
+import { SetChips } from './SetChips';
 import { SetRow } from './SetRow';
 import { catalogEquipment, isCardio } from '../../lib/exerciseCatalog';
 import { formatMD } from '../../lib/date';
@@ -46,14 +46,6 @@ interface Props {
    * 前回より先なのは、**こちらは本人が書いた意図**で、前回は自動で残った値だから。
    */
   defaultSets: SessionSet[] | null;
-  /**
-   * 波及行。**中身は外で作る。**
-   *
-   * この面が知っているのは 1 種目ぶんだけで、週の配分も部位の回復も持っていない。
-   * 値を 6 つ受け取って組み立てると、重量にも回数にも関係のない引数がここに生える。
-   * 置き場所だけをここが決めて、何を出すかは記録画面が決める。
-   */
-  ripple?: ReactNode | undefined;
   onValue: (index: number, field: SetField, value: number | null) => void;
   onAddSet: () => void;
   onRemoveSet: (index: number) => void;
@@ -106,7 +98,6 @@ export function ExerciseSetEditor({
   onWeightUnitChange,
   bodyWeight,
   defaultSets,
-  ripple,
   onValue,
   onAddSet,
   onRemoveSet,
@@ -172,12 +163,23 @@ export function ExerciseSetEditor({
       <div className={s.prev} data-e2e="set-previous">
         {previous ? (
           <>
-            <span>
-              {t('set.previous', {
-                date: formatMD(previous.date),
-                sets: summarizeSets(t, previous.point, displayUnit),
-              })}
-            </span>
+            {/*
+              前回のセットは、カードと同じ札を薄く並べる（2026/10/10、利用者の指摘：文字が多い）。
+              今日の行と見比べやすい。有酸素はセットの並びではなく合計で読むので文のまま
+            */}
+            {cardio ? (
+              <span>
+                {t('set.previous', {
+                  date: formatMD(previous.date),
+                  sets: summarizeSets(t, previous.point, displayUnit),
+                })}
+              </span>
+            ) : (
+              <>
+                <span>{t('set.previousOn', { date: formatMD(previous.date) })}</span>
+                <SetChips point={previous.point} repUnit={exercise.repUnit} muted />
+              </>
+            )}
             {empty && (
               <button
                 type="button"
@@ -309,29 +311,6 @@ export function ExerciseSetEditor({
         />
       ))}
 
-      {/*
-        その日の合計と通算の最高を、**打っている面にも出す。**
-        「前回より重く」「最高に届くか」を確かめるために、いちいち閉じてカードへ
-        戻ることになっていた。カードと同じ部品なので、数字の出し方もそろう。
-
-        置き場所はセットの行の下——**カードと同じ並び**（セット → 合計 → 最高）にする。
-        打ち終わった行の続きに合計が出るので、1 セット足すたびに目が動く距離も短い。
-      */}
-      <ExerciseTotals
-        exercise={exercise}
-        point={point}
-        bodyWeight={bodyWeight}
-        previous={previous}
-        best={best}
-        bestWeight={bestWeight}
-      />
-
-      {/*
-        **合計と最高のすぐ下。**セットの行 → 合計 → 最高 → 波及、と
-        内から外へ広がる順に並ぶ。打ち終わった行から目が下りていく先に置く。
-      */}
-      {ripple}
-
       <div className={s.setActions}>
         {repeated && (
           <button type="button" className={s.addSet} onClick={onAddSet} data-e2e="set-add">
@@ -354,6 +333,21 @@ export function ExerciseSetEditor({
           </button>
         )}
       </div>
+
+      {/*
+        その日の量を、**カードと同じ大きな数字と前回との差** で出す（2026/10/10、利用者の指摘：文字が多い）。
+        セットを追加のすぐ下。打ち終わった行から目が下りていく先に置く。
+        推定1RM・回数・通算の最高の文字は置かない（超えたら ★ の印だけ。数字は「推移」が持つ）。
+      */}
+      <ExerciseTotals
+        inEditor
+        exercise={exercise}
+        point={point}
+        bodyWeight={bodyWeight}
+        previous={previous}
+        best={best}
+        bestWeight={bestWeight}
+      />
     </div>
   );
 }

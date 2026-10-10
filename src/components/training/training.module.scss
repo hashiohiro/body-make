@@ -176,36 +176,6 @@
   font-size: 12px;
 }
 
-/* 総重量の下。前回と、そこまでの残り */
-.exPrev {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 3px;
-  font-size: 10px;
-  color: var(--ink-muted);
-  @include tabular;
-}
-
-.exFoot {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-  font-size: 11px;
-  color: var(--ink-muted);
-  @include tabular;
-
-  b {
-    margin-left: auto;
-    font-size: 13px;
-    font-weight: 640;
-    color: var(--ink);
-  }
-}
-
 /* ---- 記録のカード（数字 1 つと形） ---- */
 
 /* その日の量。数字だけを大きく、見出しと単位は小さく添える */
@@ -219,6 +189,27 @@
   color: var(--ink-muted);
   font-size: 12px;
   @include tabular;
+}
+
+/* 入力ダイアログ。右に寄せ、数字を少し控えめに（主役は入力欄） */
+.exBigEditor {
+  justify-content: flex-end;
+
+  .exBigValue {
+    font-size: 22px;
+  }
+
+  /* 差は小さめに。何との差かを、さらに小さく添える */
+  .exBigDelta {
+    font-size: 12px;
+  }
+}
+
+.exBigDeltaNote {
+  margin-left: 2px;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--ink-muted);
 }
 
 .exBigLabel {
@@ -235,6 +226,16 @@
 .exBigDelta {
   margin-left: 8px;
   font-size: 14px;
+  font-weight: 640;
+}
+
+.exBigBest {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--good-text) 14%, transparent);
+  color: var(--good-text);
+  font-size: 11px;
   font-weight: 640;
 }
 
@@ -258,6 +259,17 @@
     border-radius: 999px;
     background: var(--surface-sunken);
     color: var(--ink);
+  }
+}
+
+/* 前回のセット（入力ダイアログ）。今日の札と見分けるため、地を塗らず枠だけにする */
+.setChipsMuted {
+  margin: 0;
+
+  li {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--ink-muted);
   }
 }
 
@@ -1636,36 +1648,6 @@
 .weekRowMark {
   font-size: 11px;
   color: var(--ink-muted);
-}
-
-/*
- * 波及行。**その一打が、この種目の外に及んだぶん。**
- *
- * ラベルの列をそろえる——行が増えても、左端をなぞるだけで読める。
- * 合計・最高と地続きにしないよう、上に 1 本引く（あちらは種目の中の話）。
- */
-.ripple {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 12px;
-  margin: 12px 0 0;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
-}
-
-/* dt と dd を、行ではなく上の格子へ直に並べる */
-.rippleRow {
-  display: contents;
-}
-
-.rippleLabel {
-  color: var(--ink-muted);
-}
-
-.rippleValue {
-  margin: 0;
-  color: var(--ink-2);
 }
 
 /* ---- 目標タブの図（`docs/design-pace.md` のトレーニング側） ---- */
