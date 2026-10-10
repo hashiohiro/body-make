@@ -5,8 +5,9 @@ import s from './Meter.module.scss';
  *
  *   row  … 一覧の行に混ぜる（6px）。並べて見比べるためのもの
  *   card … 目標のカードの主役（10px）。1 本だけ置く
+ *   line … 記録のカードの目標（4px）。種目の目標の線（`GoalTrack`）と同じ太さと色
  */
-type Size = 'row' | 'card';
+type Size = 'row' | 'card' | 'line';
 
 interface Props {
   /** 0〜1。外れた値はここで丸める（呼び出し側で毎回クランプさせない） */
@@ -31,6 +32,8 @@ interface Props {
   tinted?: boolean | undefined;
   /** アニメーションを付けるか。1 本だけ置く面で使う（並ぶ行が一斉に動くと落ち着かない） */
   animated?: boolean | undefined;
+  /** 目標に届いたか。届いたら塗りの色を変える（記録のカードの目標の棒） */
+  reached?: boolean | undefined;
 }
 
 /**
@@ -42,12 +45,12 @@ interface Props {
  * **`role="progressbar"` は目標のカードにしか付いていなかった**
  * （読み上げで進捗が読めるのが 1 か所だけだった）。
  */
-export function Meter({ value, label, size = 'row', block, tinted, animated }: Props) {
+export function Meter({ value, label, size = 'row', block, tinted, animated, reached }: Props) {
   const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
 
   return (
     <span
-      className={`${s.track} ${s[size]} ${block ? s.block : ''} ${tinted ? s.tinted : ''}`}
+      className={`${s.track} ${s[size]} ${block ? s.block : ''} ${tinted ? s.tinted : ''} ${reached ? s.reached : ''}`}
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}

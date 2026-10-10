@@ -24,6 +24,9 @@ export const en: Record<MessageKey, string> = {
     'The default for the weight field. From the field heading on the record screen you can {strong} (this setting does not change).',
   'alert.readFailedNote':
     'This device’s storage could not be opened. {strong} Leave it even though it looks empty. Anything you type now is not saved.',
+  'card.groupWeekOf': '{group} this week {value}',
+  'card.setsOfGoal': '{n}/{goal} sets',
+  'card.setOf': '{weight} {unit} × {amount}',
   'card.goal': 'Goal {value}',
   'common.followDevice': 'Match the device',
   'common.today': 'Today',
@@ -165,6 +168,7 @@ export const en: Record<MessageKey, string> = {
   'exGoal.stalled': 'unchanged for {weeks}+ weeks',
   'exGoal.exerciseUnit': 'exercises',
   'exercise.goalOf': 'Goal for {name}',
+  'exerciseGoal.metricOf': '{metric} goal',
   'exercise.settingsOf': 'Settings for {name}',
   'common.trendOf': 'Trend for {name}',
   'common.goal': 'Goal',
@@ -692,7 +696,6 @@ export const en: Record<MessageKey, string> = {
   'ripple.goalReached': '{amount} (goal {value} reached)',
   'ripple.goalOf': '{amount} (goal {value})',
   'ripple.nextOf': '{group} recovers on',
-  'ripple.reached': '{value} {unit} reached',
 
   'goalNote.maintain': 'No number to hit and no “reached” check. Only the change from the start.',
   'goalNote.weight': 'Judged by the heaviest weight that day, not the estimated 1RM.',

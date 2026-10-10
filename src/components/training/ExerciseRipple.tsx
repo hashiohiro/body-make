@@ -2,11 +2,10 @@ import { addDays, formatMD } from '../../lib/date';
 import { GROUP_KEYS, muscleOf } from '../../lib/exerciseCatalog';
 import { requiredDays } from '../../lib/check';
 import type { GroupSets } from '../../lib/check';
-import { goalCurrent, goalUnitOf } from '../../lib/training';
-import type { CardioWeek, ExerciseHistoryPoint } from '../../lib/training';
+import type { CardioWeek } from '../../lib/training';
 import { fmt } from '../../lib/format';
 import { useWeightFormat } from '../../hooks/useWeightUnit';
-import type { Exercise, ExercisePoint, GroupGoals, MuscleGroup, GoalPeriod } from '../../types';
+import type { Exercise, ExercisePoint, GroupGoals, MuscleGroup } from '../../types';
 import s from './training.module.scss';
 import { useT } from '../../lib/i18n';
 
@@ -16,13 +15,9 @@ interface Props {
   date: string;
   /** その日のこの種目。まだ何も打っていなければ null */
   point: ExercisePoint | null;
-  /** この種目の前回。目標を跨いだかを見る相手 */
-  previous: ExerciseHistoryPoint | null;
   /** **その日を含む週**の部位別セット数。今日の週とは限らない（遡って打つ日がある） */
   weekSets: Record<MuscleGroup, number>;
   weekVolume: Record<MuscleGroup, number>;
-  /** 種目の目標を数える単位。週次なら、1 打で跨いだかの行は出さない */
-  goalPeriod: GoalPeriod;
   /**
    * 部位の今週の行を出すか。入力ダイアログでは `GroupWeekLine` が同じ部位の今週を出すので、
    * 重ねないように外す（回復の日・目標の到達はこちらに残る）。
@@ -65,10 +60,8 @@ export function ExerciseRipple({
   exercise,
   date,
   point,
-  previous,
   weekSets,
   weekVolume,
-  goalPeriod,
   showGroup = true,
   groupGoals,
   todayGroupSets,
@@ -162,36 +155,10 @@ export function ExerciseRipple({
   }
 
   /*
-   * 種目の目標。**跨いだときだけ。**
-   *
-   * 「含まない場合と含む場合の差」なので、比べる相手は前回のセッション
-   * （その日を除いた直近の値）。超えている日に毎回出すと、到達した事実ではなく
-   * 状態の表示になり、読み飛ばされる。
+   * 種目の目標は、ここでは出さない。カードと入力ダイアログの「{指標}の目標」の行
+   * （`ExerciseGoalLine`）が、いまの値と目標を常に並べ、届けば「到達」と言う。
+   * ここにも跨いだ行を置くと、同じことを 2 回言うことになる（2026/10/10）。
    */
-  const goal = exercise.goal;
-  /*
-   * 週次の目標は出さない。1 打で跨いだかは「今週のほかの日」まで足さないと決まらず、
-   * この行が持つ比べる相手（前回のセッション）とは物差しが違う。今週の値は目標画面が持つ。
-   */
-  if (goal?.value != null && goalPeriod !== 'week' && point) {
-    const current = goalCurrent(goal.type, point);
-    const before = previous ? goalCurrent(goal.type, previous.point) : null;
-    if (current != null && current >= goal.value && (before == null || before < goal.value)) {
-      const unit = goalUnitOf(t, goal.type, exercise.repUnit);
-      const kg = unit === 'kg';
-      const digits = goal.type === 'weight' || goal.type === 'speed' ? 1 : 0;
-      const value = kg ? conv(goal.value) : goal.value;
-      rows.push({
-        key: 'goal',
-        label: t('common.goal'),
-        // 単位に数える単位を添える（ここに来るのは日次だけなので「/日」）
-        value: t('ripple.reached', {
-          value: fmt(value, digits),
-          unit: t('goalPeriod.perDay', { unit: kg ? unitLabel : unit }),
-        }),
-      });
-    }
-  }
 
   if (rows.length === 0) return null;
 

@@ -206,6 +206,121 @@
   }
 }
 
+/* ---- 記録のカード（数字 1 つと形） ---- */
+
+/* その日の量。数字だけを大きく、見出しと単位は小さく添える */
+.exBig {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--ink-muted);
+  font-size: 12px;
+  @include tabular;
+}
+
+.exBigLabel {
+  margin-right: 4px;
+}
+
+.exBigValue {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.exBigDelta {
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 640;
+}
+
+.exBigEmpty {
+  font-size: 12px;
+}
+
+/* その日のセット。1 つずつ小さな札にする */
+.setChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  @include tabular;
+
+  li {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--surface-sunken);
+    color: var(--ink);
+  }
+}
+
+/* 目標の棒と部位の丸。ラベルの列をそろえる */
+.meterRows {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  @include tabular;
+}
+
+.meterRow {
+  display: contents;
+}
+
+.meterLabel {
+  white-space: nowrap;
+}
+
+.meterEnd {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.dots {
+  /* 1 行に 5 つの組を 2 つ（10 個）。行ごとの数をそろえる（2026/10/10、利用者の指摘） */
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 4px 8px;
+
+  i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+}
+
+/* 5 つで 1 まとまり。まとまりの間は広く、中は詰める */
+.dotGroup {
+  display: flex;
+  gap: 3px;
+}
+
+/*
+ * 色は今週の量の曜日の点と、種目の目標の線にそろえる。
+ * まだのぶんは線の地（`--border`）で塗り、やったぶんは「いま」の色（`--s-weight`）。
+ */
+.dot {
+  background: var(--border);
+}
+
+.dotOn {
+  background: var(--s-weight);
+}
+
+.dotsReached .dotOn {
+  background: var(--good-text);
+}
+
 /* ---- 種目ピッカー / 種目管理 ---- */
 
 .pickerGroup {

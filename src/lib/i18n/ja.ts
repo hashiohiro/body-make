@@ -28,6 +28,9 @@ export const ja = {
     'セットの重量欄の既定です。記録画面の重量欄の見出しから{strong}（この設定は変わりません）。',
   'alert.readFailedNote':
     'この端末の保存領域を開けませんでした。{strong}空に見えても、触らないでください。いま打った内容は保存されません。',
+  'card.groupWeekOf': '{group} 今週 {value}',
+  'card.setsOfGoal': '{n}/{goal}セット',
+  'card.setOf': '{weight} {unit} × {amount}',
   'card.goal': '目標 {value}',
   'common.followDevice': '端末に合わせる',
   'common.today': '今日',
@@ -179,6 +182,7 @@ export const ja = {
   'exGoal.stalled': '{weeks}週以上動いていない',
   'exGoal.exerciseUnit': '種目',
   'exercise.goalOf': '{name}の目標',
+  'exerciseGoal.metricOf': '{metric}の目標',
   'exercise.settingsOf': '{name}の設定',
   'common.trendOf': '{name}の推移',
   'common.goal': '目標',
@@ -713,7 +717,6 @@ export const ja = {
   'ripple.goalReached': '{amount}（目標 {value} に到達）',
   'ripple.goalOf': '{amount}（目標 {value}）',
   'ripple.nextOf': '{group}が回復する日',
-  'ripple.reached': '{value} {unit} に到達',
 
   'goalNote.maintain': '数値は決めず、到達の判定もしません。開始比だけ出ます。',
   'goalNote.weight': 'その日いちばん重かった記録で判定します。推定1RMでは判定しません。',

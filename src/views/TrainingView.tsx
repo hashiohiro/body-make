@@ -5,7 +5,8 @@ import { ExerciseRipple } from '../components/training/ExerciseRipple';
 import { TrainingAside } from '../components/training/TrainingAside';
 import type { PresetOption } from '../components/training/PresetCard';
 import { ExerciseCard } from '../components/training/ExerciseCard';
-import { GroupWeekLine } from '../components/training/GroupWeekLine';
+import { GroupWeekDots, GroupWeekLine } from '../components/training/GroupWeekLine';
+import { ExerciseGoalBar, ExerciseGoalLine } from '../components/training/ExerciseGoalLine';
 import { ExerciseSetEditor } from '../components/training/ExerciseSetEditor';
 import { ExerciseDetailDialog } from '../components/training/ExerciseDetailDialog';
 import { ExercisePicker } from '../components/training/ExercisePicker';
@@ -409,13 +410,23 @@ export function TrainingView({ body, date }: Props) {
               groupWeek={(() => {
                 // 主部位の今週（見ている日の週）と部位の目標。有酸素は部位を持たない
                 const muscle = muscleOf(exercise.group);
-                return muscle == null ? undefined : (
-                  <GroupWeekLine
-                    group={muscle}
-                    sets={(weekOfDate?.setsByGroup ?? NO_WEEK)[muscle]}
-                    volume={(weekOfDate?.volumeByGroup ?? NO_WEEK)[muscle]}
-                    target={data.groupGoals[muscle]}
-                  />
+                return (
+                  <>
+                    {/* この種目の目標までの棒。左に指標の名前、右端に目標の値 */}
+                    <ExerciseGoalBar
+                      exercise={exercise}
+                      sessions={sessions}
+                      date={date}
+                      goalPeriod={data.settings.goalPeriod}
+                    />
+                    {muscle != null && (
+                      <GroupWeekDots
+                        group={muscle}
+                        sets={(weekOfDate?.setsByGroup ?? NO_WEEK)[muscle]}
+                        target={data.groupGoals[muscle]}
+                      />
+                    )}
+                  </>
                 );
               })()}
               // 1 種目しか無い日に、動かしようのない操作を出さない
@@ -519,20 +530,24 @@ export function TrainingView({ body, date }: Props) {
                     <GroupWeekLine
                       group={muscle}
                       sets={(weekOfDate?.setsByGroup ?? NO_WEEK)[muscle]}
-                      volume={(weekOfDate?.volumeByGroup ?? NO_WEEK)[muscle]}
                       target={data.groupGoals[muscle]}
                     />
                   );
                 })()}
+                {/* カードと同じ、この種目の目標。打つたびにいまの値が動く */}
+                <ExerciseGoalLine
+                  exercise={editExercise}
+                  sessions={sessions}
+                  date={date}
+                  goalPeriod={data.settings.goalPeriod}
+                />
                 <ExerciseRipple
                   showGroup={false}
                   exercise={editExercise}
                   date={date}
                   point={session?.exercises.find((p) => p.exerciseId === editExercise.id) ?? null}
-                  previous={previousPoint(sessions, editExercise.id, date)}
                   weekSets={weekOfDate?.setsByGroup ?? NO_WEEK}
                   weekVolume={weekOfDate?.volumeByGroup ?? NO_WEEK}
-                  goalPeriod={data.settings.goalPeriod}
                   groupGoals={data.groupGoals}
                   // 回復と同じ数え方を借りる。ここで数え直すと回復カードと食い違う
                   todayGroupSets={checkHistory.groupSets.get(date) ?? null}

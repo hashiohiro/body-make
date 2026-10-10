@@ -23,6 +23,12 @@ interface Props {
   best: number | null;
   /** 同じくその日より前の、記録した重量の最高値 */
   bestWeight: number | null;
+  /**
+   * 記録のカードに置く形。**その日の量の数字 1 つと前回との差だけ**を大きく出す
+   * （2026/10/10、利用者の指摘：文字が多い）。推定1RM・回数・通算の最高は出さない
+   * ——入力ダイアログ（この部品の通常の形）と「推移」が持つ。
+   */
+  compact?: boolean | undefined;
 }
 
 /**
@@ -32,7 +38,15 @@ interface Props {
  * 移したので、そこに無いと、確かめるたびに閉じてカードへ戻ることになる。
  * 別々に組むと数字の出し方がずれるので、同じ部品を両方に置く。
  */
-export function ExerciseTotals({ exercise, point, bodyWeight, previous, best, bestWeight }: Props) {
+export function ExerciseTotals({
+  exercise,
+  point,
+  bodyWeight,
+  previous,
+  best,
+  bestWeight,
+  compact,
+}: Props) {
   /*
    * 記録は kg で持っている（`lib/weight.ts`）。ここは読む場所なので、
    * 出す直前に読むときの単位へ直す。**差分も換算後どうしで取る**——
@@ -105,6 +119,65 @@ export function ExerciseTotals({ exercise, point, bodyWeight, previous, best, be
    */
   const partialVolume = exercise.loadMode === 'bodyweight' && bodyWeight == null && rawVolume > 0;
 
+  /*
+   * 体重が乗る種目で、体重の記録が無いまま加重だけ打った日。
+   * **指示ではなく事実**を書く（§1.2）——入れれば遡って出し直すのは仕組みの側の話。
+   */
+  const partialNote = partialVolume && (
+    <p className={ui.note} data-e2e="exercise-partial-volume">
+      {t('totals.noBodyWeight')}
+    </p>
+  );
+
+  if (compact) {
+    // 量は通常の形の太字と同じ決め方（挙上量 / 総レップ・総秒数 / 距離・時間）
+    const big = cardio
+      ? point?.meters != null
+        ? { label: t('metric.distance'), value: String(point.meters), unit: 'm' }
+        : (point?.minutes ?? 0) > 0
+          ? {
+              label: t('metric.duration'),
+              value: String(point?.minutes),
+              unit: t('metric.durationUnit'),
+            }
+          : null
+      : byVolume
+        ? rawVolume > 0
+          ? { label: t('metric.volume'), value: fmtVolume(volume), unit: volumeUnit }
+          : null
+        : count > 0
+          ? { label: null, value: String(count), unit: t(REP_UNIT_KEYS[exercise.repUnit]) }
+          : null;
+    // 差は ▲▼ と色で見せる。挙上量のときだけ（前回比を持つのは挙上量）
+    const arrow = big && byVolume && !cardio && delta != null ? delta : null;
+    return (
+      <>
+        <div className={s.exBig} data-e2e="exercise-totals">
+          {big == null ? (
+            // まだ何も打っていない。0 と書かず、セット数だけを出す
+            <span className={s.exBigEmpty}>{t('common.sets', { n: point?.workSets ?? 0 })}</span>
+          ) : (
+            <>
+              {big.label && <span className={s.exBigLabel}>{big.label}</span>}
+              <b className={s.exBigValue}>{big.value}</b>
+              <span className={s.exBigUnit}>{big.unit}</span>
+              {arrow != null && (
+                <span
+                  className={`${s.exBigDelta} ${TONE_CLASS[tone]}`}
+                  aria-label={fmtDelta(arrow, 0)}
+                >
+                  <span aria-hidden="true">{arrow > 0 ? '▲' : arrow < 0 ? '▼' : '±'}</span>
+                  {fmtVolume(Math.abs(arrow))}
+                </span>
+              )}
+            </>
+          )}
+        </div>
+        {partialNote}
+      </>
+    );
+  }
+
   return (
     <>
       <div className={s.exFoot} data-e2e="exercise-totals">
@@ -175,7 +248,8 @@ export function ExerciseTotals({ exercise, point, bodyWeight, previous, best, be
               {byVolume ? (
                 rawVolume > 0 ? (
                   <>
-                    {fmtVolume(volume)} {volumeUnit}
+                    {/* 何の数字か分かるように「挙上量」を添える（2026/10/10、利用者の指摘） */}
+                    {t('totals.volumeValue', { value: fmtVolume(volume), unit: volumeUnit })}
                     {delta != null && (
                       <span className={`${ui.hint} ${TONE_CLASS[tone]}`}>
                         {' '}
@@ -196,15 +270,7 @@ export function ExerciseTotals({ exercise, point, bodyWeight, previous, best, be
         )}
       </div>
 
-      {/*
-        体重が乗る種目で、体重の記録が無いまま加重だけ打った日。
-        **指示ではなく事実**を書く（§1.2）——入れれば遡って出し直すのは仕組みの側の話。
-      */}
-      {partialVolume && (
-        <p className={ui.note} data-e2e="exercise-partial-volume">
-          {t('totals.noBodyWeight')}
-        </p>
-      )}
+      {partialNote}
 
       {/*
         通算の最高。前回との差は上の行が持っているので、ここは通算で見る。

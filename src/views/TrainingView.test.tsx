@@ -336,8 +336,8 @@ describe('トレ画面', () => {
     // 60×10 + 60×9 = 1,140 kg（種目カードの小計）
     expect(screen.getAllByText(/1,140 kg/).length).toBeGreaterThan(0);
     // 推定1RM はベンチの分母 40 で 60 × (1 + 10/40) = 75.0。
-    // カードと、打っている面（セット入力）の両方に出る
-    expect(screen.getAllByText(/推定1RM 75\.0 kg/)).toHaveLength(2);
+    // 打っている面（セット入力）にだけ出る。カードは数字 1 つと形にした（2026/10/10）
+    expect(screen.getAllByText(/推定1RM 75\.0 kg/)).toHaveLength(1);
     // 換算元のセットは併記しない。その日のセットは編集の面に並んでいる
     expect(screen.queryByText(/から）/)).toBeNull();
   });
@@ -541,11 +541,11 @@ describe('トレ画面', () => {
 
     /*
      * 最高重量は換算後ではなく、バーに載せた数字。
-     * カードと、打っている面（セット入力のダイアログ）の両方に出す——
-     * 「前回より重く」を確かめるのに、いちいち閉じて戻らなくてよいように
+     * 打っている面（セット入力のダイアログ）に出す。カードは数字 1 つと形にしたので
+     * 通算の最高は置かない（2026/10/10、利用者の指摘：文字が多い）
      */
-    expect(screen.getAllByText('最高重量 60.0 kg')).toHaveLength(2);
-    expect(screen.getAllByText('最高挙上量 600 kg/日')).toHaveLength(2);
+    expect(screen.getAllByText('最高重量 60.0 kg')).toHaveLength(1);
+    expect(screen.getAllByText('最高挙上量 600 kg/日')).toHaveLength(1);
 
     /*
      * 残り（あと N kg）は出さない。その日の合計はすぐ上の行にあり、
@@ -553,7 +553,7 @@ describe('トレ画面', () => {
      */
     typeSet(setRows()[0]!, '60', '7');
     expect(screen.queryByText(/あと /)).toBeNull();
-    expect(screen.getAllByText('最高挙上量 600 kg/日')).toHaveLength(2);
+    expect(screen.getAllByText('最高挙上量 600 kg/日')).toHaveLength(1);
   });
 
   it('✓ をもう一度押すとその日から外れる', () => {
@@ -6425,8 +6425,8 @@ describe('有酸素', () => {
     render(<Harness />);
     expand('水泳');
 
-    // カードと、打っている面の両方に出る
-    expect(screen.getAllByText(/2\s*本/)).toHaveLength(2);
+    // 打っている面に出る（カードは距離の数字 1 つだけ）
+    expect(screen.getAllByText(/2\s*本/)).toHaveLength(1);
     expect(screen.queryByText(/2\s*セット/)).toBeNull();
     expect(screen.getByRole('button', { name: '本を追加' })).toBeTruthy();
   });
@@ -6456,7 +6456,9 @@ describe('有酸素', () => {
     expect(screen.queryByRole('button', { name: '本を追加' })).toBeNull();
     expect(screen.queryByRole('button', { name: '1セット目を削除' })).toBeNull();
     expect(screen.queryByText(/1\s*本/)).toBeNull();
-    expect(screen.getAllByText(/5200\s*m/)).toHaveLength(2);
+    expect(screen.getAllByText(/5200\s*m/)).toHaveLength(1);
+    // カードは距離を大きな数字で出す
+    expect(within(document.getElementById('ex-card-ex_running')!).getByText('5200')).toBeTruthy();
   });
 
   it('繰り返すかどうかはカタログが決める', async () => {
@@ -6488,8 +6490,10 @@ describe('有酸素', () => {
     expand('サーキット');
 
     // 距離は出ないので、量は時間と本数で見る
-    expect(screen.getAllByText(/3\s*本/)).toHaveLength(2);
-    expect(screen.getAllByText(/18.7\s*分/)).toHaveLength(2);
+    expect(screen.getAllByText(/3\s*本/)).toHaveLength(1);
+    expect(screen.getAllByText(/18.7\s*分/)).toHaveLength(1);
+    // カードは時間を大きな数字で出す
+    expect(within(document.getElementById('ex-card-ex_circuit')!).getByText('18.7')).toBeTruthy();
   });
 
   it('部位の回復には出ない（筋肥大の回復モデルに乗せない）', () => {
@@ -8589,19 +8593,21 @@ it('記録のカードに、主部位の今週と部位の目標が出る', () =
     groupGoals: { chest: { type: 'sets', value: 15 } },
   });
   render(<Harness />);
-  const card = within(document.getElementById('ex-card-ex_bench')!);
-  expect(card.getByText('胸 今週')).toBeTruthy();
-  // いまの量に単位、目標はかっこで（「1 / 15セット」と並べない）
-  expect(card.getByText('1セット（目標 15）')).toBeTruthy();
-  // ゲージは置かない（ラベルと値の文字だけ）
+  const root = document.getElementById('ex-card-ex_bench')!;
+  const card = within(root);
+  // 数字ではなく丸の数で見せる（2026/10/10、利用者の指摘：文字が多い）。値は読み上げが持つ
+  const dots = card.getByRole('img', { name: '胸 今週 1セット（目標 15）' });
+  expect(dots.querySelectorAll('i')).toHaveLength(15);
+  expect(dots.querySelectorAll('i[class*="dotOn"]')).toHaveLength(1);
+  // 目標の棒は種目の目標だけ。部位の目標に棒は置かない
   expect(card.queryByRole('progressbar')).toBeNull();
 });
 
-/** 記録のカードに種目の目標の札は置かない（その日の量と週の目標が並んで食い違って見えるため） */
-it('記録のカードに、種目の目標の札を出さない', () => {
+/** ベンチプレスに目標を決め、今日 60 kg × 10 を 1 セット打った状態 */
+function seedBenchGoal(goal: { type: string; value?: number }, goalPeriod: 'session' | 'week') {
   seedRaw({
     version: 7,
-    settings: { goalPeriod: 'week' },
+    settings: { goalPeriod },
     entries: {},
     exercises: [
       {
@@ -8609,13 +8615,59 @@ it('記録のカードに、種目の目標の札を出さない', () => {
           CATALOG.find((c) => c.id === 'ex_bench')!,
           0,
         ),
-        goal: { type: 'volume', value: 15000 },
+        goal,
       },
     ],
     workouts: { [todayISO()]: [{ exerciseId: 'ex_bench', sets: [{ weight: 60, reps: 10 }] }] },
+    // 部位の挙上量の目標もある。種目のカードには出さない
+    groupGoals: { chest: { volume: 2000 } },
   });
   render(<Harness />);
-  const card = within(document.getElementById('ex-card-ex_bench')!);
-  expect(card.queryByText(/目標 15,?000/)).toBeNull();
+  return within(document.getElementById('ex-card-ex_bench')!);
+}
+
+/*
+ * 記録のカードには**種目の目標**を、いまの値と並べて出す。
+ * 部位の挙上量の行（胸の今週の合計）を目標と並べていた頃は、この種目の値に見えた
+ * （2026/10/10、利用者の指摘）。
+ *
+ * 以前は「その日の量と週の目標が並んで食い違って見える」ので札を置かなかった。
+ * 週次ならいまの値も今週の値（kg/週）にするので、物差しはそろう。
+ */
+it('記録のカードに、種目の目標までの棒を出す（週次は今週の値）', () => {
+  const card = seedBenchGoal({ type: 'volume', value: 15000 }, 'week');
+  // 長さで見せる。いまの値は読み上げが持ち、右端に目標の値
+  const bar = card.getByRole('progressbar', { name: '600 kg/週（目標 15,000）' });
+  expect(bar.getAttribute('aria-valuenow')).toBe('4');
+  expect(card.getByText('15,000 kg/週')).toBeTruthy();
+  // 立て方の札（矢印）は置かない
   expect(card.queryByText(/挙上量↑/)).toBeNull();
+  // 部位の挙上量は出さない（部位はセット数の丸だけ）
+  expect(card.queryByText(/2,000/)).toBeNull();
+});
+
+it('目標に届いたら、棒は満杯になって色が変わる', () => {
+  const card = seedBenchGoal({ type: 'weight', value: 60 }, 'session');
+  const bar = card.getByRole('progressbar', { name: '60.0 kg（目標 60.0 に到達）' });
+  expect(bar.getAttribute('aria-valuenow')).toBe('100');
+  expect(bar.className).toMatch(/reached/);
+  // 重量は量ではないので「/日」を添えない
+  expect(card.getByText('60.0 kg')).toBeTruthy();
+});
+
+it('維持の目標は数値を持たないので、棒を出さない', () => {
+  const card = seedBenchGoal({ type: 'maintain' }, 'session');
+  expect(card.queryByRole('progressbar')).toBeNull();
+});
+
+it('カードはその日の量を大きな数字 1 つで出し、セットを並べる', () => {
+  const card = seedBenchGoal({ type: 'weight', value: 100 }, 'session');
+  // 何の数字か分かるように「挙上量」を小さく添える
+  expect(card.getByText('挙上量')).toBeTruthy();
+  expect(card.getByText('600')).toBeTruthy();
+  expect(card.getByText('kg/日')).toBeTruthy();
+  expect(card.getByText('60 kg × 10回')).toBeTruthy();
+  // 推定1RM・合計の回数・通算の最高はカードに置かない
+  expect(card.queryByText(/推定1RM/)).toBeNull();
+  expect(card.queryByText(/最高/)).toBeNull();
 });

@@ -1,8 +1,9 @@
-import { GROUP_KEYS, exerciseName } from '../../lib/exerciseCatalog';
+import { GROUP_KEYS, REP_UNIT_KEYS, exerciseName, isCardio } from '../../lib/exerciseCatalog';
 import type { ReactNode } from 'react';
 import { ExerciseTotals } from './ExerciseTotals';
 import type { ExerciseHistoryPoint } from '../../lib/training';
-import type { Exercise, ExercisePoint } from '../../types';
+import type { Exercise, ExercisePoint, RepUnit } from '../../types';
+import { useWeightFormat } from '../../hooks/useWeightUnit';
 import ui from '../../styles/ui.module.scss';
 import { MiniButton } from '../MiniButton';
 import { Tag } from '../Tag';
@@ -28,7 +29,7 @@ interface Props {
   onOpenGoal: () => void;
   /** セットを打つダイアログを開く。**入力はカードではなく面を分けて置く** */
   onEdit: () => void;
-  /** この部位の今週と部位の目標（`GroupWeekLine`）。有酸素は部位を持たないので渡さない */
+  /** この部位の今週と部位の目標（`GroupWeekLine`）、この種目の目標（`ExerciseGoalLine`） */
   groupWeek?: ReactNode;
 }
 
@@ -65,10 +66,7 @@ export function ExerciseCard({
         */}
         {exercise.shelf === 'adhoc' && <Tag kind="state">{t('exercise.notAdded')}</Tag>}
         {/* この種目をどうしたいか（維持 / 重量↑ / 挙上量↑ / 回数↑）。打ちながら分かるように */}
-        {/*
-          種目の目標の札は置かない。目標は週次で数えることもあり、その日の量（下の合計）と
-          並べると、1 日ぶんと 1 週ぶんが同じカードで食い違って見える。目標は「目標」ボタンと目標タブが持つ。
-        */}
+        {/* 目標の札は置かない。目標は下の「{指標}の目標」の行が、いまの値と一緒に持つ */}
         <span className={s.exHeadBtns}>
           {/* 並びはやった順。掴むと、その日の種目だけが小さな一覧に畳まれる */}
           {onMove && (
@@ -90,8 +88,13 @@ export function ExerciseCard({
         </span>
       </div>
 
-      {/* その日の合計と通算の最高。セット入力のダイアログでも同じものを出す */}
+      {/*
+        **カードは数字 1 つと形だけ**（2026/10/10、利用者の指摘：文字が多い）。
+        その日の量を大きく、セットは「60×10」を並べ、目標は棒、部位の今週は丸で見せる。
+        推定1RM・回数・通算の最高は、入力ダイアログと「推移」が持つ。
+      */}
       <ExerciseTotals
+        compact
         exercise={exercise}
         point={point}
         bodyWeight={bodyWeight}
@@ -100,7 +103,9 @@ export function ExerciseCard({
         bestWeight={bestWeight}
       />
 
-      {groupWeek}
+      {!isCardio(exercise.group) && <SetChips point={point} repUnit={exercise.repUnit} />}
+
+      {groupWeek && <div className={s.meterRows}>{groupWeek}</div>}
 
       {/*
         記録しながら過去の推移を見たくなる。グラフ画面と同じものを開く。
@@ -148,5 +153,34 @@ export function ExerciseCard({
         </button>
       </div>
     </section>
+  );
+}
+
+/**
+ * その日のセットを「60 kg × 10回」で並べる。重量の無いセット（自重・秒）は「10回」「30秒」。
+ * 重量は打った値を読むときの単位で出し、小数は要るときだけ付ける（60 / 62.5）。
+ */
+function SetChips({ point, repUnit }: { point: ExercisePoint | null; repUnit: RepUnit }) {
+  const t = useT();
+  const { label: unitLabel, conv } = useWeightFormat();
+  const sets = (point?.sets ?? []).filter((x) => x.reps != null || x.weight != null);
+  if (sets.length === 0) return null;
+  // 回数には単位が付くので、重量にも付ける（「9×10」では何の 9 か読めない。2026/10/10、利用者の指摘）
+  const amount = (n: number | null) =>
+    n == null ? '—' : t('totals.amount', { n, unit: t(REP_UNIT_KEYS[repUnit]) });
+  return (
+    <ul className={s.setChips} data-e2e="exercise-set-chips">
+      {sets.map((x) => (
+        <li key={x.index}>
+          {x.weight != null
+            ? t('card.setOf', {
+                weight: Number(conv(x.weight).toFixed(1)),
+                unit: unitLabel,
+                amount: amount(x.reps),
+              })
+            : amount(x.reps)}
+        </li>
+      ))}
+    </ul>
   );
 }
