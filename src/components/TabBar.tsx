@@ -84,6 +84,8 @@ export function TabBar({ active, onChange }: Props) {
           aria-selected={active === id}
           aria-controls={`panel-${id}`}
           onClick={() => onChange(id)}
+          data-e2e="tab"
+          data-e2e-key={id}
         >
           {ICONS[id]}
           {t(LABEL_KEYS[id])}

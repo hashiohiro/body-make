@@ -98,6 +98,9 @@ function Grid({ badges, extra }: { badges: readonly Badge[]; extra?: ReactNode }
             key={badge.id}
             type="button"
             className={`${s.badge} ${badge.earned ? s.earned : ''}`}
+            data-e2e="badge"
+            data-e2e-key={badge.id}
+            data-e2e-state={badge.earned ? 'earned' : 'locked'}
             aria-pressed={openId === badge.id}
             aria-label={t('badge.condition', {
               name: isMasked(badge) ? t('badge.hiddenLabel') : badgeName(t, badge),
@@ -163,6 +166,8 @@ interface Props {
   badges: readonly Badge[];
   /** 見出し。解除済みと未解除で別のカードにする */
   title: string;
+  /** E2E の目印（カードの `data-e2e`）。バッジは `data-e2e="badge"`・`data-e2e-key`＝ID・`data-e2e-state`＝earned / locked */
+  e2e?: string | undefined;
   /**
    * 見出しの右に出す母数。解除済みのカードにだけ渡す（`12 / 59`）。
    * 未解除のカードは件数だけでよい——割合を出すと、残りを課題として並べることになる。
@@ -187,7 +192,7 @@ interface Props {
  * **条件はタップで読めるようにする。**以前は title 属性に入れていたが、
  * それが出るのはマウスのある環境だけで、スマホでは読む手段が無かった。
  */
-export function BadgeGrid({ badges, title, total, recentFirst }: Props) {
+export function BadgeGrid({ badges, title, total, recentFirst, e2e }: Props) {
   const t = useT();
   const [more, setMore] = useState(false);
 
@@ -197,7 +202,7 @@ export function BadgeGrid({ badges, title, total, recentFirst }: Props) {
 
   return (
     <>
-      <section className={ui.card}>
+      <section className={ui.card} data-e2e={e2e}>
         <CardHeader
           title={title}
           hint={<>{total == null ? badges.length : `${badges.length} / ${total}`}</>}
@@ -211,6 +216,7 @@ export function BadgeGrid({ badges, title, total, recentFirst }: Props) {
                 type="button"
                 className={`${s.badge} ${s.more}`}
                 onClick={() => setMore(true)}
+                data-e2e="badge-more"
               >
                 {t('badge.more', { n: rest })}
               </button>

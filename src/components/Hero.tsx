@@ -30,6 +30,8 @@ interface SubProps {
   tone: DeltaTone;
   color: string;
   spark: readonly { t: number; v: number }[];
+  /** E2E の目印（行の `data-e2e`） */
+  e2e: string;
 }
 
 /**
@@ -39,11 +41,11 @@ interface SubProps {
  * 腹囲は「体重が止まっていてもここは落ちているか」。どちらも
  * 単独で見る数字ではないので、大きな数値にはせず、同じ器で下に積む。
  */
-function SubRow({ label, value, unit, delta, tone, color, spark }: SubProps) {
+function SubRow({ label, value, unit, delta, tone, color, spark, e2e }: SubProps) {
   const t = useT();
 
   return (
-    <div className={s.sub}>
+    <div className={s.sub} data-e2e={e2e}>
       <p className={s.subHead}>
         <span className={s.subLabel}>{label}</span>
         <b className={s.subValue}>
@@ -88,13 +90,13 @@ export function Hero({
   const leanTone = deltaTone(leanDelta, false, 0.5);
 
   return (
-    <section className={s.hero}>
+    <section className={s.hero} data-e2e="hero">
       <p className={s.label}>{t('hero.movingAverageOf', { name: t('common.weight') })}</p>
-      <p className={s.value}>
+      <p className={s.value} data-e2e="hero-weight">
         {fmt(weight)}
         <span className={s.unit}>kg</span>
       </p>
-      <p className={`${s.delta} ${TONE_CLASS[tone]}`}>
+      <p className={`${s.delta} ${TONE_CLASS[tone]}`} data-e2e="hero-delta">
         <span aria-hidden="true">{TONE_ICON[tone]}</span>
         {t('common.fromStart', { delta: fmtDelta(delta), unit: ' kg' })}
       </p>
@@ -111,6 +113,7 @@ export function Hero({
       {lean != null && (
         <SubRow
           label={t('hero.leanMass')}
+          e2e="hero-lean"
           value={lean}
           unit="kg"
           delta={leanDelta}
@@ -123,6 +126,7 @@ export function Hero({
       {waist != null && (
         <SubRow
           label={t('hero.waist')}
+          e2e="hero-waist"
           value={waist}
           unit="cm"
           delta={waistDelta}
@@ -133,7 +137,9 @@ export function Hero({
         />
       )}
 
-      <p className={s.caption}>{caption}</p>
+      <p className={s.caption} data-e2e="hero-caption">
+        {caption}
+      </p>
     </section>
   );
 }

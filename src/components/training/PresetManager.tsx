@@ -127,6 +127,7 @@ export function PresetManager({
         <Button
           tone={presets.length === 0 ? 'primary' : undefined}
           onClick={() => setCreating(true)}
+          e2e="preset-create"
         >
           {t('preset.createTitle')}
         </Button>

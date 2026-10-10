@@ -19,6 +19,7 @@ export function WeeklyTable({ weeks }: { weeks: readonly WeekPoint[] }) {
   return (
     <DataTable
       summary={t('table.weekly')}
+      e2e="table-weekly"
       columns={[
         t('table.week'),
         t('table.period'),
@@ -61,6 +62,7 @@ export function EnergyTable({ points }: { points: readonly EnergyPoint[] }) {
   return (
     <DataTable
       summary={t('table.energy')}
+      e2e="table-energy"
       columns={[
         t('table.week'),
         t('table.period'),
@@ -118,6 +120,7 @@ export function DailyTable({
   return (
     <DataTable
       summary={t('table.daily')}
+      e2e="table-daily"
       columns={[
         t('table.date'),
         t('table.amWeight'),

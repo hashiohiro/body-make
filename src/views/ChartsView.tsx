@@ -57,6 +57,7 @@ export function ChartsView({ body, domain: mode, exerciseId }: Props) {
         value={range}
         onChange={setRange}
         label={t('range.label')}
+        e2e="trend-range"
       />
 
       {mode === 'training' && (

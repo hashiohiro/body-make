@@ -139,7 +139,7 @@ export function WeekMenuManager({
       {WEEKDAYS.map((day) => {
         const items = onDay(day);
         return (
-          <div key={day} className={s.weekRow}>
+          <div key={day} className={s.weekRow} data-e2e="week-day" data-e2e-key={day}>
             {items.length === 0 ? (
               /*
                * 置いていない日。**始め方を選ばせる。**いきなり全身図を開くと、
@@ -150,6 +150,7 @@ export function WeekMenuManager({
                 className={s.weekRowHead}
                 aria-label={t('week.setDay', { day: t(WEEKDAY_KEYS[day]) })}
                 onClick={() => setStarting(day)}
+                data-e2e="week-set"
               >
                 <span className={s.weekRowDay}>{t(WEEKDAY_KEYS[day])}</span>
                 <span className={s.weekRowRest}>{t('week.rest')}</span>
@@ -222,6 +223,7 @@ export function WeekMenuManager({
             choices={[
               {
                 label: t('week.createNew'),
+                e2e: 'week-new',
                 onSelect: () => {
                   setCreatingFor(starting);
                   setStarting(null);
@@ -229,6 +231,7 @@ export function WeekMenuManager({
               },
               {
                 label: t('picker.fromPresets'),
+                e2e: 'week-from-preset',
                 onSelect: () => {
                   setPicking(starting);
                   setStarting(null);

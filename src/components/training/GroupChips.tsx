@@ -19,6 +19,8 @@ interface Props {
    * 同じ面に絞り込みの行が 2 つ以上あるときに使う（カタログの 器具 / 部位）。
    */
   showLabel?: boolean | undefined;
+  /** E2E の目印（`ChipGroup` の `e2e`） */
+  e2e?: string | undefined;
 }
 
 /**
@@ -31,7 +33,13 @@ interface Props {
  * 読み上げの名前は「部位」でそろえる。同じものを指すのに面ごとに名前が違うと、
  * 読み上げで画面を渡り歩く人にとっては別の部品に見える。
  */
-export function GroupChips({ value, onChange, groups = EXERCISE_GROUP_ORDER, showLabel }: Props) {
+export function GroupChips({
+  value,
+  onChange,
+  groups = EXERCISE_GROUP_ORDER,
+  showLabel,
+  e2e,
+}: Props) {
   const t = useT();
   // 1 種類しか無ければ、押し分ける相手がいない
   if (groups.length <= 1) return null;
@@ -47,6 +55,7 @@ export function GroupChips({ value, onChange, groups = EXERCISE_GROUP_ORDER, sho
       label={t('group.label')}
       showLabel={showLabel}
       tight
+      e2e={e2e}
     />
   );
 }

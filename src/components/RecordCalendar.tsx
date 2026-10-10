@@ -169,7 +169,10 @@ export function RecordCalendar({
 
   return (
     <section className={ui.card}>
-      <CardHeader title={t('calendar.title')} hint={summary} />
+      <CardHeader
+        title={t('calendar.title')}
+        hint={<span data-e2e="calendar-summary">{summary}</span>}
+      />
 
       <ChipGroup
         options={RANGES.map((r) => ({ id: r.id, label: t(r.key) }))}

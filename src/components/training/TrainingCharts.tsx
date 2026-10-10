@@ -156,9 +156,16 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
             label={t('exTrend.metric')}
             showLabel
             tight
+            e2e="trend-metric"
           />
 
-          <GroupChips value={group} onChange={setGroup} groups={groups} showLabel />
+          <GroupChips
+            value={group}
+            onChange={setGroup}
+            groups={groups}
+            showLabel
+            e2e="trend-group"
+          />
         </div>
 
         <div className={s.trendList}>
@@ -174,13 +181,18 @@ export function TrainingCharts({ sessions, exercises, from, initialOpenId }: Pro
                     type="button"
                     className={s.trendRow}
                     onClick={() => setOpenId(row.ex.id)}
+                    data-e2e="trend-row"
+                    data-e2e-key={row.ex.id}
                   >
                     <span className={s.trendName}>{exerciseName(t, row.ex)}</span>
                     <span className={s.trendStat}>
-                      <b>{fmt(row.value, metric.digits)}</b>
+                      <b data-e2e="trend-value">{fmt(row.value, metric.digits)}</b>
                       {metric.unit && <em>{metric.unit}</em>}
                       {row.delta != null && (
-                        <i className={TONE_CLASS[deltaTone(row.delta, false, 0)]}>
+                        <i
+                          className={TONE_CLASS[deltaTone(row.delta, false, 0)]}
+                          data-e2e="trend-delta"
+                        >
                           {fmtDelta(row.delta, metric.digits)}
                         </i>
                       )}

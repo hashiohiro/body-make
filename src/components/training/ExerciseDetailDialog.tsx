@@ -236,9 +236,10 @@ export function ExerciseDetailDialog({
           onChange={setMetricId}
           label={t('exTrend.metric')}
           tight
+          e2e="detail-metric"
         />
 
-        <div className={s.statRow}>
+        <div className={s.statRow} data-e2e="detail-best">
           <span className={s.statLabel}>{t('detail.best')}</span>
           <b>{fmt(best, metric.digits)}</b>
           <span>{metric.unit}</span>
@@ -253,7 +254,7 @@ export function ExerciseDetailDialog({
           )}
         </div>
 
-        <div className={s.statSub}>
+        <div className={s.statSub} data-e2e="detail-recent">
           <span>
             {t('summary.recent', { value: `${fmt(current, metric.digits)} ${metric.unit}` })}
           </span>
@@ -402,6 +403,7 @@ export function ExerciseDetailDialog({
 
         {/* 表そのものが目的の面なので、畳まない（summary を渡さない） */}
         <DataTable
+          e2e="detail-raw"
           columns={[
             t('table.date'),
             t('detail.topSet'),

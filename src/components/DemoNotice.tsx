@@ -34,7 +34,7 @@ export function DemoNotice({ onStart }: Props) {
       <p className={ui.note}>{t('demo.note4')}</p>
 
       <div className={ui.btnRow}>
-        <Button tone="primary" onClick={onStart}>
+        <Button tone="primary" onClick={onStart} e2e="demo-start">
           {t('demo.start')}
         </Button>
       </div>

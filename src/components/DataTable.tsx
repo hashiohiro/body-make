@@ -12,6 +12,8 @@ interface Props {
   children: ReactNode;
   /** 表の下に置くもの（古い行を伸ばす的など） */
   footer?: ReactNode;
+  /** E2E の目印。表に `data-e2e`、畳んだ表を開く summary に `<e2e>-open` */
+  e2e?: string | undefined;
 }
 
 /**
@@ -26,11 +28,11 @@ interface Props {
  *
  * 横スクロールは器の中だけで起こす。表が画面幅を超えても、地のほうは動かさない。
  */
-export function DataTable({ summary, columns, children, footer }: Props) {
+export function DataTable({ summary, columns, children, footer, e2e }: Props) {
   const table = (
     <>
       <div className={ui.tableScroll}>
-        <table className={ui.table}>
+        <table className={ui.table} data-e2e={e2e}>
           <thead>
             <tr>
               {columns.map((c, i) => (
@@ -51,7 +53,7 @@ export function DataTable({ summary, columns, children, footer }: Props) {
   if (summary == null) return table;
   return (
     <details className={ui.tableView}>
-      <summary>{summary}</summary>
+      <summary data-e2e={e2e == null ? undefined : `${e2e}-open`}>{summary}</summary>
       {table}
     </details>
   );

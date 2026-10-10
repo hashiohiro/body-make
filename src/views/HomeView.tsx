@@ -68,7 +68,12 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
   const lockedBadges = badges.filter((b) => !b.earned);
 
   const trendLink = (label: string) => (
-    <button type="button" className={`${ui.card} ${ui.linkRow}`} onClick={onOpenTrend}>
+    <button
+      type="button"
+      className={`${ui.card} ${ui.linkRow}`}
+      onClick={onOpenTrend}
+      data-e2e="trend-link"
+    >
       <span>{label}</span>
       <span aria-hidden="true">›</span>
     </button>
@@ -90,13 +95,13 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
       {domain === 'body' &&
         (daily.length === 0 ? (
           <section className={ui.card}>
-            <p className={ui.emptyState}>
+            <p className={ui.emptyState} data-e2e="home-empty">
               {t('common.noRecords')}
               <br />
               {t('home.emptyHint')}
             </p>
             <div className={ui.btnRow}>
-              <Button tone="primary" onClick={onOpenRecords}>
+              <Button tone="primary" onClick={onOpenRecords} e2e="home-record">
                 {t('home.record')}
               </Button>
             </div>
@@ -151,12 +156,13 @@ export function HomeView({ body, domain, onOpenRecords, onOpenTrend }: Props) {
             <BadgeGrid
               badges={earnedBadges}
               title={t('badge.earnedSection')}
+              e2e="badges-earned"
               total={badges.length}
               recentFirst
             />
           )}
           {lockedBadges.length > 0 && (
-            <BadgeGrid badges={lockedBadges} title={t('badge.lockedSection')} />
+            <BadgeGrid badges={lockedBadges} title={t('badge.lockedSection')} e2e="badges-locked" />
           )}
         </>
       )}

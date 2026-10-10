@@ -55,7 +55,7 @@ export function StatTiles({ stats }: { stats: Stats }) {
   return (
     <div className={s.grid}>
       {tiles.map((tile) => (
-        <div key={tile.key} className={s.tile}>
+        <div key={tile.key} className={s.tile} data-e2e="stat-tile" data-e2e-key={tile.key}>
           <div className={s.key}>
             {tile.color && (
               <i className={ui.swatch} style={{ background: tile.color }} aria-hidden="true" />

@@ -23,7 +23,12 @@ export function useToast() {
 
 export function Toast({ message }: { message: string | null }) {
   return (
-    <div className={`${s.toast} ${message ? s.on : ''}`} role="status" aria-live="polite">
+    <div
+      className={`${s.toast} ${message ? s.on : ''}`}
+      role="status"
+      aria-live="polite"
+      data-e2e="toast"
+    >
       {message}
     </div>
   );

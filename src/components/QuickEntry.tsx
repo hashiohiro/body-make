@@ -81,6 +81,7 @@ export function QuickEntry({ date, entries, daily, waistEnabled, onValue, onOpen
                 {canCopy && (
                   <MiniButton
                     label={t('records.fillLastValue', { slot: t(slot.key) })}
+                    e2e={`body-${slot.id}-fill-last`}
                     onClick={() => {
                       onValue(date, slot.id, 'weight', prevWeight);
                       if (prevBodyFat != null) onValue(date, slot.id, 'bodyFat', prevBodyFat);

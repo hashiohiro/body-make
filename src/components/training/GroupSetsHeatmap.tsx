@@ -64,7 +64,7 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
         />
 
         <div className={ui.tableScroll}>
-          <table className={`${ui.table} ${s.heatmap}`}>
+          <table className={`${ui.table} ${s.heatmap}`} data-e2e="heatmap">
             <thead>
               <tr>
                 <th scope="col">{t('group.label')}</th>
@@ -82,7 +82,7 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
                 // 挙上量を部位間で比べないのもこれと同じ理由（重量の大きい種目に支配される）
                 const max = Math.max(...visible.map((w) => value.pick(w, group)), 1);
                 return (
-                  <tr key={group}>
+                  <tr key={group} data-e2e="heatmap-row" data-e2e-key={group}>
                     <th scope="row">{t(GROUP_KEYS[group])}</th>
                     {visible.map((w) => {
                       const n = value.pick(w, group);
@@ -112,7 +112,7 @@ export function GroupSetsHeatmap({ weeks, valueId, onValueChange }: Props) {
                   </tr>
                 );
               })}
-              <tr>
+              <tr data-e2e="heatmap-row" data-e2e-key="days">
                 <th scope="row">{t('group.days')}</th>
                 {visible.map((w) => (
                   <td key={w.start}>{w.days}</td>

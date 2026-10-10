@@ -235,12 +235,16 @@ export function ExerciseManager({
             <MiniButton
               label={t('manage.unhideOf', { name: exerciseName(t, ex) })}
               onClick={() => onUpdate({ ...ex, shelf: 'listed' })}
+              e2e="manage-unhide"
+              e2eKey={ex.id}
             >
               {t('manage.unhide')}
             </MiniButton>
             <MiniButton
               label={t('manage.deleteOf', { name: exerciseName(t, ex) })}
               onClick={() => remove(ex)}
+              e2e="manage-delete"
+              e2eKey={ex.id}
             >
               {t('settings.delete')}
             </MiniButton>
@@ -275,12 +279,16 @@ export function ExerciseManager({
             <MiniButton
               label={t('manage.hideOf', { name: exerciseName(t, ex) })}
               onClick={() => onUpdate({ ...ex, shelf: 'hidden' })}
+              e2e="manage-hide"
+              e2eKey={ex.id}
             >
               {t('manage.hidden')}
             </MiniButton>
             <MiniButton
               label={t('manage.deleteOf', { name: exerciseName(t, ex) })}
               onClick={() => remove(ex)}
+              e2e="manage-delete"
+              e2eKey={ex.id}
             >
               {t('settings.delete')}
             </MiniButton>
@@ -320,7 +328,7 @@ export function ExerciseManager({
 
       {/* 追加は一番上。登録済みが増えるほど、下に置くとスクロールを強いることになる */}
       <div className={ui.btnRow}>
-        <Button adds tone="primary" onClick={() => setAdding(true)}>
+        <Button adds tone="primary" onClick={() => setAdding(true)} e2e="manage-add">
           {t('manage.add')}
         </Button>
       </div>

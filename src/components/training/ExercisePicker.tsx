@@ -312,7 +312,9 @@ export function ExercisePicker({
               */}
               {todayMenu && (
                 <>
-                  <p className={ui.sectionLabel}>{t('picker.todayMenu')}</p>
+                  <p className={ui.sectionLabel} data-e2e="today-menu">
+                    {t('picker.todayMenu')}
+                  </p>
                   {presetRow(todayMenu)}
                 </>
               )}

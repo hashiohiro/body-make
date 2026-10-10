@@ -32,6 +32,7 @@ export function WeightUnitForm({ settings, onUpdate }: Props) {
           value={settings.inputWeightUnit}
           options={WEIGHT_UNIT_OPTIONS.map((o) => ({ id: o.id, label: t(o.key) }))}
           onChange={(inputWeightUnit) => onUpdate({ inputWeightUnit })}
+          e2e="units-input"
         />
         <p className={ui.note}>
           <Strong text={t('unitForm.inputNote')} values={[t('unitForm.inputNoteStrong')]} />
@@ -45,6 +46,7 @@ export function WeightUnitForm({ settings, onUpdate }: Props) {
           value={settings.displayWeightUnit}
           options={WEIGHT_UNIT_OPTIONS.map((o) => ({ id: o.id, label: t(o.key) }))}
           onChange={(displayWeightUnit) => onUpdate({ displayWeightUnit })}
+          e2e="units-display"
         />
         <p className={ui.note}>
           {t('unitForm.displayNote')}

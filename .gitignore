@@ -8,3 +8,4 @@ dev-dist/
 
 # ルートの正本から prebuild で生成される
 public/THIRD-PARTY-NOTICES.txt
+dist-demo

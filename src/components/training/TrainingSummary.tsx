@@ -41,7 +41,7 @@ export function TrainingSummary({ sessions, stats }: Props) {
           <CardHeader title={t('summary.thisWeek')} />
 
           <div className={s.statRow} style={{ marginBottom: 0 }}>
-            <b>{stats.thisWeekDays}</b>
+            <b data-e2e="summary-week-days">{stats.thisWeekDays}</b>
             <span>{t('stat.days')}</span>
           </div>
 
@@ -76,7 +76,7 @@ export function TrainingSummary({ sessions, stats }: Props) {
           <CardHeader title={t('summary.total')} />
 
           <div className={s.statRow} style={{ marginBottom: 0 }}>
-            <b>{stats.sessions}</b>
+            <b data-e2e="summary-sessions">{stats.sessions}</b>
             <span>{t('summary.times')}</span>
           </div>
 

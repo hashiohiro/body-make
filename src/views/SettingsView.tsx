@@ -218,19 +218,19 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
   const importModal = pending && (
     <Modal open title={t('import.title')} onClose={() => setPending(null)}>
       <div>
-        <p className={ui.note} style={{ marginTop: 0 }}>
+        <p className={ui.note} style={{ marginTop: 0 }} data-e2e="import-contains">
           {t('import.contains', { found: pending.found })}
         </p>
 
         <div className={ui.btnRow}>
-          <Button tone="primary" onClick={() => runImport('merge')}>
+          <Button tone="primary" onClick={() => runImport('merge')} e2e="import-merge">
             {t('import.merge')}
           </Button>
         </div>
         <p className={ui.note}>{t('import.mergeNote')}</p>
 
         <div className={ui.btnRow}>
-          <Button tone="danger" onClick={() => runImport('replace')}>
+          <Button tone="danger" onClick={() => runImport('replace')} e2e="import-replace">
             {t('import.replace')}
           </Button>
         </div>
@@ -306,6 +306,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
             pressed={settings.waistEnabled}
             label={t('settings.waistToggle')}
             onClick={() => updateSettings({ waistEnabled: !settings.waistEnabled })}
+            e2e="settings-waist"
           >
             {settings.waistEnabled ? t('settings.on') : t('settings.off')}
           </Pill>
@@ -532,10 +533,13 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
               // ホームの促し（components/SafetyNotices.tsx）は、この日付を起点にする
               markExported();
             }}
+            e2e="settings-export"
           >
             {t('common.exportJson')}
           </Button>
-          <Button onClick={() => fileRef.current?.click()}>{t('settings.importJson')}</Button>
+          <Button onClick={() => fileRef.current?.click()} e2e="settings-import">
+            {t('settings.importJson')}
+          </Button>
         </div>
 
         {importModal}
@@ -550,6 +554,7 @@ export function SettingsView({ body, section, page = null, onOpen, onToast }: Pr
           type="file"
           accept=".json,application/json"
           hidden
+          data-e2e="settings-import-file"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void handleImport(file);
