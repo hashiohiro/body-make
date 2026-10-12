@@ -13,6 +13,7 @@ export const CATALOG_NAMES_EN = {
   // 胸
   ex_bench: 'Bench Press',
   ex_incline_bench: 'Incline Bench Press',
+  ex_floor_press: 'Floor Press',
   ex_chest_press: 'Chest Press',
   ex_db_fly: 'Dumbbell Fly',
   ex_dips: 'Dips',
@@ -125,6 +126,7 @@ export const CATALOG_NAMES_EN = {
   ex_skull_crusher: 'Skull Crusher',
   ex_preacher_curl: 'Preacher Curl',
   ex_overhead_extension: 'Overhead Triceps Extension',
+  ex_french_press: 'French Press',
   ex_cable_overhead_extension: 'Cable Overhead Triceps Extension',
   ex_kickback: 'Triceps Kickback',
   ex_cable_kickback: 'Cable Triceps Kickback',

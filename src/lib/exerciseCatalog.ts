@@ -65,7 +65,7 @@ export type CatalogEntry = Omit<
    * 検索で拾う別の呼び方。**カタログだけが持つ（保存しない）。**
    *
    * 同じ種目の呼び方は揺れる（チェストサポーテッドロウ / チェストサポートロウ、
-   * トライセプスプレスダウン / プッシュダウン、フレンチプレス）。
+   * トライセプスプレスダウン / プッシュダウン）。
    * 片方の綴りしか当たらないと**あるのに無いと思われ**、同じ種目をもう 1 つ
    * 自分で作ることになる。手元に置いたあとは名前を知っているので、
    * 要るのは「まだ持っていないものを探すとき」＝カタログだけ。
@@ -77,10 +77,10 @@ export type CatalogEntry = Omit<
    * **名前で当たる語も入れない**（「ラットプル」は「ラットプルダウン」に含まれる）。
    * 名前との重なりとほかの種目の名前は試験で弾いている。
    *
-   * **同じ語が 2 種目に付くことはある。**「フレンチプレス」は寝て行う側
-   * （スカルクラッシャー）と立って行う側（オーバーヘッドエクステンション）の
-   * どちらにも使われる。**どちらか一方に決めない**——2 件出して選ばせるほうが、
-   * 打ちたいほうが出てこないより良い。
+   * **同じ語が 2 種目に付くことはある。**呼び方が寝て行う側と立って行う側の
+   * どちらにも使われるなら、**どちらか一方に決めない**——2 件出して選ばせるほうが、
+   * 打ちたいほうが出てこないより良い（以前の「フレンチプレス」がそうだった。
+   * 2026/10/12 に独立した種目にした）。
    */
   aliases?: readonly string[];
   /**
@@ -295,6 +295,17 @@ export const CATALOG: readonly CatalogEntry[] = [
     name: 'インクラインベンチプレス',
     group: 'chest',
     subGroups: ['shoulders', 'arms'],
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_floor_press',
+    implements: BOTH,
+    name: 'フロアプレス',
+    group: 'chest',
+    // 床で肘が止まり、押し切りを腕が受け持つ。ディップスと同じ割合
+    subGroups: ['shoulders', ['arms', 0.75]],
     loadMode: 'standard',
     bodyweightFactor: null,
     rmDivisor: RM_DEFAULT,
@@ -1449,7 +1460,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_skull_crusher',
-    aliases: ['ライイングトライセプスエクステンション', 'フレンチプレス'],
+    aliases: ['ライイングトライセプスエクステンション'],
     name: 'スカルクラッシャー',
     group: 'arms',
     loadMode: 'standard',
@@ -1466,8 +1477,21 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'ex_overhead_extension',
-    aliases: ['フレンチプレス', 'トライセプスエクステンション'],
+    aliases: ['トライセプスエクステンション'],
     name: 'オーバーヘッドエクステンション',
+    group: 'arms',
+    loadMode: 'standard',
+    bodyweightFactor: null,
+    rmDivisor: RM_DEFAULT,
+  },
+  {
+    id: 'ex_french_press',
+    /*
+     * 座る・立って、EZバーかダンベル 1 つを両手で頭の後ろへ下ろす（2026/10/12、利用者の決定）。
+     * 以前はスカルクラッシャーとオーバーヘッドエクステンションの別名だったが、記録を分けたい。
+     * 両手で 1 つ持つので器具は選ばせない（ダンベルを選ぶと 2 倍で数えてしまう）
+     */
+    name: 'フレンチプレス',
     group: 'arms',
     loadMode: 'standard',
     bodyweightFactor: null,
